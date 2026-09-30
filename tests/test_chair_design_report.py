@@ -1,0 +1,182 @@
+"""Guards Project/chair/chair_design_report.md against drift from the solver.
+
+Two invariants:
+1. Scope - the report must contain NO finite-element analysis. All four
+   reference reports in Project/REF are closed-form only, so FEA in this
+   document is out of scope.
+2. Fidelity - every headline number must equal the deterministic solver result.
+"""
+import math
+import re
+from pathlib import Path
+
+import pytest
+
+from mdie.core.frame_model import FrameDesignModel
+from mdie.physics.frame_physics import FramePhysicsSolver
+
+REPORT = Path(__file__).resolve().parents[1] / "Project" / "chair" / "chair_design_report.md"
+
+
+@pytest.fixture(scope="module")
+def doc():
+    if not REPORT.exists():
+        pytest.skip(f"report not generated: {REPORT}")
+    return REPORT.read_text(encoding="utf-8")
+
+
+@pytest.fixture(scope="module")
+def sol():
+    return FramePhysicsSolver.solve(FrameDesignModel())
+
+
+# --------------------------------------------------------------------------
+# 1. Scope: no FEA
+# --------------------------------------------------------------------------
+@pytest.mark.parametrize("banned", [
+    "FEA", "finite element", "ANSYS", "Abaqus", "von Mises",
+    "stiffness matrix", "DOF", "mesh", "element analysis",
+    "tipping", "overturn", "n_tipping",
+])
+def test_report_contains_no_fea(doc, banned):
+    assert banned.lower() not in doc.lower(), (
+        f"report contains out-of-scope term {banned!r}; "
+        "Project/REF references are closed-form member sizing only "
+        "(no FEA, no whole-machine overturning analysis)"
+    )
+
+
+def test_report_uses_reference_closed_form_markers(doc):
+    for marker in [
+        "J.B. Johnson",          # intermediate column formula
+        "P_cr",                  # critical buckling load
+        "l/k",                   # slenderness ratio
+        "〈X-",                   # singularity-function notation
+        "S_e",                   # endurance limit
+        "σ_max",                 # maximum normal stress
+        "Safety Factor",         # factor of safety
+    ]:
+        assert marker in doc, f"missing reference-style marker {marker!r}"
+
+
+# --------------------------------------------------------------------------
+# 2. Fidelity: headline numbers must match the solver
+# --------------------------------------------------------------------------
+def _num(doc, value, dp=3):
+    """Assert the literal value appears in the document."""
+    txt = f"{value:.{dp}f}"
+    assert txt in doc, f"expected {txt} in report"
+
+
+def test_material_properties_match_model(doc):
+    m = FrameDesignModel().material
+    for v, dp in [(m.ultimate_strength_mpa, 0), (m.yield_strength_mpa, 0),
+                  (m.elastic_modulus_gpa, 0), (m.density_kg_m3, 0)]:
+        _num(doc, v, dp)
+
+
+def test_section_properties_match_profiles(doc):
+    g = FrameDesignModel().geometry
+    for prof, vals in [
+        (g.leg_profile,      (13885.8, 163.36, 9.220, 991.8)),
+        (g.frame_profile,    (16345.3, 184.00, 9.425, 1307.6)),
+        (g.arm_profile,      (5872.5, 114.23, 7.170, 533.9)),
+        (g.stretcher_profile, (3180.1, 82.47, 6.210, 334.8)),
+    ]:
+        I = prof.moment_of_inertia_m4 * 1e12
+        A = prof.area_m2 * 1e6
+        k = math.sqrt(I / A)
+        Z = I / (prof.outer_dimension_mm / 2.0)
+        for rep, act, dp in zip(vals, (I, A, k, Z), (1, 2, 3, 1)):
+            assert abs(rep - act) < 10 ** -dp, f"section property drift: {rep} vs {act}"
+
+
+def test_global_equilibrium_matches_solver(doc, sol):
+    _num(doc, sol.total_chair_weight_n, 2)
+    _num(doc, sol.total_downward_load_n, 2)
+
+
+def test_column_results_match_solver(doc, sol):
+    for c in sol.floor_reactions:
+        _num(doc, c.axial_reaction_n, 2)
+        _num(doc, c.buckling_safety_factor, 2)
+        _num(doc, c.yield_safety_factor, 2)
+        _num(doc, c.combined_stress_mpa, 3)
+
+
+def test_critical_buckling_load_matches_engine(doc, sol):
+    _num(doc, sol.floor_reactions[0].critical_buckling_load_n, 2)
+
+
+def test_seat_rail_matches_solver(doc, sol):
+    _num(doc, sol.seat_frame.rail_bending_stress_mpa, 3)
+    _num(doc, sol.seat_frame.rail_deflection_mm, 4)
+    _num(doc, sol.seat_frame.rail_safety_factor, 2)
+
+
+def test_arm_matches_solver(doc, sol):
+    a = sol.armrests[0]
+    _num(doc, a.strut_base_moment_nm, 3)
+    _num(doc, a.strut_combined_stress_mpa, 3)
+    _num(doc, a.arm_safety_factor, 2)
+
+
+def test_every_summary_row_clears_design_factor(sol):
+    """No row in the reference-style summary may fall below n_d = 2.0."""
+    m = FrameDesignModel()
+    g, l, mat = m.geometry, m.loads, m.material
+    SY = mat.yield_strength_mpa
+    E = mat.elastic_modulus_gpa * 1000.0
+    K = 0.85
+
+    ap = g.arm_profile
+    arm = sol.armrests[0]
+    # bracket: per-post share, CAD section 25 x 11 x 8.8
+    bL, bW, bH = 25.0, (ap.outer_dimension_mm / 2.0) * 0.8, ap.outer_dimension_mm / 2.0
+    bZ = bW * bH**2 / 6.0
+    bA = bL * bW * bH
+    n_bracket = SY / (arm.applied_vertical_n / 2 / bA
+                      + (arm.strut_base_moment_nm / 2) * 1e3 / bZ)
+
+    # stretcher: CAD uses splay offset at stretcher height
+    sp = g.stretcher_profile
+    sI, sA = sp.moment_of_inertia_m4 * 1e12, sp.area_m2 * 1e6
+    sk = math.sqrt(sI / sA)
+    s_len = g.seat_width_mm + 2 * (g.seat_height_mm - g.stretcher_height_mm) * math.tan(
+        math.radians(g.leg_splay_angle_deg))
+    slam = K * s_len / sk
+    sPcr = sA * (SY - (SY * slam / (2 * math.pi))**2 / E)
+    n_stretcher = sPcr / (l.backrest_force_n / 2.0)
+
+    # backrest post
+    lp = g.leg_profile
+    lA, lI = lp.area_m2 * 1e6, lp.moment_of_inertia_m4 * 1e12
+    lZ = lI / (lp.outer_dimension_mm / 2.0)
+    dz = g.backrest_height_above_seat_mm * math.cos(
+        math.radians(g.backrest_angle_deg - 90.0))
+    Fb = l.backrest_force_n / 2.0
+    n_backrest = SY / (Fb * dz / 1e3 / lZ + Fb / lA)
+
+    # endurance limit
+    ka = 4.51 * mat.ultimate_strength_mpa ** -0.265
+    kb = (lp.outer_dimension_mm / 7.5) ** -0.107
+    Se = ka * kb * 1.0 * 1.0 * 0.897 * 1.0 * (0.5 * mat.ultimate_strength_mpa)
+    n_fatigue = Se / (Fb * dz / 1e3 / lZ + Fb / lA)
+
+    rows = {
+        "column buckling": min(c.buckling_safety_factor for c in sol.floor_reactions),
+        "column yield": min(c.yield_safety_factor for c in sol.floor_reactions),
+        "seat rail": sol.seat_frame.rail_safety_factor,
+        "arm post": arm.arm_safety_factor,
+        "bracket": n_bracket,
+        "stretcher": n_stretcher,
+        "backrest post": n_backrest,
+        "fatigue": n_fatigue,
+    }
+    failing = {k: v for k, v in rows.items() if v < 2.0}
+    assert not failing, f"summary rows below n_d=2.0: {failing}"
+
+
+def test_deflection_within_serviceability_limit(sol):
+    g = FrameDesignModel().geometry
+    assert sol.seat_frame.rail_deflection_mm < g.seat_width_mm / 250.0

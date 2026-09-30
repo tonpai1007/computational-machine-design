@@ -127,6 +127,168 @@ class MeshPrimitives:
         return b"".join(parts)
 
 
+# --- Analytic primitive descriptions ---------------------------------------
+# A "primitive" is an exact description of one member (box or tube) in model
+# coordinates. The drawing generator consumes these to draw true silhouettes
+# and the mesh builder consumes them to make the solid, so a sheet can never
+# drift away from the exported geometry.
+#
+#   box  -> {"kind": "box",  "c": (x, y, z), "s": (sx, sy, sz)}
+#   tube -> {"kind": "tube", "a": (x, y, z), "b": (x, y, z), "r": radius}
+
+
+def primitives_to_triangles(prims: List[dict], n_slices: int = 12) -> List[Triangle]:
+    """Build a closed mesh from a list of analytic primitives."""
+    tris: List[Triangle] = []
+    for p in prims:
+        if p["kind"] == "box":
+            cx, cy, cz = p["c"]
+            sx, sy, sz = p["s"]
+            tris.extend(MeshPrimitives.create_box_triangles(
+                cx, cy, cz, sx, sy, sz))
+        elif p["kind"] == "tube":
+            # An optional "n" lets a member keep its own tessellation
+            # density, so a described assembly meshes identically to the
+            # solids exported from it.
+            tris.extend(MeshPrimitives.create_cylinder_triangles(
+                p["a"], p["b"], p["r"], n_slices=p.get("n", n_slices)))
+    return tris
+
+
+def armrest_primitives(
+    w: float, d: float, h: float,
+    arm_h: float, arm_pad_w: float, arm_pad_len: float,
+    arm_pad_thick: float, arm_tube_r: float,
+    side: float = -1.0,
+) -> List[dict]:
+    """
+    Exact armrest sub-assembly: two cross brackets, two posts, one pad.
+
+    ``side`` is -1 for the left arm and +1 for the right; the two are mirror
+    images about the YZ plane, so a single sheet is drawn for both.
+    """
+    arm_x = side * (w / 2.0 + 25.0)
+    bracket_len = abs(arm_x) - w / 2.0
+    bracket_x = side * (w / 2.0 + bracket_len / 2.0)
+    post_ys = (40.0, -d / 3.0)
+    prims: List[dict] = []
+    for post_y in post_ys:
+        # Cross beam tying the post back to the seat-frame rail.
+        prims.append({
+            "kind": "box",
+            "c": (bracket_x, post_y, h - arm_tube_r / 2.0),
+            "s": (bracket_len, arm_tube_r * 0.8, arm_tube_r),
+        })
+        # Vertical post carrying the pad.
+        prims.append({
+            "kind": "tube",
+            "a": (arm_x, post_y, h),
+            "b": (arm_x, post_y, h + arm_h),
+            "r": arm_tube_r,
+        })
+    prims.append({
+        "kind": "box",
+        "c": (arm_x, 10.0, h + arm_h + arm_pad_thick / 2.0),
+        "s": (arm_pad_w, arm_pad_len, arm_pad_thick),
+    })
+    return prims
+
+
+def assembly_primitives(model: FrameDesignModel) -> List[Tuple[str, List[dict]]]:
+    """
+    Exact description of the whole chair, grouped by item number.
+
+    Used by the assembly drawing so the general-arrangement sheet shows the
+    real members. The numbers mirror ``generate_assembly_parts``; the
+    regression suite pins the two together.
+    """
+    g = model.geometry
+    w, d, h = g.seat_width_mm, g.seat_depth_mm, g.seat_height_mm
+    splay = math.radians(g.leg_splay_angle_deg)
+    delta = h * math.tan(splay)
+    r_leg = g.leg_profile.outer_dimension_mm / 2.0
+    groups: List[Tuple[str, List[dict]]] = []
+
+    if g.num_legs == 3:
+        r_top = min(w, d) / 2.0
+        r_bot = r_top + delta
+        angles = [math.pi / 2.0, 7.0 * math.pi / 6.0, 11.0 * math.pi / 6.0]
+        legs = [(f"Leg_{i+1}",
+                 (r_top * math.cos(a), r_top * math.sin(a), h),
+                 (r_bot * math.cos(a), r_bot * math.sin(a), 0.0))
+                for i, a in enumerate(angles)]
+    else:
+        legs = [
+            ("Leg_Front_Left",  (-w/2,  d/2, h), (-w/2 - delta,  d/2 + delta, 0.0)),
+            ("Leg_Front_Right", ( w/2,  d/2, h), ( w/2 + delta,  d/2 + delta, 0.0)),
+            ("Leg_Rear_Right",  ( w/2, -d/2, h), ( w/2 + delta, -d/2 - delta, 0.0)),
+            ("Leg_Rear_Left",   (-w/2, -d/2, h), (-w/2 - delta, -d/2 - delta, 0.0)),
+        ]
+    for name, p_top, p_bot in legs:
+        groups.append((name, [{"kind": "tube", "a": p_bot, "b": p_top,
+                               "r": r_leg, "n": 16}]))
+
+    if g.has_stretchers:
+        sh = g.stretcher_height_mm
+        sr = g.stretcher_profile.outer_dimension_mm / 2.0
+        s_delta = (h - sh) * math.tan(splay)
+        s_prims: List[dict] = []
+        if g.num_legs == 3:
+            r_s = (min(w, d) / 2.0) + s_delta
+            angles = [math.pi / 2.0, 7.0 * math.pi / 6.0, 11.0 * math.pi / 6.0]
+            pts = [(r_s * math.cos(a), r_s * math.sin(a), sh) for a in angles]
+            for i in range(len(pts)):
+                s_prims.append({"kind": "tube", "a": pts[i],
+                                "b": pts[(i + 1) % len(pts)], "r": sr})
+        else:
+            xl, xr = -w/2 - s_delta, w/2 + s_delta
+            yf, yr = d/2 + s_delta, -d/2 - s_delta
+            for a, b in (((xl, yf, sh), (xr, yf, sh)), ((xl, yr, sh), (xr, yr, sh)),
+                         ((xl, yf, sh), (xl, yr, sh)), ((xr, yf, sh), (xr, yr, sh))):
+                s_prims.append({"kind": "tube", "a": a, "b": b, "r": sr})
+        groups.append(("Lower_Stretchers", s_prims))
+
+    f_dim = g.frame_profile.outer_dimension_mm
+    groups.append(("Seat_Frame_Rails", [
+        {"kind": "box", "c": (0.0,  d/2 - f_dim/2, h - f_dim/2), "s": (w, f_dim, f_dim)},
+        {"kind": "box", "c": (0.0, -d/2 + f_dim/2, h - f_dim/2), "s": (w, f_dim, f_dim)},
+        {"kind": "box", "c": (-w/2 + f_dim/2, 0.0, h - f_dim/2), "s": (f_dim, d, f_dim)},
+        {"kind": "box", "c": ( w/2 - f_dim/2, 0.0, h - f_dim/2), "s": (f_dim, d, f_dim)},
+    ]))
+
+    if g.has_seat_plate:
+        groups.append(("Seat_Pan_Deck", [
+            {"kind": "box", "c": (0.0, 0.0, h + g.seat_thickness_mm / 2.0),
+             "s": (w, d, g.seat_thickness_mm)}]))
+
+    if g.has_arms:
+        for side, name in [(-1.0, "Armrest_Left"), (1.0, "Armrest_Right")]:
+            groups.append((name, armrest_primitives(
+                w, d, h, g.armrest_height_above_seat_mm, g.armrest_width_mm,
+                g.armrest_length_mm, 18.0,
+                g.arm_profile.outer_dimension_mm / 2.0, side=side)))
+
+    if g.has_backrest:
+        back_h = g.backrest_height_above_seat_mm
+        back_rad = math.radians(g.backrest_angle_deg - 90.0)
+        dy_back = back_h * math.sin(back_rad)
+        dz_back = back_h * math.cos(back_rad)
+        b_prims: List[dict] = []
+        for sx in (-1.0, 1.0):
+            px = sx * (w/2 - r_leg)
+            b_prims.append({"kind": "tube",
+                            "a": (px, -d/2 + r_leg, h),
+                            "b": (px, -d/2 + r_leg - dy_back, h + dz_back),
+                            "r": r_leg})
+        b_prims.append({
+            "kind": "box",
+            "c": (0.0, -d/2 + r_leg - dy_back * 0.7, h + dz_back * 0.7),
+            "s": (w - 30.0, 16.0, back_h * 0.45)})
+        groups.append(("Backrest_Assembly", b_prims))
+
+    return groups
+
+
 class FrameCADEngine:
     """Parametric CAD generator for multi-member spatial frames, tables, chairs, and stands."""
 
@@ -310,7 +472,15 @@ module seat_pan() {{
 
 module armrest_assembly(side) {{
     arm_x = side * (seat_w/2 + 25);
+    // Bracket span: from seat-frame rail outer face to arm post axis
+    bracket_len = abs(arm_x) - seat_w/2;
+    bracket_x = side * (seat_w/2 + bracket_len/2);
     color(metal_color) {{
+        // Mounting brackets tying each post to the seat frame rail
+        for (post_y = [40, -seat_d/3]) {{
+            translate([bracket_x, post_y, seat_h - arm_tube_d/2])
+                cube([bracket_len, arm_tube_d*0.8, arm_tube_d], center=true);
+        }}
         translate([arm_x, 40, seat_h])
             cylinder(r = arm_tube_d/2, h = arm_h);
         translate([arm_x, -seat_d/3, seat_h])
@@ -414,6 +584,12 @@ module backrest_assembly() {{
 
             for side in (-1.0, 1.0):
                 arm_x = side * (w/2 + 25.0)
+                bracket_len = abs(arm_x) - w/2
+                bracket_x = side * (w/2 + bracket_len/2.0)
+                for post_y in (40.0, -d/3.0):
+                    tris.extend(MeshPrimitives.create_box_triangles(
+                        bracket_x, post_y, h - r_arm_tube/2.0,
+                        bracket_len, r_arm_tube*0.8, r_arm_tube))
                 tris.extend(MeshPrimitives.create_cylinder_triangles((arm_x, 40.0, h), (arm_x, 40.0, h + arm_h), r_arm_tube, 12))
                 tris.extend(MeshPrimitives.create_cylinder_triangles((arm_x, -d/3, h), (arm_x, -d/3, h + arm_h), r_arm_tube, 12))
                 tris.extend(MeshPrimitives.create_box_triangles(arm_x, 10.0, h + arm_h + arm_pad_thick/2, arm_pad_w, arm_pad_len, arm_pad_thick))
@@ -504,19 +680,16 @@ module backrest_assembly() {{
 
         # 5. Armrests
         if g.has_arms:
-            arm_h = g.armrest_height_above_seat_mm
-            r_arm_tube = g.arm_profile.outer_dimension_mm / 2.0
-            arm_pad_w = g.armrest_width_mm
-            arm_pad_len = g.armrest_length_mm
-            arm_pad_thick = 18.0
-
             for side, name in [(-1.0, "Armrest_Left"), (1.0, "Armrest_Right")]:
-                arm_x = side * (w/2 + 25.0)
-                arm_tris = []
-                arm_tris.extend(MeshPrimitives.create_cylinder_triangles((arm_x, 40.0, h), (arm_x, 40.0, h + arm_h), r_arm_tube, 12))
-                arm_tris.extend(MeshPrimitives.create_cylinder_triangles((arm_x, -d/3, h), (arm_x, -d/3, h + arm_h), r_arm_tube, 12))
-                arm_tris.extend(MeshPrimitives.create_box_triangles(arm_x, 10.0, h + arm_h + arm_pad_thick/2, arm_pad_w, arm_pad_len, arm_pad_thick))
-                parts.append(SolidPart(name, arm_tris, color_rgb=(0.6, 0.4, 0.2)))
+                prims = armrest_primitives(
+                    w, d, h,
+                    g.armrest_height_above_seat_mm,
+                    g.armrest_width_mm, g.armrest_length_mm,
+                    18.0, g.arm_profile.outer_dimension_mm / 2.0, side=side,
+                )
+                parts.append(SolidPart(
+                    name, primitives_to_triangles(prims, n_slices=12),
+                    color_rgb=(0.6, 0.4, 0.2)))
 
         # 6. Backrest
         if g.has_backrest:

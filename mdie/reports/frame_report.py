@@ -35,6 +35,7 @@ class FrameReportGenerator:
         col_z_mm3 = col_prof.section_modulus_m3 * 1e9
         col_r_gyr_mm = col_prof.radius_of_gyration_m * 1000.0
         unbraced_len_mm = max(100.0, g.seat_height_mm - g.stretcher_height_mm)
+        k_factor = 0.85 if g.has_stretchers else 1.2
 
         # Johnson transition slenderness ratio (C = 1.0 pinned-pinned baseline)
         c_end = 1.0
@@ -663,7 +664,7 @@ class FrameReportGenerator:
         &lambda;<sub>1</sub> = &radic;[ (2 &pi;&sup2; C E) / S<sub>y</sub> ] = &radic;[ (2 &pi;&sup2; &times; {c_end:.1f} &times; {m.elastic_modulus_gpa * 1000.0:.0f} MPa) / {m.yield_strength_mpa:.1f} MPa ] = {trans_slenderness:.1f}
       </div>
       <div style="font-size: 12px; color: #475569; margin-top: 4px;">
-        Unbraced Length L<sub>eff</sub> = {unbraced_len_mm:.1f} mm &bull; Radius of Gyration k = {col_r_gyr_mm:.2f} mm &bull; Column Slenderness &lambda; = L<sub>eff</sub> / k = {(unbraced_len_mm / col_r_gyr_mm):.1f}
+        Unbraced Length L = {unbraced_len_mm:.1f} mm &bull; Effective Length Factor K = {k_factor:.2f} &bull; L<sub>eff</sub> = K&times;L = {(k_factor * unbraced_len_mm):.1f} mm &bull; Radius of Gyration k = {col_r_gyr_mm:.2f} mm &bull; Column Slenderness &lambda; = L<sub>eff</sub> / k = {(k_factor * unbraced_len_mm / col_r_gyr_mm):.1f}
       </div>
     </div>
 

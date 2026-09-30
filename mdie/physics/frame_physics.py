@@ -334,7 +334,8 @@ class FramePhysicsSolver:
 
         sf_tip_fwd = restoring_moment_pitch / max(abs(mx_total), 1.0)
         sf_tip_rear = restoring_moment_pitch / max(abs(mx_total), 1.0)
-        sf_tip_lat = restoring_moment_roll / max(abs(my_total), 1.0)
+        # When my_total is ~0 (balanced lateral loads), there is no net overturning moment
+        sf_tip_lat = restoring_moment_roll / abs(my_total) if abs(my_total) > 1.0 else 1e6
 
         min_leg_buck = min(l.buckling_safety_factor for l in leg_results)
         min_leg_yld = min(l.yield_safety_factor for l in leg_results)

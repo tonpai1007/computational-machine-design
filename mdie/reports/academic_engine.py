@@ -230,8 +230,8 @@ class AcademicAssignmentEngine:
                 <p>
                     เพื่อตรวจสอบความถูกต้องของการคำนวณเชิงทฤษฎี โครงสร้าง 3 มิติได้รับการวิเคราะห์ด้วยระเบียบวิธีไฟไนต์เอลิเมนต์แบบ Direct Stiffness Method
                     โดยกำหนดระดับความเป็นอิสระ (DOF) จำนวน 6 ระดับต่อจุดต่อ (3 การเคลื่อนที่ในแนวแกน X, Y, Z และ 3 การหมุนรอบแกน)
-                    โครงสร้างประกอบด้วย <strong>{fea_result.get('num_members', 14)} ชิ้นส่วนคาน-เสาในปริภูมิ 3 มิติ</strong> และ
-                    <strong>{fea_result.get('num_nodes', 12)} จุดต่อ (Joints)</strong> ({fea_result.get('active_free_dof', 84)} ระดับความเป็นอิสระอิสระ).
+                    โครงสร้างประกอบด้วย <strong>{fea_result.get('num_members', 28)} ชิ้นส่วนคาน-เสาในปริภูมิ 3 มิติ</strong> และ
+                    <strong>{fea_result.get('num_nodes', 24)} จุดต่อ (Joints)</strong> ({fea_result.get('active_free_dof', 120)} ระดับความเป็นอิสระอิสระ).
                 </p>
                 <div class="kpi-grid">
                     <div class="kpi-card">
@@ -251,8 +251,8 @@ class AcademicAssignmentEngine:
                     </div>
                     <div class="kpi-card">
                         <div class="kpi-label">Active DOFs Solved</div>
-                        <div class="kpi-val">{fea_result.get('active_free_dof', 84)}</div>
-                        <div class="kpi-sub">Total Model DOFs: {fea_result.get('total_dof', 72)}</div>
+                        <div class="kpi-val">{fea_result.get('active_free_dof', 120)}</div>
+                        <div class="kpi-sub">Total Model DOFs: {fea_result.get('total_dof', 144)}</div>
                     </div>
                 </div>
             </div>
@@ -1370,7 +1370,8 @@ class AcademicAssignmentEngine:
         leg_A_m2 = (math.pi / 4.0) * (leg_Do_m**2 - leg_Di_m**2) if leg_Di_m > 0 else (math.pi * leg_Do_m**2 / 4.0)
         leg_I_m4 = (math.pi / 64.0) * (leg_Do_m**4 - leg_Di_m**4) if leg_Di_m > 0 else (math.pi * leg_Do_m**4 / 64.0)
         leg_k_m = math.sqrt(leg_I_m4 / leg_A_m2)
-        leg_slenderness = leg_len_m / leg_k_m
+        leg_k_factor = 0.85 if g.has_stretchers else 1.2
+        leg_slenderness = (leg_k_factor * leg_len_m) / leg_k_m
         c_end = 1.0
         crit_slenderness = math.sqrt(2.0 * (math.pi**2) * c_end * E_pa / (Sy * 1e6))
 
@@ -1379,7 +1380,7 @@ class AcademicAssignmentEngine:
             leg_Pcr_N = leg_A_m2 * ((Sy * 1e6) - (((Sy * 1e6) / (2.0 * math.pi) * leg_slenderness)**2) * (1.0 / (c_end * E_pa)))
         else:
             buckling_formula_name = "Euler (เสายาว)"
-            leg_Pcr_N = (math.pi**2 * c_end * E_pa * leg_I_m4) / (leg_len_m**2)
+            leg_Pcr_N = (math.pi**2 * c_end * E_pa * leg_I_m4) / ((leg_k_factor * leg_len_m)**2)
 
         leg_kb = 1.0
         leg_kc = 0.59 # Axial
@@ -1419,9 +1420,10 @@ class AcademicAssignmentEngine:
     I = (&pi; / 64) [(Do)&sup4; - (Di)&sup4;] = {leg_I_m4:.3e} m&sup4;<br>
     A = (&pi; / 4) [(Do)&sup2; - (Di)&sup2;] = {leg_A_m2:.3e} m&sup2;<br>
     k = &radic;(I / A) = {leg_k_m:.5f} m<br>
-    l / k = {leg_len_m:.3f} / {leg_k_m:.5f} = {leg_slenderness:.2f}<br>
+    L<sub>eff</sub> = K &times; l = {leg_k_factor:.2f} &times; {leg_len_m:.3f} = {leg_k_factor * leg_len_m:.3f} m<br>
+    (l / k)<sub>eff</sub> = L<sub>eff</sub> / k = {(leg_k_factor * leg_len_m):.3f} / {leg_k_m:.5f} = {leg_slenderness:.2f}<br>
     (l / k)&sub1; = &radic;[ 2 &pi;&sup2; C E / Sy ] = {crit_slenderness:.2f} &nbsp;&nbsp;&nbsp;; C = {c_end:.1f}<br>
-    (l / k) {'&lt;' if leg_slenderness < crit_slenderness else '&ge;'} (l / k)&sub1; &nbsp;&nbsp; ใช้สูตร {buckling_formula_name}
+    (l / k)<sub>eff</sub> {'&lt;' if leg_slenderness < crit_slenderness else '&ge;'} (l / k)&sub1; &nbsp;&nbsp; ใช้สูตร {buckling_formula_name}
   </div>
 
   <h3 class="step-title">Step 2 : หาการโก่งเดาะของเสาขาโครงสร้าง (Deflection & Buckling)</h3>

@@ -349,6 +349,8 @@ class FEA3DSolver:
         return {
             "model_name": self.name,
             "num_nodes": n_nodes,
+            "total_dof": total_dof,
+            "active_free_dof": len(free_dofs),
             "num_members": len(self.members),
             "max_displacement_mm": max_disp_m * 1000.0,
             "max_von_mises_mpa": max_stress_overall,
@@ -456,18 +458,77 @@ def build_chair_3d_fea_model(chair_model: Any) -> FEA3DSolver:
         arm_h = g.armrest_height_above_seat_mm / 1000.0
         arm_x_l = -(w/2 + 0.025)
         arm_x_r = +(w/2 + 0.025)
+        # Match OpenSCAD: front arm post at y=+40mm, rear at y=-seat_d/3=-160mm
+        arm_y_front = 40 / 1000.0    # +40 mm (front)
+        arm_y_rear  = -d / 3.0       # -160 mm (rear, matches seat_d/3)
 
-        n_arm_l_top = solver.add_node(arm_x_l, 0.03, h + arm_h, "Arm_Left_Top")
-        n_arm_r_top = solver.add_node(arm_x_r, 0.03, h + arm_h, "Arm_Right_Top")
+        # Left side arm posts (front + rear)
+        n_arm_l_front_top = solver.add_node(arm_x_l, arm_y_front, h + arm_h, "Arm_Left_Front_Top")
+        n_arm_l_front_base = solver.add_node(arm_x_l, arm_y_front, h, "Arm_Left_Front_Base")
+        n_arm_l_rear_top = solver.add_node(arm_x_l, arm_y_rear, h + arm_h, "Arm_Left_Rear_Top")
+        n_arm_l_rear_base = solver.add_node(arm_x_l, arm_y_rear, h, "Arm_Left_Rear_Base")
+
+        # Right side arm posts (front + rear)
+        n_arm_r_front_top = solver.add_node(arm_x_r, arm_y_front, h + arm_h, "Arm_Right_Front_Top")
+        n_arm_r_front_base = solver.add_node(arm_x_r, arm_y_front, h, "Arm_Right_Front_Base")
+        n_arm_r_rear_top = solver.add_node(arm_x_r, arm_y_rear, h + arm_h, "Arm_Right_Rear_Top")
+        n_arm_r_rear_base = solver.add_node(arm_x_r, arm_y_rear, h, "Arm_Right_Rear_Base")
 
         ap = g.arm_profile
-        solver.add_member("Arm_Strut_L", top_nodes[0], n_arm_l_top, E, G, ap.area_m2, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4*2, ap.outer_dim_m, Sy)
-        solver.add_member("Arm_Strut_R", top_nodes[1], n_arm_r_top, E, G, ap.area_m2, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4*2, ap.outer_dim_m, Sy)
+        # Vertical arm posts (front and rear, per side)
+        solver.add_member("Arm_Post_L_Front", n_arm_l_front_base, n_arm_l_front_top, E, G, ap.area_m2, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4*2, ap.outer_dim_m, Sy)
+        solver.add_member("Arm_Post_L_Rear", n_arm_l_rear_base, n_arm_l_rear_top, E, G, ap.area_m2, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4*2, ap.outer_dim_m, Sy)
+        solver.add_member("Arm_Post_R_Front", n_arm_r_front_base, n_arm_r_front_top, E, G, ap.area_m2, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4*2, ap.outer_dim_m, Sy)
+        solver.add_member("Arm_Post_R_Rear", n_arm_r_rear_base, n_arm_r_rear_top, E, G, ap.area_m2, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4*2, ap.outer_dim_m, Sy)
 
-        solver.add_nodal_load(n_arm_l_top, fx=l.left_arm_lateral_n, fz=-l.left_arm_vertical_n)
-        solver.add_nodal_load(n_arm_r_top, fx=l.right_arm_lateral_n, fz=-l.right_arm_vertical_n)
+        # Short connecting members from arm posts to nearest seat frame corners
+        # Left side: FL connects to front arm base, RL connects to rear arm base
+        solver.add_member("Arm_Post_L_Front_FLT", top_nodes[0], n_arm_l_front_base, E, G, ap.area_m2, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4*2, ap.outer_dim_m, Sy)
+        solver.add_member("Arm_Post_L_Rear_RLT", top_nodes[3], n_arm_l_rear_base, E, G, ap.area_m2, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4*2, ap.outer_dim_m, Sy)
+        solver.add_member("Arm_Post_R_Front_FRT", top_nodes[1], n_arm_r_front_base, E, G, ap.area_m2, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4*2, ap.outer_dim_m, Sy)
+        solver.add_member("Arm_Post_R_Rear_RRT", top_nodes[2], n_arm_r_rear_base, E, G, ap.area_m2, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4*2, ap.outer_dim_m, Sy)
 
-    # 6. Apply External Seat Load distributed on corner nodes
+        # Cross-connectors between front and rear arm posts (top and base)
+        solver.add_member("Arm_Post_L_Top_X", n_arm_l_front_top, n_arm_l_rear_top, E, G, ap.area_m2, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4*2, ap.outer_dim_m, Sy)
+        solver.add_member("Arm_Post_R_Top_X", n_arm_r_front_top, n_arm_r_rear_top, E, G, ap.area_m2, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4*2, ap.outer_dim_m, Sy)
+        solver.add_member("Arm_Post_L_Base_X", n_arm_l_front_base, n_arm_l_rear_base, E, G, ap.area_m2, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4*2, ap.outer_dim_m, Sy)
+        solver.add_member("Arm_Post_R_Base_X", n_arm_r_front_base, n_arm_r_rear_base, E, G, ap.area_m2, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4*2, ap.outer_dim_m, Sy)
+
+        # Split arm loads between front and rear posts (50/50 split)
+        left_force = l.left_arm_vertical_n / 2.0
+        solver.add_nodal_load(n_arm_l_front_top, fz=-left_force, fy=l.left_arm_lateral_n)
+        solver.add_nodal_load(n_arm_l_rear_top, fz=-left_force, fy=l.left_arm_lateral_n)
+        right_force = l.right_arm_vertical_n / 2.0
+        solver.add_nodal_load(n_arm_r_front_top, fz=-right_force, fy=l.right_arm_lateral_n)
+        solver.add_nodal_load(n_arm_r_rear_top, fz=-right_force, fy=l.right_arm_lateral_n)
+
+    # 6. Backrest (if enabled)
+    if g.has_backrest:
+        back_h_m = g.backrest_height_above_seat_mm / 1000.0
+        back_rad = math.radians(g.backrest_angle_deg - 90.0)
+        dy_back = back_h_m * math.sin(back_rad)
+        dz_back = back_h_m * math.cos(back_rad)
+        # Use leg profile for backrest legs (same tube as main columns)
+        bp = g.leg_profile
+        back_attach_y = -d / 2 + bp.outer_dim_m  # Attach at rear of seat frame
+        # Backrest attachment nodes on seat frame (at rear corners)
+        back_base_fl = solver.add_node(-w/2 + bp.outer_dim_m, back_attach_y, h, "Back_Base_FL")
+        back_base_fr = solver.add_node(w/2 - bp.outer_dim_m, back_attach_y, h, "Back_Base_FR")
+        # Backrest top nodes (splayed at backrest angle)
+        back_top_fl = solver.add_node(-w/2 + bp.outer_dim_m, back_attach_y - dy_back, h + dz_back, "Back_Top_FL")
+        back_top_fr = solver.add_node(w/2 - bp.outer_dim_m, back_attach_y - dy_back, h + dz_back, "Back_Top_FR")
+        # Backrest leg members
+        solver.add_member("Backrest_Leg_FL", back_base_fl, back_top_fl, E, G, bp.area_m2, bp.moment_of_inertia_m4, bp.moment_of_inertia_m4, bp.moment_of_inertia_m4*2, bp.outer_dim_m, Sy)
+        solver.add_member("Backrest_Leg_FR", back_base_fr, back_top_fr, E, G, bp.area_m2, bp.moment_of_inertia_m4, bp.moment_of_inertia_m4, bp.moment_of_inertia_m4*2, bp.outer_dim_m, Sy)
+        # Connect backrest base to seat frame corners
+        solver.add_member("Back_Base_FL_Connect_FL", top_nodes[0], back_base_fl, E, G, bp.area_m2, bp.moment_of_inertia_m4, bp.moment_of_inertia_m4, bp.moment_of_inertia_m4*2, bp.outer_dim_m, Sy)
+        solver.add_member("Back_Base_FR_Connect_FR", top_nodes[1], back_base_fr, E, G, bp.area_m2, bp.moment_of_inertia_m4, bp.moment_of_inertia_m4, bp.moment_of_inertia_m4*2, bp.outer_dim_m, Sy)
+        # Apply backrest horizontal thrust (backward in -Y direction)
+        f_back = l.backrest_force_n / 2.0
+        solver.add_nodal_load(back_top_fl, fy=-f_back)
+        solver.add_nodal_load(back_top_fr, fy=-f_back)
+
+    # 7. Apply External Seat Load distributed on corner nodes
     f_seat_per_corner = -l.seat_vertical_load_n / float(len(top_nodes))
     for tn in top_nodes:
         solver.add_nodal_load(tn, fz=f_seat_per_corner)
