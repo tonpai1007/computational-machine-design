@@ -8,8 +8,8 @@ import math
 import struct
 from pathlib import Path
 from typing import List, Tuple, Dict, Any, Optional
-from mdie.cad.step_assembly import MultiBodySTEPExporter, SolidPart
-from mdie.core.frame_model import FrameDesignModel, FrameGeometry
+from cad.step_assembly import MultiBodySTEPExporter, SolidPart
+from core.frame_model import FrameDesignModel, FrameGeometry
 
 Point3D = Tuple[float, float, float]
 Triangle = Tuple[Point3D, Point3D, Point3D]

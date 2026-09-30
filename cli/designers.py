@@ -2,7 +2,7 @@
 
 Each `handle_*` function turns one family of plain-language prompt into a
 full design run: parameters, geometry, structural checks and deliverables.
-`dispatch_prompt` in :mod:mdie.cli.app routes to the right handler.
+`dispatch_prompt` in :mod:cli.app routes to the right handler.
 """
 
 from __future__ import annotations
@@ -19,11 +19,11 @@ from rich.panel import Panel
 console = Console()
 
 def _handle_bracket(prompt: str, p_lower: str, output_dir: Optional[str] = None) -> bool:
-    from mdie.core.bracket_model import BracketModel, BracketGeometry, BracketLoads, BoltHolePattern
-    from mdie.core.frame_model import STRUCTURAL_MATERIALS
-    from mdie.physics.bracket_physics import BracketPhysicsSolver
-    from mdie.cad.bracket_cad import BracketCADEngine
-    from mdie.reporting.bracket_report import BracketReportGenerator
+    from core.bracket_model import BracketModel, BracketGeometry, BracketLoads, BoltHolePattern
+    from core.frame_model import STRUCTURAL_MATERIALS
+    from physics.bracket_physics import BracketPhysicsSolver
+    from cad.bracket_cad import BracketCADEngine
+    from reporting.bracket_report import BracketReportGenerator
 
     out_path = Path(output_dir or "Project/bracket")
     out_path.mkdir(parents=True, exist_ok=True)
@@ -180,12 +180,12 @@ def _handle_bracket(prompt: str, p_lower: str, output_dir: Optional[str] = None)
 
 
 def _handle_chair(prompt: str, p_lower: str, output_dir: Optional[str] = None) -> bool:
-    from mdie.core.frame_model import FrameDesignModel, STRUCTURAL_MATERIALS
-    from mdie.physics.frame_physics import FramePhysicsSolver
-    from mdie.cad.assembly import FrameCADEngine
-    from mdie.reporting.frame_report import FrameReportGenerator
-    from mdie.reporting.academic_engine import AcademicAssignmentEngine
-    from mdie.physics.fea_3d import build_chair_3d_fea_model
+    from core.frame_model import FrameDesignModel, STRUCTURAL_MATERIALS
+    from physics.frame_physics import FramePhysicsSolver
+    from cad.assembly import FrameCADEngine
+    from reporting.frame_report import FrameReportGenerator
+    from reporting.academic_engine import AcademicAssignmentEngine
+    from physics.fea_3d import build_chair_3d_fea_model
 
     out_path = Path(output_dir or "Project/chair")
     out_path.mkdir(parents=True, exist_ok=True)
@@ -304,7 +304,7 @@ def _handle_chair(prompt: str, p_lower: str, output_dir: Optional[str] = None) -
         ))
 
     # Generate Word (.docx) deliverables & Consolidate study materials via Learning Tools
-    from mdie.integrations.learning_tools import LearningToolsBridge
+    from integrations.learning_tools import LearningToolsBridge
     bridge = LearningToolsBridge()
     assignment_docx = out_path / "academic_assignment_report.docx"
     assignment_v2_docx = out_path / "academic_assignment_report_v2.docx"
@@ -382,8 +382,8 @@ def _handle_chair(prompt: str, p_lower: str, output_dir: Optional[str] = None) -
 
 
 def _handle_space_frame(prompt: str, p_lower: str, output_dir: Optional[str] = None) -> bool:
-    from mdie.physics.fea_3d import build_space_truss_tower_model, build_cantilever_space_frame_model
-    from mdie.cad.space_frame_cad import SpaceFrameCADEngine
+    from physics.fea_3d import build_space_truss_tower_model, build_cantilever_space_frame_model
+    from cad.space_frame_cad import SpaceFrameCADEngine
 
     out_path = Path(output_dir or "Project/space_frame")
     out_path.mkdir(parents=True, exist_ok=True)
@@ -473,8 +473,8 @@ def _handle_space_frame(prompt: str, p_lower: str, output_dir: Optional[str] = N
 
 
 def _handle_generative(prompt: str, p_lower: str, output_dir: Optional[str] = None) -> bool:
-    from mdie.ai.generative_agent import GenerativeEngineeringAgent
-    from mdie.drafting.blueprint_2d import Blueprint2DGenerator
+    from ai.generative_agent import GenerativeEngineeringAgent
+    from drafting.blueprint_2d import Blueprint2DGenerator
 
     # Extract clean project slug
     words = [w for w in re.findall(r'[a-zA-Z0-9]+', p_lower) if w not in ["design", "a", "an", "the", "with", "and", "for", "in", "of", "to"]]
@@ -536,12 +536,12 @@ def _handle_generative(prompt: str, p_lower: str, output_dir: Optional[str] = No
 
 
 def _handle_shaft(prompt: str, p_lower: str, output_dir: Optional[str] = None) -> bool:
-    from mdie.ai.parser import NLParser
-    from mdie.physics.solver import PhysicsSolver
-    from mdie.cad.openscad import OpenSCADGenerator
-    from mdie.cad.stl_exporter import STLExporter
-    from mdie.cad.step_exporter import STEPExporter
-    from mdie.reporting.generator import ReportGenerator
+    from ai.parser import NLParser
+    from physics.solver import PhysicsSolver
+    from cad.openscad import OpenSCADGenerator
+    from cad.stl_exporter import STLExporter
+    from cad.step_exporter import STEPExporter
+    from reporting.generator import ReportGenerator
 
     out_path = Path(output_dir or "Project/shaft")
     out_path.mkdir(parents=True, exist_ok=True)
@@ -573,7 +573,7 @@ def _handle_shaft(prompt: str, p_lower: str, output_dir: Optional[str] = None) -
         f.write(ReportGenerator.generate_html_report(model, result))
 
     # 2D Technical Drawing Blueprint
-    from mdie.drafting.blueprint_2d import Blueprint2DGenerator
+    from drafting.blueprint_2d import Blueprint2DGenerator
     bp_svg_file = out_path / "shaft_blueprint.svg"
     bp_svg = Blueprint2DGenerator.generate_shaft_blueprint_svg(model, result, theme="blueprint")
     with open(bp_svg_file, "w", encoding="utf-8") as f:

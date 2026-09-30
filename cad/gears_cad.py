@@ -6,7 +6,7 @@ central bore, hub, and standard keyways.
 
 import math
 from typing import Dict, Any, List
-from mdie.components.gears import GearPairResult
+from components.gears import GearPairResult
 
 
 class GearCADGenerator:

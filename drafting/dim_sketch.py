@@ -2,7 +2,7 @@
 
 Explains, in one picture, which numbers are sizes of the pan (a box) and
 which is a position of the whole chair relative to the floor.
-Run:  python -m mdie.drafting.dim_sketch
+Run:  python -m drafting.dim_sketch
 """
 from __future__ import annotations
 

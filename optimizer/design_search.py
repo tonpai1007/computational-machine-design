@@ -8,9 +8,9 @@ import copy
 import math
 from typing import List, Dict, Any, Optional, Tuple
 from scipy.optimize import minimize_scalar
-from mdie.core.models import EngineeringModel, ShaftSegment, SolverResult, EngineeringConstraints
-from mdie.materials.database import MaterialDatabase, Material
-from mdie.physics.solver import PhysicsSolver
+from core.models import EngineeringModel, ShaftSegment, SolverResult, EngineeringConstraints
+from materials.database import MaterialDatabase, Material
+from physics.solver import PhysicsSolver
 
 # Standard metric shaft diameters in millimeters (ISO 286 / DIN standard transmission shafting)
 STANDARD_SHAFT_DIAMETERS_MM = [

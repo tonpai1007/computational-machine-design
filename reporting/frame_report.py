@@ -7,8 +7,8 @@ Strictly follows clean white-paper professional engineering standard (Engineervi
 
 import math
 from typing import Dict, Any, List
-from mdie.core.frame_model import FrameDesignModel
-from mdie.physics.frame_physics import FrameSolverResult
+from core.frame_model import FrameDesignModel
+from physics.frame_physics import FrameSolverResult
 
 
 class FrameReportGenerator:

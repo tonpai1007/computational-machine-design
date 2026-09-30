@@ -8,11 +8,11 @@ import copy
 import math
 import os
 from typing import Dict, Any, List, Optional, Tuple
-from mdie.core.models import EngineeringModel, SolverResult
-from mdie.physics.solver import PhysicsSolver
-from mdie.ai.critic import DesignCritic
-from mdie.materials.database import MaterialDatabase
-from mdie.ai.llm_router import LLMRouter
+from core.models import EngineeringModel, SolverResult
+from physics.solver import PhysicsSolver
+from ai.critic import DesignCritic
+from materials.database import MaterialDatabase
+from ai.llm_router import LLMRouter
 
 class EngineeringCopilot:
     @staticmethod

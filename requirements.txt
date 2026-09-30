@@ -12,7 +12,7 @@ rich>=13.7.0
 google-genai>=1.0.0
 pytest>=8.0.0
 
-# mdie.convert - document and drawing-sheet conversion
+# convert - document and drawing-sheet conversion
 python-docx>=1.1.0
 Markdown>=3.5
 PyMuPDF>=1.24.0

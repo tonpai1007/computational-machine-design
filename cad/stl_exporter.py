@@ -8,7 +8,7 @@ Fully compatible with 3D slicers (Cura, PrusaSlicer, Bambu Studio) and CAD tools
 import math
 import struct
 from typing import List, Tuple
-from mdie.core.models import EngineeringModel, ShaftSegment
+from core.models import EngineeringModel, ShaftSegment
 
 class STLExporter:
     @staticmethod

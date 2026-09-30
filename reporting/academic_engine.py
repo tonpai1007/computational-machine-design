@@ -23,12 +23,12 @@ import json
 import logging
 from pathlib import Path
 from typing import Dict, Any, List, Optional
-from mdie.core.frame_model import FrameDesignModel
-from mdie.physics.frame_physics import FrameSolverResult
-from mdie.ai.llm_router import LLMRouter
-from mdie.ai.narrative_synthesizer import synthesize_academic_narrative
+from core.frame_model import FrameDesignModel
+from physics.frame_physics import FrameSolverResult
+from ai.llm_router import LLMRouter
+from ai.narrative_synthesizer import synthesize_academic_narrative
 
-logger = logging.getLogger("mdie.reporting.academic_engine")
+logger = logging.getLogger("reporting.academic_engine")
 
 
 class AcademicAssignmentEngine:
@@ -1284,7 +1284,7 @@ class AcademicAssignmentEngine:
     ) -> Dict[str, Any]:
         """
         Synthesize technical introduction (บทนำ) and component engineering descriptions
-        using AI (delegated to mdie.ai.narrative_synthesizer).
+        using AI (delegated to ai.narrative_synthesizer).
         """
         return synthesize_academic_narrative(model, component_names, use_ai=use_ai)
 

@@ -5,7 +5,7 @@ Computes support reaction forces, reaction moments, and internal shear/bending/t
 
 import numpy as np
 from typing import List, Tuple, Dict, Any, Optional
-from mdie.core.models import EngineeringModel, Support, PointLoad, DistributedLoad, SupportReaction
+from core.models import EngineeringModel, Support, PointLoad, DistributedLoad, SupportReaction
 
 class EquilibriumSolver:
     @staticmethod

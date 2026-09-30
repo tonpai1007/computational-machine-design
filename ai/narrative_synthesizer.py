@@ -11,10 +11,10 @@ Strictly adheres to MDIE Directives:
 import json
 import logging
 from typing import Dict, Any, List, Optional
-from mdie.core.frame_model import FrameDesignModel
-from mdie.ai.llm_router import LLMRouter
+from core.frame_model import FrameDesignModel
+from ai.llm_router import LLMRouter
 
-logger = logging.getLogger("mdie.ai.narrative_synthesizer")
+logger = logging.getLogger("ai.narrative_synthesizer")
 
 
 def synthesize_academic_narrative(

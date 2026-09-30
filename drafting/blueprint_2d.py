@@ -7,8 +7,8 @@ centerlines, projection angle symbols, and engineering title blocks.
 
 import math
 from typing import Dict, Any, List, Optional
-from mdie.core.models import EngineeringModel, SolverResult
-from mdie.components.gears import GearPairResult
+from core.models import EngineeringModel, SolverResult
+from components.gears import GearPairResult
 
 
 class Blueprint2DGenerator:

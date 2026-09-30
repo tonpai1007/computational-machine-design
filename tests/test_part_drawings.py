@@ -5,8 +5,8 @@ import re
 
 import pytest
 
-from mdie.core.frame_model import FrameDesignModel
-from mdie.drafting.part_drawings import (
+from core.frame_model import FrameDesignModel
+from drafting.part_drawings import (
     DIMC,
     _clip_annulus,
     _leg_len,
@@ -139,7 +139,7 @@ def test_every_dimension_has_a_label(parts, model):
 
 def test_no_text_is_tiny(parts, model):
     """No annotation may fall below a legible size on the A4 sheet."""
-    from mdie.drafting.part_drawings import TXT_SMALL
+    from drafting.part_drawings import TXT_SMALL
 
     floor = TXT_SMALL - 0.05
     for p in parts:
@@ -152,7 +152,7 @@ def test_no_text_is_tiny(parts, model):
 
 def test_dimension_text_is_larger_than_notes(parts, model):
     """Dimension values must be the most prominent annotation."""
-    from mdie.drafting.part_drawings import DIMC, TXT_DIM, TXT_NOTE
+    from drafting.part_drawings import DIMC, TXT_DIM, TXT_NOTE
 
     assert TXT_DIM > TXT_NOTE, "dimension text should exceed note text"
     for p in parts:
@@ -179,7 +179,7 @@ def _text_box(x, y, size, anchor, body, rotate=None):
     y axis and its short axis is the x axis. Measuring it as if it were
     horizontal is what made a rotated label look like it hung off the sheet.
     """
-    from mdie.drafting.part_drawings import _text_width
+    from drafting.part_drawings import _text_width
 
     w = _text_width(body, size)
     h = size * 0.78
@@ -235,7 +235,7 @@ def _solid_boxes(svg: str):
     furniture that text is *meant* to sit inside; only material counts as
     something text must stay off.
     """
-    from mdie.drafting.part_drawings import FILL
+    from drafting.part_drawings import FILL
 
     boxes = []
     for m in re.finditer(r'<polygon points="([^"]+)"[^>]*?fill="([^"]*)"',
@@ -291,7 +291,7 @@ def test_text_never_sits_on_top_of_the_geometry(parts, model):
     A white halo makes such text readable but not legible, and a dimension
     value printed across a member is simply wrong.
     """
-    from mdie.drafting.part_drawings import render_assembly_svg
+    from drafting.part_drawings import render_assembly_svg
 
     sheets = [(p.key, render_part_svg(p, model)) for p in parts]
     sheets.append(("Chair_Assembly", render_assembly_svg(model)))
@@ -309,7 +309,7 @@ def test_text_never_sits_on_top_of_the_geometry(parts, model):
 
 def test_text_never_overlaps_other_text(parts, model):
     """Two labels printing on top of each other make both unreadable."""
-    from mdie.drafting.part_drawings import render_assembly_svg
+    from drafting.part_drawings import render_assembly_svg
 
     sheets = [(p.key, render_part_svg(p, model)) for p in parts]
     sheets.append(("Chair_Assembly", render_assembly_svg(model)))
@@ -337,7 +337,7 @@ def test_no_text_lands_on_any_drawn_shape(parts, model):
     so a full containment is allowed; straddling an edge or landing on a
     stroke is not.
     """
-    from mdie.drafting.part_drawings import render_assembly_svg
+    from drafting.part_drawings import render_assembly_svg
 
     sheets = [(p.key, render_part_svg(p, model)) for p in parts]
     sheets.append(("Chair_Assembly", render_assembly_svg(model)))
@@ -366,7 +366,7 @@ def test_feature_dimensions_land_on_the_feature_they_measure(parts, model):
     nothing connecting it. Every horizontal feature dimension is therefore
     checked to fall inside the view's own model extent.
     """
-    import mdie.drafting.part_drawings as pd
+    import drafting.part_drawings as pd
 
     checked = 0
     for p in parts:
@@ -497,7 +497,7 @@ def test_three_view_sheets_match_exported_solids(parts, model):
     ``part_drawings`` while the solid is built independently in
     ``assembly``. If the two drift apart the drawing is lying.
     """
-    from mdie.cad.assembly import FrameCADEngine
+    from cad.assembly import FrameCADEngine
 
     solids = {s.name: s for s in FrameCADEngine.generate_assembly_parts(model)}
     # The armrest sheet covers both arms, which are exported separately.
@@ -524,7 +524,7 @@ def test_armrest_sheet_covers_both_mirrored_arms(parts, model):
     Drawing the armrest once is only honest if the right arm is the left
     arm reflected about the centre plane, so both share every dimension.
     """
-    from mdie.cad.assembly import FrameCADEngine
+    from cad.assembly import FrameCADEngine
 
     solids = {s.name: s for s in FrameCADEngine.generate_assembly_parts(model)}
     left = solids["Armrest_Left"]
@@ -567,7 +567,7 @@ def test_assembly_primitives_match_exported_solids(model):
     ``generate_assembly_parts`` feeds the STEP files. If the two describe
     different chairs the drawing is fiction, so compare every group.
     """
-    from mdie.cad.assembly import (FrameCADEngine, assembly_primitives,
+    from cad.assembly import (FrameCADEngine, assembly_primitives,
                                    primitives_to_triangles)
 
     groups = dict(assembly_primitives(model))
@@ -594,7 +594,7 @@ def test_assembly_sheet_shows_every_item(model):
     """The GA sheet must carry a view per direction plus a ballooned list."""
     from xml.etree import ElementTree as ET
 
-    from mdie.drafting.part_drawings import ASSEMBLY_ITEMS, render_assembly_svg
+    from drafting.part_drawings import ASSEMBLY_ITEMS, render_assembly_svg
 
     s = render_assembly_svg(model)
     ET.fromstring(s)
@@ -612,8 +612,8 @@ def test_assembly_sheet_dimensions_come_from_the_model(model):
     """Overall envelope and seat height must be the model's own numbers."""
     import math
 
-    from mdie.cad.assembly import assembly_primitives
-    from mdie.drafting.part_drawings import render_assembly_svg
+    from cad.assembly import assembly_primitives
+    from drafting.part_drawings import render_assembly_svg
 
     g = model.geometry
     prims = [p for _, pl in assembly_primitives(model) for p in pl]
@@ -648,8 +648,8 @@ def test_assembly_overall_height_is_the_backrest_not_a_formula(model):
     import math
     import re
 
-    from mdie.cad.assembly import assembly_primitives
-    from mdie.drafting.part_drawings import render_assembly_svg
+    from cad.assembly import assembly_primitives
+    from drafting.part_drawings import render_assembly_svg
 
     prims = [p for _, pl in assembly_primitives(model) for p in pl]
 
@@ -689,7 +689,7 @@ def test_assembly_sheet_stays_inside_the_border(model):
     """The GA sheet is held to the same border rule as every detail sheet."""
     from xml.etree import ElementTree as ET
 
-    from mdie.drafting.part_drawings import render_assembly_svg
+    from drafting.part_drawings import render_assembly_svg
 
     s = render_assembly_svg(model)
     ET.fromstring(s)

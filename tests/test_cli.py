@@ -6,16 +6,16 @@ from pathlib import Path
 
 import pytest
 
-from mdie.cli import main
-from mdie.cli.app import SUBCOMMANDS, _design_flags, _resolve_target
-from mdie.cli.viewers import find_cad_tools, launch_cad_viewer
+from cli import main
+from cli.app import SUBCOMMANDS, _design_flags, _resolve_target
+from cli.viewers import find_cad_tools, launch_cad_viewer
 
 MD_SAMPLE = "# Sheet\n\nbody\n"
 
 
 def test_bare_invocation_opens_the_interactive_prompt(monkeypatch):
     called = []
-    monkeypatch.setattr("mdie.cli.app.interactive_repl", lambda: called.append(True))
+    monkeypatch.setattr("cli.app.interactive_repl", lambda: called.append(True))
     assert main([]) == 0
     assert called == [True]
 

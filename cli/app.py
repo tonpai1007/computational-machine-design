@@ -4,7 +4,7 @@ Usage shapes
 ------------
 ``mdie "design a chair with 4 legs"``   free-form design prompt
 ``mdie chair | bracket | shaft``        canned designs
-``mdie convert in.html --to pdf``       file conversion (see :mod:`mdie.convert`)
+``mdie convert in.html --to pdf``       file conversion (see :mod:`convert`)
 ``mdie view chair --freecad``           open a project in a CAD viewer
 ``mdie drawings --pdf``                 regenerate chair drawing sheets
 ``mdie report chair --ai``              consolidate an engineering report
@@ -22,14 +22,14 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
 
-from mdie.cli.designers import (
+from cli.designers import (
     _handle_bracket,
     _handle_chair,
     _handle_generative,
     _handle_shaft,
     _handle_space_frame,
 )
-from mdie.cli.viewers import find_cad_tools, launch_cad_viewer
+from cli.viewers import find_cad_tools, launch_cad_viewer
 
 console = Console()
 
@@ -54,7 +54,7 @@ def process_prompt(prompt: str, output_dir: Optional[str] = None,
 
     console.print(f"\n[bold cyan]>> Analyzing Prompt:[/bold cyan] [italic]{prompt}[/italic]")
 
-    from mdie.ai.classifier import DomainClassifier
+    from ai.classifier import DomainClassifier
     domain, meta = DomainClassifier.classify(prompt)
 
     if domain == "bracket":
@@ -131,12 +131,12 @@ def _show_help() -> None:
         rows.append((name.capitalize(),
                      f"[green]Installed[/green] ({p})" if p else "[yellow]Not detected[/yellow]"))
 
-    from mdie.ai.llm_router import LLMRouter
+    from ai.llm_router import LLMRouter
     providers = LLMRouter.get_configured_providers()
     llm = (f"[green]{' -> '.join(p.upper() for p in providers)}[/green]" if providers
            else "[yellow]none configured (offline heuristic engine)[/yellow]")
 
-    from mdie.convert import available_formats
+    from convert import available_formats
     conv = ", ".join(available_formats())
 
     console.print(Panel(
@@ -163,8 +163,8 @@ def _show_help() -> None:
 
 
 def _show_info() -> None:
-    from mdie import __version__
-    from mdie.ai.llm_router import LLMRouter
+    from core import __version__
+    from ai.llm_router import LLMRouter
 
     table = Table(title=f"MDIE {__version__}", show_header=True, header_style="bold cyan")
     table.add_column("Component")
@@ -177,7 +177,7 @@ def _show_info() -> None:
     providers = LLMRouter.get_configured_providers()
     table.add_row("llm cascade", " -> ".join(providers) if providers else "offline heuristic engine")
 
-    from mdie.convert import available_formats, missing_dependencies
+    from convert import available_formats, missing_dependencies
     table.add_row("convert formats", ", ".join(available_formats()))
     missing = missing_dependencies()
     if missing:
@@ -198,7 +198,7 @@ def _resolve_target(name: str) -> Path:
 
 
 def _cmd_convert(argv: list[str]) -> int:
-    from mdie.convert import convert_file, describe_formats
+    from convert import convert_file, describe_formats
 
     import argparse
     ap = argparse.ArgumentParser(
@@ -244,7 +244,7 @@ def _cmd_drawings(argv: list[str]) -> int:
     args = ap.parse_args(argv)
 
     import subprocess
-    cmd = [sys.executable, "-m", "mdie.drafting.part_drawings", "--outdir", args.outdir]
+    cmd = [sys.executable, "-m", "drafting.part_drawings", "--outdir", args.outdir]
     if args.pdf:
         cmd.append("--pdf")
     if args.chrome:
@@ -260,7 +260,7 @@ def _cmd_report(argv: list[str]) -> int:
     ap.add_argument("--ai", action="store_true", help="enable AI summarisation")
     args = ap.parse_args(argv)
 
-    from mdie.integrations.learning_tools import LearningToolsBridge
+    from integrations.learning_tools import LearningToolsBridge
     bridge = LearningToolsBridge()
 
     target_p = Path(args.target)

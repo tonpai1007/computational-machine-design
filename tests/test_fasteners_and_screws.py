@@ -3,10 +3,10 @@ Test Suite: Bolted Joints (VDI 2230) & Power Screws (ASME B1.5)
 """
 
 import pytest
-from mdie.components.bolted_joints import BoltedJointSpecification
-from mdie.physics.bolted_joints import BoltedJointSolver
-from mdie.components.power_screws import PowerScrewSpecification
-from mdie.physics.power_screws import PowerScrewSolver
+from components.bolted_joints import BoltedJointSpecification
+from physics.bolted_joints import BoltedJointSolver
+from components.power_screws import PowerScrewSpecification
+from physics.power_screws import PowerScrewSolver
 
 
 def test_bolted_joint_vdi2230():

@@ -8,9 +8,9 @@ Accounts for variable second moment of area along stepped shoulders.
 import math
 import numpy as np
 from typing import Dict, Any, List, Tuple
-from mdie.core.models import EngineeringModel, Support
-from mdie.materials.database import Material
-from mdie.physics.stress import StressSolver
+from core.models import EngineeringModel, Support
+from materials.database import Material
+from physics.stress import StressSolver
 
 class DeflectionSolver:
     @staticmethod

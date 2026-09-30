@@ -4,8 +4,8 @@ Unit tests for 3D Frame & Truss FEA Solver (Direct Stiffness Method)
 
 import math
 import pytest
-from mdie.physics.fea_3d import FEA3DSolver, build_chair_3d_fea_model
-from mdie.core.frame_model import FrameDesignModel as ChairDesignModel, STRUCTURAL_MATERIALS as CHAIR_MATERIALS
+from physics.fea_3d import FEA3DSolver, build_chair_3d_fea_model
+from core.frame_model import FrameDesignModel as ChairDesignModel, STRUCTURAL_MATERIALS as CHAIR_MATERIALS
 
 def test_cantilever_beam_3d_fea():
     """Validates 3D FEA solver against classical cantilever beam tip deflection: v = P * L^3 / (3 * E * I)."""
@@ -60,8 +60,8 @@ def test_chair_3d_frame_fea():
 
 def test_space_frame_cad_export():
     """Validates OpenSCAD, STL, and STEP CAD generation for arbitrary 3D space frames."""
-    from mdie.physics.fea_3d import build_space_truss_tower_model
-    from mdie.cad.space_frame_cad import SpaceFrameCADEngine
+    from physics.fea_3d import build_space_truss_tower_model
+    from cad.space_frame_cad import SpaceFrameCADEngine
 
     tower = build_space_truss_tower_model(height_m=5.0, wind_load_n=4000.0)
     tower.solve()

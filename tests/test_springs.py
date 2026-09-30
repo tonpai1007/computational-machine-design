@@ -3,9 +3,9 @@ Test Suite: Helical Spring DIN 2089 / Shigley Physics & CAD
 """
 
 import pytest
-from mdie.components.springs import SpringSpecification
-from mdie.physics.springs import SpringSolver
-from mdie.cad.springs_cad import SpringCADGenerator
+from components.springs import SpringSpecification
+from physics.springs import SpringSolver
+from cad.springs_cad import SpringCADGenerator
 
 
 def test_compression_spring_solver():

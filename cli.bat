@@ -1,2 +1,2 @@
 @echo off
-python -m mdie %*
+python -m cli %*

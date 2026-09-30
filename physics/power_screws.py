@@ -7,7 +7,7 @@ Standards: ASME B1.5 / DIN 103 / Shigley.
 
 import math
 from typing import Dict, Any, List
-from mdie.components.power_screws import (
+from components.power_screws import (
     PowerScrewSpecification,
     PowerScrewResult,
 )

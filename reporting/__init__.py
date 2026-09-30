@@ -1,10 +1,10 @@
 """
 MDIE Reporting Package
 """
-from mdie.reporting.generator import ReportGenerator
-from mdie.reporting.frame_report import FrameReportGenerator, ChairReportGenerator
-from mdie.reporting.bracket_report import BracketReportGenerator
-from mdie.reporting.academic_engine import AcademicAssignmentEngine
+from reporting.generator import ReportGenerator
+from reporting.frame_report import FrameReportGenerator, ChairReportGenerator
+from reporting.bracket_report import BracketReportGenerator
+from reporting.academic_engine import AcademicAssignmentEngine
 
 __all__ = [
     "ReportGenerator",

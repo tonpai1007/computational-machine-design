@@ -3,11 +3,11 @@ Tests for Component Engines (SKF Bearings + DIN 6885 Keys) and ISO 10303 STEP CA
 """
 
 import pytest
-from mdie.core.models import EngineeringModel, ShaftSegment, KeywaySpec, Support, PointLoad
-from mdie.components.bearings import BearingCatalog, BearingLifeResult
-from mdie.components.keys import KeyEngine, KeyCheckResult
-from mdie.cad.step_exporter import STEPExporter
-from mdie.physics.solver import PhysicsSolver
+from core.models import EngineeringModel, ShaftSegment, KeywaySpec, Support, PointLoad
+from components.bearings import BearingCatalog, BearingLifeResult
+from components.keys import KeyEngine, KeyCheckResult
+from cad.step_exporter import STEPExporter
+from physics.solver import PhysicsSolver
 
 def test_skf_bearing_selection():
     # 30 mm shaft, 1200 N load, 1800 rpm

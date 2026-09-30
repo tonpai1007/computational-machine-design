@@ -7,7 +7,7 @@ Standards: VDI 2230 / Shigley's Mechanical Engineering Design.
 
 import math
 from typing import Dict, Any, List
-from mdie.components.bolted_joints import (
+from components.bolted_joints import (
     BoltedJointSpecification,
     BoltedJointResult,
     METRIC_BOLT_CATALOG,

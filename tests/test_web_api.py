@@ -5,7 +5,7 @@ Verifies Shaft, Chair Multi-Body Solid, and 3D Frame/Truss FEA endpoints.
 
 import pytest
 from fastapi.testclient import TestClient
-from mdie.web.app import app
+from web.app import app
 
 client = TestClient(app)
 

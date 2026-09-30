@@ -10,13 +10,13 @@ Verifies:
 import os
 from pathlib import Path
 import pytest
-from mdie.ai.classifier import DomainClassifier
-from mdie.core.bracket_model import BracketModel, BracketGeometry, BracketLoads, BoltHolePattern
-from mdie.core.frame_model import STRUCTURAL_MATERIALS
-from mdie.physics.bracket_physics import BracketPhysicsSolver
-from mdie.cad.bracket_cad import BracketCADEngine
-from mdie.reporting.bracket_report import BracketReportGenerator
-from mdie.cli import process_prompt
+from ai.classifier import DomainClassifier
+from core.bracket_model import BracketModel, BracketGeometry, BracketLoads, BoltHolePattern
+from core.frame_model import STRUCTURAL_MATERIALS
+from physics.bracket_physics import BracketPhysicsSolver
+from cad.bracket_cad import BracketCADEngine
+from reporting.bracket_report import BracketReportGenerator
+from cli import process_prompt
 
 
 def test_domain_classifier_routing():

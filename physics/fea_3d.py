@@ -365,7 +365,7 @@ def build_chair_3d_fea_model(chair_model: Any) -> FEA3DSolver:
     """
     Constructs a complete 3D space frame FEA model for the 4-leg armchair.
     """
-    from mdie.core.frame_model import FrameDesignModel
+    from core.frame_model import FrameDesignModel
     g = chair_model.geometry
     l = chair_model.loads
     m = chair_model.material

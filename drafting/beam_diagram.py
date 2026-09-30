@@ -3,7 +3,7 @@ Mermaid V / M beam-diagram generator for the seat-frame rail.
 
 Emits ``xychart-beta`` diagrams whose ordinates come from the Macaulay
 singularity function, and whose headline values are cross-checked against the
-deterministic solver in :mod:`mdie.physics.frame_physics`.
+deterministic solver in :mod:`physics.frame_physics`.
 
 Singularity function for a simply supported rail of span ``L`` carrying a
 central point load ``P`` (reactions ``R1 = R2 = P/2``)::
@@ -13,8 +13,8 @@ central point load ``P`` (reactions ``R1 = R2 = P/2``)::
 
 Usage::
 
-    python -m mdie.drafting.beam_diagram            # print to stdout
-    python -m mdie.drafting.beam_diagram --inject   # splice into the report
+    python -m drafting.beam_diagram            # print to stdout
+    python -m drafting.beam_diagram --inject   # splice into the report
 """
 
 from __future__ import annotations
@@ -26,11 +26,11 @@ import sys
 from pathlib import Path
 from typing import List, Sequence, Tuple
 
-# Allow `python -m mdie.drafting.beam_diagram` from the repo root.
+# Allow `python -m drafting.beam_diagram` from the repo root.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from mdie.core.frame_model import FrameDesignModel
-from mdie.physics.frame_physics import FramePhysicsSolver
+from core.frame_model import FrameDesignModel
+from physics.frame_physics import FramePhysicsSolver
 
 REPORT_MD = Path("Project/chair/chair_design_report.md")
 
@@ -118,7 +118,7 @@ def _fbd_image_ref(rail: "SimplySupportedRail") -> str:
     Markdown image reference for the free-body diagram.
 
     The FBD is a plotted drawing, not Mermaid: Mermaid has no arrowhead,
-    support, hatch, or dimension primitive, so ``mdie.drafting.fbd_plot``
+    support, hatch, or dimension primitive, so ``drafting.fbd_plot``
     renders it with matplotlib from this same solver result.
     """
     rel = "diagrams/fbd_cross_rail.png"
@@ -127,14 +127,14 @@ def _fbd_image_ref(rail: "SimplySupportedRail") -> str:
         "> แผนภาพที่ 1 — FBD คานโครงเบาะ เสียดยืนปลายซ้ายแบบหมุด (pinned, A) "
         f"และปลายขวาแบบลูกกลิ้ง (roller, B)  L = {rail.span_mm:g} mm, "
         f"P = {rail.p_n:g} N\n"
-        "> สร้างจากผล solver ใน `mdie/drafting/beam_diagram.py` "
-        "โดย `mdie/drafting/fbd_plot.py`"
+        "> สร้างจากผล solver ใน `drafting/beam_diagram.py` "
+        "โดย `drafting/fbd_plot.py`"
     )
 
 
 FBD_IMAGE_RE = re.compile(
     r"!\[แผนภาพแรงอิสระ \(FBD\) ของคานโครงเบาะ\]\(diagrams/fbd_cross_rail\.png\)"
-    r".*?`mdie/drafting/fbd_plot\.py`",
+    r".*?`drafting/fbd_plot\.py`",
     re.DOTALL,
 )
 
@@ -238,7 +238,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     blocks = f"{v_block}\n\n{m_block}"
 
     if args.inject:
-        from mdie.drafting.fbd_plot import plot_fbd
+        from drafting.fbd_plot import plot_fbd
         outdir = REPORT_MD.parent / "diagrams"
         for f in ("png", "svg"):
             img = plot_fbd(rail, outdir=outdir, fmt=f)

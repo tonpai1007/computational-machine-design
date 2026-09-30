@@ -4,9 +4,9 @@ import re
 
 import pytest
 
-from mdie.core.frame_model import FrameDesignModel
-from mdie.physics.frame_physics import FramePhysicsSolver
-from mdie.drafting.beam_diagram import SimplySupportedRail, build_blocks
+from core.frame_model import FrameDesignModel
+from physics.frame_physics import FramePhysicsSolver
+from drafting.beam_diagram import SimplySupportedRail, build_blocks
 
 
 @pytest.fixture
@@ -129,7 +129,7 @@ def test_moment_series_starts_and_ends_at_zero():
 
 
 def test_mermaid_pair_present_in_report():
-    from mdie.drafting.beam_diagram import REPORT_MD
+    from drafting.beam_diagram import REPORT_MD
 
     text = REPORT_MD.read_text(encoding="utf-8")
     # Only the shear and moment charts are Mermaid; the FBD is a plotted image.
@@ -142,7 +142,7 @@ def test_mermaid_pair_present_in_report():
 
 def test_fbd_is_a_rendered_image_not_mermaid():
     """The FBD must be a real plot; a Mermaid flowchart is not an FBD."""
-    from mdie.drafting.beam_diagram import REPORT_MD
+    from drafting.beam_diagram import REPORT_MD
 
     text = REPORT_MD.read_text(encoding="utf-8")
     assert "flowchart TB" not in text

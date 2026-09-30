@@ -9,9 +9,9 @@ Converts arbitrary 3D FEA frame models (nodes and members) into:
 import math
 import struct
 from typing import List, Tuple, Dict, Any, Optional
-from mdie.physics.fea_3d import FEA3DSolver, FEAMember, FEANode
-from mdie.cad.assembly import MeshPrimitives, Point3D, Triangle
-from mdie.cad.step_assembly import MultiBodySTEPExporter, SolidPart
+from physics.fea_3d import FEA3DSolver, FEAMember, FEANode
+from cad.assembly import MeshPrimitives, Point3D, Triangle
+from cad.step_assembly import MultiBodySTEPExporter, SolidPart
 
 
 class SpaceFrameCADEngine:

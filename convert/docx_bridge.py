@@ -10,7 +10,7 @@ fail. :func:`is_available` reports whether the bridge is usable, and
 :data:`HTMLToDocxConverter` stays importable either way - it raises
 :class:`LearningToolsUnavailable` on use when the dependency is missing.
 Callers that just need a Word file should use the native renderer in
-:mod:`mdie.convert.documents` instead.
+:mod:`convert.documents` instead.
 
 Point ``LEARNING_TOOLS_PATH`` at the checkout to override discovery.
 """

@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from mdie.core.frame_model import FrameDesignModel
-from mdie.physics.frame_physics import FramePhysicsSolver
+from core.frame_model import FrameDesignModel
+from physics.frame_physics import FramePhysicsSolver
 
 REPORT = Path(__file__).resolve().parents[1] / "Project" / "chair" / "chair_design_report.md"
 

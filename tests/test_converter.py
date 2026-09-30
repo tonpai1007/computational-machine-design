@@ -1,4 +1,4 @@
-"""Tests for the mdie.convert file converter."""
+"""Tests for the convert file converter."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from mdie.convert import convert_file
-from mdie.convert.documents import (
+from convert import convert_file
+from convert.documents import (
     blocks_from_docx,
     blocks_from_html,
     blocks_from_markdown,
@@ -17,14 +17,14 @@ from mdie.convert.documents import (
     blocks_to_html,
     blocks_to_markdown,
 )
-from mdie.convert.registry import (
+from convert.registry import (
     available_formats,
     describe_formats,
     format_for_extension,
     missing_dependencies,
 )
-from mdie.convert.sheets import sheets_to_pdf, svg_to_pdf, svg_to_png
-from mdie.convert.solids import (
+from convert.sheets import sheets_to_pdf, svg_to_pdf, svg_to_png
+from convert.solids import (
     ConversionError,
     convert_mesh,
     describe_mesh,
@@ -335,7 +335,7 @@ def test_describe_mesh_reports_bounds(tmp_path):
 def test_step_without_a_kernel_raises_a_clear_error(tmp_path, monkeypatch):
     src = tmp_path / "part.step"
     src.write_text("ISO-10303-21;", encoding="utf-8")
-    monkeypatch.setattr("mdie.convert.solids.find_kernel", lambda: None)
+    monkeypatch.setattr("convert.solids.find_kernel", lambda: None)
     with pytest.raises(ConversionError, match="geometry kernel"):
         convert_file(src, "stl", tmp_path / "part.stl")
 
@@ -344,14 +344,14 @@ def test_step_without_a_kernel_raises_a_clear_error(tmp_path, monkeypatch):
 
 def test_find_kernel_never_returns_the_gui_binary(monkeypatch):
     """Driving FreeCAD.exe from a script pops a window and hangs the caller."""
-    from mdie.convert.solids import find_kernel
+    from convert.solids import find_kernel
 
-    monkeypatch.setattr("mdie.convert.solids.shutil.which",
+    monkeypatch.setattr("convert.solids.shutil.which",
                         lambda name: r"C:\FreeCAD\bin\freecadcmd.exe")
     assert "freecadcmd" in find_kernel().lower()
 
-    monkeypatch.setattr("mdie.convert.solids.shutil.which", lambda name: None)
-    monkeypatch.setattr("mdie.cli.viewers.find_cad_tools",
+    monkeypatch.setattr("convert.solids.shutil.which", lambda name: None)
+    monkeypatch.setattr("cli.viewers.find_cad_tools",
                         lambda: {"freecad": r"C:\FreeCAD\bin\FreeCAD.exe"})
     monkeypatch.setattr(Path, "exists", lambda self: False)
     assert find_kernel() is None
@@ -360,7 +360,7 @@ def test_find_kernel_never_returns_the_gui_binary(monkeypatch):
 def test_scad_routes_to_openscad_not_freecad(tmp_path, monkeypatch):
     src = tmp_path / "part.scad"
     src.write_text("cube(1);", encoding="utf-8")
-    monkeypatch.setattr("mdie.convert.solids.find_openscad", lambda: None)
+    monkeypatch.setattr("convert.solids.find_openscad", lambda: None)
     with pytest.raises(ConversionError, match="OpenSCAD"):
         convert_file(src, "stl", tmp_path / "part.stl")
 
@@ -370,8 +370,8 @@ def test_a_wedged_kernel_times_out_instead_of_hanging(tmp_path, monkeypatch):
 
     src = tmp_path / "part.step"
     src.write_text("ISO-10303-21;", encoding="utf-8")
-    monkeypatch.setattr("mdie.convert.solids.find_kernel", lambda: "freecadcmd")
-    monkeypatch.setattr("mdie.convert.solids.subprocess.run",
+    monkeypatch.setattr("convert.solids.find_kernel", lambda: "freecadcmd")
+    monkeypatch.setattr("convert.solids.subprocess.run",
                         lambda *a, **k: (_ for _ in ()).throw(sp.TimeoutExpired("fc", 1)))
     with pytest.raises(ConversionError, match="did not finish"):
         convert_file(src, "stl", tmp_path / "part.stl", timeout=1)
@@ -382,9 +382,9 @@ def test_a_kernel_that_writes_nothing_reports_its_stderr(tmp_path, monkeypatch):
 
     src = tmp_path / "part.step"
     src.write_text("ISO-10303-21;", encoding="utf-8")
-    monkeypatch.setattr("mdie.convert.solids.find_kernel", lambda: "freecadcmd")
+    monkeypatch.setattr("convert.solids.find_kernel", lambda: "freecadcmd")
     monkeypatch.setattr(
-        "mdie.convert.solids.subprocess.run",
+        "convert.solids.subprocess.run",
         lambda *a, **k: sp.CompletedProcess(a[0], 1, "", "shape not a solid"))
     with pytest.raises(ConversionError, match="shape not a solid"):
         convert_file(src, "stl", tmp_path / "part.stl")
@@ -397,7 +397,7 @@ def test_kernel_output_survives_the_temporary_directory(tmp_path, monkeypatch):
     src = tmp_path / "part.step"
     src.write_text("ISO-10303-21;", encoding="utf-8")
     dst = tmp_path / "part.stl"
-    monkeypatch.setattr("mdie.convert.solids.find_kernel", lambda: "freecadcmd")
+    monkeypatch.setattr("convert.solids.find_kernel", lambda: "freecadcmd")
 
     def fake_run(*a, **k):
         # Write the mesh to the path the script was told to use.
@@ -406,6 +406,6 @@ def test_kernel_output_survives_the_temporary_directory(tmp_path, monkeypatch):
             b"vertex 1 0 0\nvertex 0 1 0\nendloop\nendfacet\nendsolid x\n")
         return sp.CompletedProcess(a[0], 0, "", "")
 
-    monkeypatch.setattr("mdie.convert.solids.subprocess.run", fake_run)
+    monkeypatch.setattr("convert.solids.subprocess.run", fake_run)
     assert convert_file(src, "stl", dst) == dst
     assert dst.exists() and dst.stat().st_size > 0

@@ -2,7 +2,7 @@
 Per-part 2D engineering drawing sheets for the chair frame (ISO 128 / ANSI Y14.5).
 
 Every dimension is read from :class:`FrameDesignModel` (see
-``mdie/core/frame_model.py``) so the drawings are exact and regenerable --
+``core/frame_model.py``) so the drawings are exact and regenerable --
 nothing is measured off a mesh. This deliberately does NOT project the STL:
 an STL is a triangle soup with no units, features, or sharp edges, so any
 dimension taken from it would be a guess.
@@ -14,8 +14,8 @@ Outputs per part:
 
 Run::
 
-    python -m mdie.drafting.part_drawings
-    python -m mdie.drafting.part_drawings --outdir Project/chair/drawings
+    python -m drafting.part_drawings
+    python -m drafting.part_drawings --outdir Project/chair/drawings
 """
 
 from __future__ import annotations
@@ -28,8 +28,8 @@ from html import escape
 from pathlib import Path
 from typing import Sequence
 
-from mdie.core.frame_model import FrameDesignModel, FrameGeometry, TubeProfile
-from mdie.cad.assembly import armrest_primitives
+from core.frame_model import FrameDesignModel, FrameGeometry, TubeProfile
+from cad.assembly import armrest_primitives
 
 DEFAULT_OUTDIR = Path("Project/chair/drawings")
 
@@ -99,7 +99,7 @@ TXT_HEAD = 4.0       # notes heading
 TXT_BLOCK = 3.4      # title block cells
 TXT_SMALL = 3.2      # projection symbol caption
 
-# Armrest build constants, mirroring mdie.cad.assembly so the armrest
+# Armrest build constants, mirroring cad.assembly so the armrest
 # sheet's extents match the exported solid.
 ARM_PAD_THICKNESS_MM = 18.0
 ARM_STANDOFF_MM = 25.0
@@ -224,7 +224,7 @@ class PartDrawing:
     depth_y_mm: float | None = None
     # Z extent for the front/side views. Defaults to length_mm.
     height_z_mm: float | None = None
-    # Exact analytic members (from mdie.cad.assembly). When present the
+    # Exact analytic members (from cad.assembly). When present the
     # sheet draws true silhouettes instead of a bounding rectangle.
     primitives: list | None = None
     # Per-frame feature dimensions: frame -> (dims_h, dims_v), each entry a
@@ -637,7 +637,7 @@ def _side_view(svg, cx, cy, dy, thick, scale, label):
 
 # --- True silhouette views from analytic primitives ------------------------
 # A view is an orthographic frame given by the two model axes kept in the
-# picture. Primitives come from mdie.cad.assembly, the same source the mesh
+# picture. Primitives come from cad.assembly, the same source the mesh
 # is built from, so a sheet cannot disagree with the exported solid.
 
 def _project(prim, u, v):
@@ -992,7 +992,7 @@ def render_part_svg(part: PartDrawing, model: FrameDesignModel) -> str:
 # ------------------------------------------------------------- assembly sheet ---
 
 # Item list for the general arrangement. Keys match the group names coming
-# out of mdie.cad.assembly.assembly_primitives.
+# out of cad.assembly.assembly_primitives.
 ASSEMBLY_ITEMS: list[tuple[str, int, str]] = [
     ("Leg_Front_Left", 1, "เสาหน้าซ้าย  FRONT LEFT LEG"),
     ("Leg_Front_Right", 1, "เสาหน้าขวา  FRONT RIGHT LEG"),
@@ -1049,7 +1049,7 @@ def render_assembly_svg(model: FrameDesignModel) -> str:
     Front, side and top silhouettes of every member, ballooned against an
     item table, with the overall envelope and seat height dimensioned.
     """
-    from mdie.cad.assembly import assembly_primitives
+    from cad.assembly import assembly_primitives
 
     g = model.geometry
     groups = dict(assembly_primitives(model))
@@ -1281,7 +1281,7 @@ def render_html(model: FrameDesignModel, parts: list[PartDrawing]) -> str:
 
 def _print_pdf(html_path: Path, pdf_path: Path, chrome: str | None = None) -> bool:
     """Print the HTML sheet to a vector PDF via headless Chrome."""
-    from mdie.drafting.render_mermaid import find_chrome
+    from drafting.render_mermaid import find_chrome
     import subprocess
 
     exe = find_chrome(chrome)

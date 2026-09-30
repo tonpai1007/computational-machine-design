@@ -7,7 +7,7 @@ Authority: Physics verifies.
 import math
 from typing import Dict, List, Any
 from pydantic import BaseModel, Field
-from mdie.core.bracket_model import BracketModel
+from core.bracket_model import BracketModel
 
 
 class BracketSolverResult(BaseModel):

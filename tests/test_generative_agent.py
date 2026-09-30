@@ -3,7 +3,7 @@ Test Suite: Generative Engineering Agent On-The-Fly Synthesis
 """
 
 import pytest
-from mdie.ai.generative_agent import GenerativeEngineeringAgent
+from ai.generative_agent import GenerativeEngineeringAgent
 
 
 def test_generative_gear_synthesis():

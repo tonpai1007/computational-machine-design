@@ -6,8 +6,8 @@ Natively importable as solid geometry in SolidWorks, Autodesk Inventor, Fusion 3
 
 from datetime import datetime
 from typing import List, Tuple
-from mdie.core.models import EngineeringModel
-from mdie.cad.stl_exporter import STLExporter
+from core.models import EngineeringModel
+from cad.stl_exporter import STLExporter
 
 class STEPExporter:
     @classmethod

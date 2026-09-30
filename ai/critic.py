@@ -5,8 +5,8 @@ recommends verified redesigns, and enforces safety boundaries between AI claims 
 """
 
 from typing import Dict, Any, List, Optional, Tuple
-from mdie.core.models import EngineeringModel, SolverResult, SectionStress
-from mdie.materials.database import MaterialDatabase
+from core.models import EngineeringModel, SolverResult, SectionStress
+from materials.database import MaterialDatabase
 
 class DesignCritic:
     @staticmethod

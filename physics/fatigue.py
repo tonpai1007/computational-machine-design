@@ -6,8 +6,8 @@ fatigue failure safety factors (Goodman, Gerber, ASME-Elliptic, Soderberg), and 
 
 import math
 from typing import Dict, Any, Tuple
-from mdie.core.models import EngineeringModel, SectionStress
-from mdie.materials.database import Material
+from core.models import EngineeringModel, SectionStress
+from materials.database import Material
 
 class MarinFactors:
     @staticmethod

@@ -10,8 +10,8 @@ Verifies:
 import os
 from unittest.mock import patch, MagicMock
 import pytest
-from mdie.ai.llm_router import LLMRouter
-from mdie.ai.parser import NLParser
+from ai.llm_router import LLMRouter
+from ai.parser import NLParser
 
 
 def test_provider_auto_detection():
@@ -67,7 +67,7 @@ def test_cascading_failover():
 
 def test_offline_deterministic_fallback():
     """When all providers fail or no keys exist, NLParser cleanly executes offline heuristics."""
-    from mdie.physics.solver import PhysicsSolver
+    from physics.solver import PhysicsSolver
     with patch.dict(os.environ, {}, clear=True):
         model, logs = NLParser.parse("stepped shaft 600 mm long, 25 kW at 1800 rpm")
         assert model is not None

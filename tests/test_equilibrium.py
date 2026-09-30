@@ -3,8 +3,8 @@ Tests for Static Equilibrium & Reactions Solver
 """
 
 import pytest
-from mdie.core.models import EngineeringModel, Support, PointLoad, DistributedLoad, ShaftSegment
-from mdie.physics.equilibrium import EquilibriumSolver
+from core.models import EngineeringModel, Support, PointLoad, DistributedLoad, ShaftSegment
+from physics.equilibrium import EquilibriumSolver
 
 def test_simply_supported_center_load():
     # Beam length 1.0m, supports at 0 and 1.0, point load 1000 N at center 0.5m

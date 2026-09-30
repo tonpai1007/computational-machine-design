@@ -8,8 +8,8 @@ Authority: Physics verifies.
 import math
 from typing import Dict, List, Optional, Any
 from pydantic import BaseModel, Field
-from mdie.core.frame_model import FrameDesignModel, FrameLoads, FrameGeometry, StructuralMaterial
-from mdie.physics.buckling import ColumnBuckling
+from core.frame_model import FrameDesignModel, FrameLoads, FrameGeometry, StructuralMaterial
+from physics.buckling import ColumnBuckling
 
 class ColumnAnalysisResult(BaseModel):
     leg_id: str                      # 'FL' (Front-Left), 'FR', 'RR', 'RL'

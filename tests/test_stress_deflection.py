@@ -4,10 +4,10 @@ Tests for Stress & Deflection Solvers
 
 import math
 import pytest
-from mdie.core.models import EngineeringModel, Support, PointLoad, ShaftSegment
-from mdie.materials.database import MaterialDatabase
-from mdie.physics.solver import PhysicsSolver
-from mdie.physics.stress import StressConcentration
+from core.models import EngineeringModel, Support, PointLoad, ShaftSegment
+from materials.database import MaterialDatabase
+from physics.solver import PhysicsSolver
+from physics.stress import StressConcentration
 
 def test_circular_bending_and_torsion():
     # Solid 30mm shaft transmitting 100 Nm torque and 150 Nm bending

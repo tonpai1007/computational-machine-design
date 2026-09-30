@@ -9,9 +9,9 @@ Verifies:
 """
 
 import pytest
-from mdie.core.frame_model import FrameDesignModel, FrameGeometry, FrameLoads, STRUCTURAL_MATERIALS
-from mdie.physics.frame_physics import FramePhysicsSolver
-from mdie.cad.assembly import FrameCADEngine
+from core.frame_model import FrameDesignModel, FrameGeometry, FrameLoads, STRUCTURAL_MATERIALS
+from physics.frame_physics import FramePhysicsSolver
+from cad.assembly import FrameCADEngine
 
 ChairDesignModel = FrameDesignModel
 ChairGeometry = FrameGeometry

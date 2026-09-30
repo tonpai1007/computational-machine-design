@@ -1,9 +1,9 @@
 """
 MDIE Core Package
 """
-from mdie.core.units import Units
-from mdie.core.vectors import Vector3D
-from mdie.core.models import (
+from core.units import Units
+from core.vectors import Vector3D
+from core.models import (
     Support,
     PointLoad,
     DistributedLoad,
@@ -34,3 +34,5 @@ __all__ = [
     "SupportReaction",
     "SolverResult",
 ]
+
+__version__ = "0.2.0"

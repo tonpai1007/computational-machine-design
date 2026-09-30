@@ -4,13 +4,13 @@ Natural Language -> Structured Engineering Model -> Assumptions Audit -> Physics
 """
 
 import pytest
-from mdie.ai.parser import NLParser
-from mdie.ai.assumptions import AssumptionManager
-from mdie.ai.critic import DesignCritic
-from mdie.physics.solver import PhysicsSolver
-from mdie.cad.openscad import OpenSCADGenerator
-from mdie.optimizer.design_search import DesignOptimizer
-from mdie.reporting.generator import ReportGenerator
+from ai.parser import NLParser
+from ai.assumptions import AssumptionManager
+from ai.critic import DesignCritic
+from physics.solver import PhysicsSolver
+from cad.openscad import OpenSCADGenerator
+from optimizer.design_search import DesignOptimizer
+from reporting.generator import ReportGenerator
 
 def test_full_pipeline_prompt():
     prompt = (

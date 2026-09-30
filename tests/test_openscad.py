@@ -5,9 +5,9 @@ Tests for OpenSCAD & STL CAD Generation
 import os
 import struct
 import pytest
-from mdie.core.models import EngineeringModel, ShaftSegment, KeywaySpec, Support
-from mdie.cad.openscad import OpenSCADGenerator
-from mdie.cad.stl_exporter import STLExporter
+from core.models import EngineeringModel, ShaftSegment, KeywaySpec, Support
+from cad.openscad import OpenSCADGenerator
+from cad.stl_exporter import STLExporter
 
 def test_openscad_code_generation():
     model = EngineeringModel(

@@ -3,7 +3,7 @@ MDIE Parametric Spring CAD Generator
 Generates clean OpenSCAD code for helical compression and extension springs.
 """
 
-from mdie.components.springs import SpringAnalysisResult
+from components.springs import SpringAnalysisResult
 
 
 class SpringCADGenerator:

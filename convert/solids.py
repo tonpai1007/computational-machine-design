@@ -260,7 +260,7 @@ def find_kernel() -> str | None:
         if found:
             return found
 
-    from mdie.cli.viewers import find_cad_tools
+    from cli.viewers import find_cad_tools
     gui = find_cad_tools().get("freecad")
     if gui:
         sibling = Path(gui).parent / "FreeCADCmd.exe"
@@ -341,7 +341,7 @@ def find_openscad() -> str | None:
         found = shutil.which(name)
         if found:
             return found
-    from mdie.cli.viewers import find_cad_tools
+    from cli.viewers import find_cad_tools
     return find_cad_tools().get("openscad")
 
 
@@ -382,7 +382,7 @@ def convert_scad(src: Path, dst: Path, dst_format: str,
 
 def describe_mesh(path: Path) -> str:
     """Human-readable summary of a mesh file: bounds, triangle count, extents."""
-    from mdie.convert.registry import format_for_extension
+    from convert.registry import format_for_extension
     fmt = format_for_extension(path)
     if fmt not in READERS:
         raise ConversionError(f"cannot inspect '{path.name}'")

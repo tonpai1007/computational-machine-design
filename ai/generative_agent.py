@@ -12,24 +12,24 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 from pydantic import BaseModel, Field
 
-from mdie.ai.llm_router import LLMRouter
-from mdie.materials.database import MaterialDatabase
-from mdie.drafting.blueprint_2d import Blueprint2DGenerator
+from ai.llm_router import LLMRouter
+from materials.database import MaterialDatabase
+from drafting.blueprint_2d import Blueprint2DGenerator
 
 # Specialized physics engines for exact closed-form standards
-from mdie.physics.gears import GearSolver
-from mdie.components.gears import GearPairSpecification
-from mdie.cad.gears_cad import GearCADGenerator
+from physics.gears import GearSolver
+from components.gears import GearPairSpecification
+from cad.gears_cad import GearCADGenerator
 
-from mdie.physics.springs import SpringSolver
-from mdie.components.springs import SpringSpecification
-from mdie.cad.springs_cad import SpringCADGenerator
+from physics.springs import SpringSolver
+from components.springs import SpringSpecification
+from cad.springs_cad import SpringCADGenerator
 
-from mdie.physics.bolted_joints import BoltedJointSolver
-from mdie.components.bolted_joints import BoltedJointSpecification
+from physics.bolted_joints import BoltedJointSolver
+from components.bolted_joints import BoltedJointSpecification
 
-from mdie.physics.power_screws import PowerScrewSolver
-from mdie.components.power_screws import PowerScrewSpecification
+from physics.power_screws import PowerScrewSolver
+from components.power_screws import PowerScrewSpecification
 
 
 class GenerativeDesignResult(BaseModel):

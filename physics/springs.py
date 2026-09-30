@@ -6,7 +6,7 @@ Standards: Shigley's Mechanical Engineering Design / DIN 2089.
 
 import math
 from typing import Dict, Any, List, Optional
-from mdie.components.springs import (
+from components.springs import (
     SpringSpecification,
     SpringGeometry,
     SpringAnalysisResult,

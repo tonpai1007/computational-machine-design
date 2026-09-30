@@ -26,13 +26,18 @@ ai = ["google-genai>=1.0.0"]
 dev = ["pytest>=8.0.0"]
 
 [project.scripts]
-mdie = "mdie.cli:main"
+mdie = "cli:main"
 
 [tool.setuptools.packages.find]
-include = ["mdie*"]
+where = ["."]
+include = [
+    "ai*", "cad*", "cli*", "components*", "convert*", "core*", "drafting*",
+    "integrations*", "materials*", "optimizer*", "physics*", "reporting*", "web*",
+]
+exclude = ["tests*", "scratch*", "Project*"]
 
 [tool.setuptools.package-data]
-"mdie.web" = ["static/*"]
+"web" = ["static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

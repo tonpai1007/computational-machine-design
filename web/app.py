@@ -12,14 +12,14 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, PlainTextResponse, JSONResponse
 from pydantic import BaseModel
 
-from mdie.core.models import EngineeringModel, SolverResult, ShaftSegment, Support, PointLoad
-from mdie.physics.solver import PhysicsSolver
-from mdie.materials.database import MaterialDatabase
-from mdie.cad.openscad import OpenSCADGenerator
-from mdie.optimizer.design_search import DesignOptimizer
-from mdie.ai.parser import NLParser
-from mdie.ai.copilot import EngineeringCopilot
-from mdie.reporting.generator import ReportGenerator
+from core.models import EngineeringModel, SolverResult, ShaftSegment, Support, PointLoad
+from physics.solver import PhysicsSolver
+from materials.database import MaterialDatabase
+from cad.openscad import OpenSCADGenerator
+from optimizer.design_search import DesignOptimizer
+from ai.parser import NLParser
+from ai.copilot import EngineeringCopilot
+from reporting.generator import ReportGenerator
 
 app = FastAPI(
     title="Machine Design Intelligence Engine (MDIE)",
@@ -114,7 +114,7 @@ def parse_natural_language(req: ParseRequest):
 
         # 1. 3D Spatial Frame / Truss Domain
         if any(w in p_lower for w in ["tower", "truss", "space frame", "girder", "spatial frame", "3d frame"]):
-            from mdie.physics.fea_3d import build_space_truss_tower_model, build_cantilever_space_frame_model
+            from physics.fea_3d import build_space_truss_tower_model, build_cantilever_space_frame_model
             if "cantilever" in p_lower or "girder" in p_lower or "box" in p_lower:
                 solver = build_cantilever_space_frame_model()
             else:
@@ -130,10 +130,10 @@ def parse_natural_language(req: ParseRequest):
         chair_keywords = ["chair", "armchair", "furniture", "stool", "4 leg", "four leg", "armrest", "seating"]
         is_chair = any(w in p_lower for w in chair_keywords) or ("seat" in p_lower and "bearing" not in p_lower and "shaft" not in p_lower)
         if is_chair:
-            from mdie.core.frame_model import FrameDesignModel as ChairDesignModel, STRUCTURAL_MATERIALS as CHAIR_MATERIALS
-            from mdie.physics.frame_physics import FramePhysicsSolver as ChairPhysicsSolver
-            from mdie.cad.assembly import FrameCADEngine as ChairCADEngine
-            from mdie.physics.fea_3d import build_chair_3d_fea_model
+            from core.frame_model import FrameDesignModel as ChairDesignModel, STRUCTURAL_MATERIALS as CHAIR_MATERIALS
+            from physics.frame_physics import FramePhysicsSolver as ChairPhysicsSolver
+            from cad.assembly import FrameCADEngine as ChairCADEngine
+            from physics.fea_3d import build_chair_3d_fea_model
 
             chair_model = ChairDesignModel(name="MDIE Ergonomic Armchair")
             
@@ -265,7 +265,7 @@ def download_scad(req: SolveRequest):
 @app.post("/api/export/stl")
 def export_stl(req: SolveRequest):
     from fastapi.responses import Response
-    from mdie.cad.stl_exporter import STLExporter
+    from cad.stl_exporter import STLExporter
     try:
         stl_bytes = STLExporter.export_binary_stl(req.model, n_slices=64)
         filename = (req.model.name or "machine_part").replace(" ", "_") + ".stl"
@@ -280,7 +280,7 @@ def export_stl(req: SolveRequest):
 @app.post("/api/export/step")
 def export_step(req: SolveRequest):
     from fastapi.responses import Response
-    from mdie.cad.step_exporter import STEPExporter
+    from cad.step_exporter import STEPExporter
     try:
         step_text = STEPExporter.export_step(req.model, n_slices=48)
         filename = (req.model.name or "machine_part").replace(" ", "_") + ".step"
@@ -297,7 +297,7 @@ def export_step(req: SolveRequest):
 # ==============================================================================
 
 def _build_chair_from_request(req: ChairSolveRequest):
-    from mdie.core.frame_model import FrameDesignModel, STRUCTURAL_MATERIALS
+    from core.frame_model import FrameDesignModel, STRUCTURAL_MATERIALS
     mat = STRUCTURAL_MATERIALS.get(req.material_id, STRUCTURAL_MATERIALS["STEEL_1018"])
     chair = FrameDesignModel(name="MDIE Ergonomic Armchair", material=mat)
     chair.loads.seat_vertical_load_n = req.seat_load_n
@@ -310,9 +310,9 @@ def _build_chair_from_request(req: ChairSolveRequest):
 @app.post("/api/chair/solve")
 def solve_chair(req: ChairSolveRequest):
     try:
-        from mdie.physics.frame_physics import FramePhysicsSolver as ChairPhysicsSolver
-        from mdie.cad.assembly import FrameCADEngine as ChairCADEngine
-        from mdie.physics.fea_3d import build_chair_3d_fea_model
+        from physics.frame_physics import FramePhysicsSolver as ChairPhysicsSolver
+        from cad.assembly import FrameCADEngine as ChairCADEngine
+        from physics.fea_3d import build_chair_3d_fea_model
 
         chair = _build_chair_from_request(req)
         result = ChairPhysicsSolver.solve(chair)
@@ -334,7 +334,7 @@ def solve_chair(req: ChairSolveRequest):
 @app.post("/api/chair/export/step")
 def export_chair_step(req: ChairSolveRequest):
     from fastapi.responses import Response
-    from mdie.cad.assembly import FrameCADEngine as ChairCADEngine
+    from cad.assembly import FrameCADEngine as ChairCADEngine
     try:
         chair = _build_chair_from_request(req)
         step_text = ChairCADEngine.export_step_solid(chair)
@@ -349,7 +349,7 @@ def export_chair_step(req: ChairSolveRequest):
 @app.post("/api/chair/export/stl")
 def export_chair_stl(req: ChairSolveRequest):
     from fastapi.responses import Response
-    from mdie.cad.assembly import FrameCADEngine as ChairCADEngine
+    from cad.assembly import FrameCADEngine as ChairCADEngine
     try:
         chair = _build_chair_from_request(req)
         stl_bytes = ChairCADEngine.export_stl(chair)
@@ -363,7 +363,7 @@ def export_chair_stl(req: ChairSolveRequest):
 
 @app.post("/api/chair/export/scad")
 def export_chair_scad(req: ChairSolveRequest):
-    from mdie.cad.assembly import FrameCADEngine as ChairCADEngine
+    from cad.assembly import FrameCADEngine as ChairCADEngine
     try:
         chair = _build_chair_from_request(req)
         scad_text = ChairCADEngine.generate_openscad(chair)
@@ -376,8 +376,8 @@ def export_chair_scad(req: ChairSolveRequest):
 
 @app.post("/api/chair/report/html")
 def export_chair_report(req: ChairSolveRequest):
-    from mdie.physics.frame_physics import FramePhysicsSolver as ChairPhysicsSolver
-    from mdie.reporting.frame_report import FrameReportGenerator as ChairReportGenerator
+    from physics.frame_physics import FramePhysicsSolver as ChairPhysicsSolver
+    from reporting.frame_report import FrameReportGenerator as ChairReportGenerator
     try:
         chair = _build_chair_from_request(req)
         res = ChairPhysicsSolver.solve(chair)
@@ -401,7 +401,7 @@ def list_fea_presets():
 @app.get("/api/fea3d/preset/{preset_id}")
 def get_fea_preset(preset_id: str):
     try:
-        from mdie.physics.fea_3d import (
+        from physics.fea_3d import (
             build_space_truss_tower_model,
             build_cantilever_space_frame_model,
             build_chair_3d_fea_model
@@ -411,7 +411,7 @@ def get_fea_preset(preset_id: str):
         elif preset_id == "girder":
             solver = build_cantilever_space_frame_model()
         elif preset_id == "chair":
-            from mdie.core.frame_model import FrameDesignModel
+            from core.frame_model import FrameDesignModel
             solver = build_chair_3d_fea_model(FrameDesignModel())
         else:
             raise HTTPException(status_code=404, detail="Preset not found")
@@ -423,7 +423,7 @@ def get_fea_preset(preset_id: str):
 @app.post("/api/fea3d/solve")
 def solve_custom_fea_3d(req: FEA3DSolveRequest):
     try:
-        from mdie.physics.fea_3d import FEA3DSolver
+        from physics.fea_3d import FEA3DSolver
         solver = FEA3DSolver(name=req.name)
         nodes = []
         for n in req.nodes:
@@ -462,7 +462,7 @@ def solve_custom_fea_3d(req: FEA3DSolveRequest):
 def export_docx(req: DocxExportRequest):
     """Export an HTML report to DOCX using the learning-tools converter."""
     try:
-        from mdie.integrations.learning_tools import LearningToolsBridge
+        from integrations.learning_tools import LearningToolsBridge
         bridge = LearningToolsBridge()
         docx_path = bridge.convert_docx(
             html_path=req.html_path,
@@ -484,7 +484,7 @@ def export_docx(req: DocxExportRequest):
 def consolidate_report(req: ConsolidateRequest):
     """Consolidate an MDIE engineering report into summaries and study guides using learning-tools."""
     try:
-        from mdie.integrations.learning_tools import LearningToolsBridge
+        from integrations.learning_tools import LearningToolsBridge
         bridge = LearningToolsBridge()
         result = bridge.consolidate_report(
             report_path=req.report_path,
@@ -502,7 +502,7 @@ def consolidate_report(req: ConsolidateRequest):
 @app.get("/api/learning-tools/status")
 def learning_tools_status():
     """Check connectivity to learning-tools microservice (port 5000)."""
-    from mdie.integrations.learning_tools import LearningToolsBridge
+    from integrations.learning_tools import LearningToolsBridge
     bridge = LearningToolsBridge()
     return {
         "learning_tools_url": bridge.base_url,

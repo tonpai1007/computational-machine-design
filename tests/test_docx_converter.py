@@ -3,7 +3,7 @@ Tests for the HTML to Word (.docx) report converter.
 
 The rich converter behind the bridge lives in the separate learning-tools
 repository, so these are skipped when it is not installed. The in-repo
-renderer in ``mdie.convert.documents`` is covered unconditionally by
+renderer in ``convert.documents`` is covered unconditionally by
 ``tests/test_converter.py``.
 """
 
@@ -11,7 +11,7 @@ from pathlib import Path
 import docx
 import pytest
 
-from mdie.convert.docx_bridge import (
+from convert.docx_bridge import (
     HTMLToDocxConverter,
     is_available,
     learning_tools_path,
@@ -37,7 +37,7 @@ def test_learning_tools_path_is_none_or_a_real_checkout():
 
 @pytest.mark.skipif(is_available(), reason="learning-tools is installed")
 def test_using_the_bridge_without_learning_tools_raises_a_clear_error(tmp_path):
-    from mdie.convert.docx_bridge import LearningToolsUnavailable
+    from convert.docx_bridge import LearningToolsUnavailable
 
     src = tmp_path / "r.html"
     src.write_text("<html><body><p>hi</p></body></html>", encoding="utf-8")
@@ -47,7 +47,7 @@ def test_using_the_bridge_without_learning_tools_raises_a_clear_error(tmp_path):
 
 def test_bridge_degrades_to_none_when_the_checkout_is_absent(monkeypatch):
     """Simulate a machine without learning-tools: load() must not raise."""
-    import mdie.convert.docx_bridge as bridge
+    import convert.docx_bridge as bridge
 
     monkeypatch.setattr(bridge, "learning_tools_path", lambda: None)
     assert bridge._load() is None

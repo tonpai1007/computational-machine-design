@@ -10,8 +10,8 @@ Produces formal, audit-ready engineering dossiers adhering to university Machine
 """
 
 from typing import Dict, Any
-from mdie.core.bracket_model import BracketModel
-from mdie.physics.bracket_physics import BracketSolverResult
+from core.bracket_model import BracketModel
+from physics.bracket_physics import BracketSolverResult
 
 
 class BracketReportGenerator:

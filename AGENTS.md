@@ -9,7 +9,7 @@ You are working on the **Machine Design Intelligence Engine (MDIE)**, an AI-assi
 ### 1. Physics Determinism is Absolute
 - **AI proposes, physics calculates and verifies.**
 - Never estimate, guess, or hallucinate stress values, safety factors, deflections, or reaction forces in responses or documentation.
-- All numerical engineering conclusions must come from deterministic solver executions in [`mdie/physics/`](file:///c:/codework/computational-machine-design/mdie/physics/).
+- All numerical engineering conclusions must come from deterministic solver executions in [`physics/`](file:///c:/codework/computational-machine-design/physics/).
 - Full specification: [`.agents/rules/physics-authority.md`](file:///c:/codework/computational-machine-design/.agents/rules/physics-authority.md).
 
 ### 2. Standard Units Convention
@@ -43,8 +43,8 @@ All internal calculations and models strictly use the mechanical engineering SI 
 
 ### 5. Primary Interface: CLI & Python Scripts (No Web Interface)
 - **Do NOT rely on or prioritize web browser interfaces.**
-- The primary user interface is the **`mdie` CLI** (console script from `pyproject.toml`, or `python -m mdie`; `mdie.bat`/`cli.bat` wrap the module form) and direct Python library workflows.
-- Entry point is [`mdie/cli/`](file:///c:/codework/computational-machine-design/mdie/cli/): `app.py` holds argparse dispatch, `designers.py` the per-domain prompt handlers, `viewers.py` CAD viewer detection. Do not add a second root-level `cli.py`.
+- The primary user interface is the **`mdie` CLI** (console script from `pyproject.toml`, or `python -m cli`; `mdie.bat`/`cli.bat` wrap the module form) and direct Python library workflows.
+- Entry point is [`cli/`](file:///c:/codework/computational-machine-design/cli/): `app.py` holds argparse dispatch, `designers.py` the per-domain prompt handlers, `viewers.py` CAD viewer detection. Do not add a second root-level `cli.py`.
 - Subcommands: free-form prompt, `chair`/`bracket`, `shaft`, `convert`, `drawings`, `report`, `view`, `info`.
 - All runs must output directly to local files in `Project/<project_name>/`:
   - **`.step`** for ISO-10303 CAD solid assembly
@@ -54,22 +54,31 @@ All internal calculations and models strictly use the mechanical engineering SI 
   - Rich terminal tables with forces, stresses, safety factors, and pass/fail verdicts.
 
 ### 5.1 Package Layout
+**The repository root IS MDIE.** There is no enclosing `mdie/` wrapper package —
+all 13 packages live at the top level and import each other directly
+(`from core.models import ...`, not `from mdie.core.models import ...`).
+
 Keep responsibilities separated - do not merge these back together:
 
 | Package | Owns |
 | --- | --- |
-| `mdie/core` | geometry primitives, units, the design data model |
-| `mdie/cad` | solids, STEP/STL export, OpenSCAD emission |
-| `mdie/components` | standard component sizing |
-| `mdie/physics` | stress, deflection, fatigue, buckling, FEA, frame solver |
-| `mdie/drafting` | dimensioned drawing sheets, FBD plots, Mermaid diagrams |
-| `mdie/reporting` | HTML/Markdown engineering report generators |
-| `mdie/convert` | the file converter: documents, CAD solids, drawing sheets |
-| `mdie/cli` | command line interface |
+| `core` | geometry primitives, units, the design data model |
+| `cad` | solids, STEP/STL export, OpenSCAD emission |
+| `components` | standard component sizing |
+| `physics` | stress, deflection, fatigue, buckling, FEA, frame solver |
+| `drafting` | dimensioned drawing sheets, FBD plots, Mermaid diagrams |
+| `reporting` | HTML/Markdown engineering report generators |
+| `convert` | the file converter: documents, CAD solids, drawing sheets |
+| `cli` | command line interface (entry point; `__version__` lives in `core`) |
+| `ai` | NL prompt parsing, domain classification, LLM routing, design critic, assumption audit |
+| `materials` | the material property database and derived elastic/shear moduli |
+| `optimizer` | parametric design search over candidate geometries |
+| `integrations` | bridges to external toolchains (e.g. the learning-tools project) |
+| `web` | optional HTTP surface; the CLI in `cli/` stays the primary interface |
 
-- `mdie/drafting` must stay **model-derived**: read dimensions back off the actual primitives, never restate input parameters. The drawing regression tests enforce this.
-- `mdie/convert` must degrade gracefully when an optional dependency is missing - probe with `mdie.convert.registry.has_dependency` and raise a `ConversionError` that names the tool, rather than an `ImportError`.
-- The former `mdie/reports/` package no longer exists; it was split into `mdie/drafting/` and `mdie/reporting/`.
+- `drafting` must stay **model-derived**: read dimensions back off the actual primitives, never restate input parameters. The drawing regression tests enforce this.
+- `convert` must degrade gracefully when an optional dependency is missing - probe with `convert.registry.has_dependency` and raise a `ConversionError` that names the tool, rather than an `ImportError`.
+- Do not reintroduce an `mdie/` wrapper directory, and do not reintroduce `mdie/reports/` (long gone; split into `drafting/` and `reporting/`).
 
 ### 6. Dual-Tier Engineering Report Standards
 Engineering deliverables maintain a strict white-paper aesthetic (`#ffffff`, `#0f172a` ink, printable A4):

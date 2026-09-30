@@ -8,7 +8,7 @@ import os
 import re
 import json
 from typing import Dict, Any, Optional, Tuple, List
-from mdie.core.models import (
+from core.models import (
     EngineeringModel,
     ShaftSegment,
     Support,
@@ -17,7 +17,7 @@ from mdie.core.models import (
     EngineeringConstraints,
     EngineeringAssumption,
 )
-from mdie.ai.assumptions import AssumptionManager
+from ai.assumptions import AssumptionManager
 
 class NLParser:
     @staticmethod
@@ -29,7 +29,7 @@ class NLParser:
         """
         logs = []
 
-        from mdie.ai.llm_router import LLMRouter
+        from ai.llm_router import LLMRouter
 
         if LLMRouter.get_configured_providers():
             try:
@@ -49,7 +49,7 @@ class NLParser:
     @staticmethod
     def _parse_with_llm(prompt: str) -> Tuple[Optional[EngineeringModel], List[str]]:
         """Extract structured model using cascading LLMRouter (Groq -> OpenRouter -> Gemini)."""
-        from mdie.ai.llm_router import LLMRouter
+        from ai.llm_router import LLMRouter
 
         system_instruction = (
             "You are an expert mechanical engineering parser for the Machine Design Intelligence Engine (MDIE).\n"
@@ -158,7 +158,7 @@ class NLParser:
         segments = []
         raw_segs = data.get("segments", [])
         if raw_segs and isinstance(raw_segs, list):
-            from mdie.core.models import KeywaySpec
+            from core.models import KeywaySpec
             for seg in raw_segs:
                 kw_data = seg.get("keyway")
                 kw_obj = None
@@ -384,7 +384,7 @@ class NLParser:
         has_keyway = "keyway" in t or "key" in t
         keyway_spec = None
         if has_keyway:
-            from mdie.core.models import KeywaySpec
+            from core.models import KeywaySpec
             kw_len = 0.040  # 40 mm default
             kw_w = round(max(0.004, init_d * 0.25), 4)  # standard ~ d/4
             kw_d = round(max(0.002, init_d * 0.125), 4) # standard ~ d/8

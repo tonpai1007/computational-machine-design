@@ -93,28 +93,30 @@ pip install -e ".[dev]"       # + pytest
 ```
 
 Without installing, everything still runs from a checkout via
-`python -m mdie ...`. `mdie info` prints the detected CAD viewers, the active
+`python -m cli ...`. `mdie info` prints the detected CAD viewers, the active
 LLM cascade and which conversion formats are currently usable.
 
 ### 3.1 Project Layout
 
+The repository root **is** MDIE — all packages are top level, with no
+enclosing `mdie/` wrapper.
+
 ```text
 computational-machine-design/
 ├── pyproject.toml            packaging + `mdie` console script
-├── mdie/
-│   ├── cli/                  command line interface (app, designers, viewers)
-│   ├── convert/              file converter (documents, solids, sheets)
-│   ├── drafting/             dimensioned drawing sheets, FBD plots, Mermaid
-│   ├── reporting/            HTML/Markdown engineering report generators
-│   ├── cad/                  solids, STEP/STL export, OpenSCAD emission
-│   ├── components/           bearings, gears, keys, springs, fasteners
-│   ├── core/                 geometry primitives, units, design model
-│   ├── physics/              stress, deflection, fatigue, buckling, FEA, frames
-│   ├── materials/            material property database
-│   ├── optimizer/            parameter search
-│   ├── ai/                   LLM routing, parser, critic, narrative synthesis
-│   ├── integrations/         external bridges (learning-tools)
-│   └── web/                  FastAPI application
+├── cli/                      command line interface (app, designers, viewers)
+├── convert/                  file converter (documents, solids, sheets)
+├── drafting/                 dimensioned drawing sheets, FBD plots, Mermaid
+├── reporting/                HTML/Markdown engineering report generators
+├── cad/                      solids, STEP/STL export, OpenSCAD emission
+├── components/               bearings, gears, keys, springs, fasteners
+├── core/                     geometry primitives, units, design model
+├── physics/                  stress, deflection, fatigue, buckling, FEA, frames
+├── materials/                material property database
+├── optimizer/                parameter search
+├── ai/                       LLM routing, parser, critic, narrative synthesis
+├── integrations/             external bridges (learning-tools)
+├── web/                      FastAPI application
 ├── tests/
 └── Project/<name>/           generated deliverables (git-ignored)
 ```
@@ -213,7 +215,7 @@ a GUI executable - only `FreeCADCmd` is considered, so a conversion can never
 open a window or block on a dialog. Drawing sheets are rendered with PyMuPDF,
 so no headless Chrome or ImageMagick is needed.
 
-Python API: `from mdie.convert import convert_file`.
+Python API: `from convert import convert_file`.
 
 ---
 

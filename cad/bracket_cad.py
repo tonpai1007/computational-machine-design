@@ -7,9 +7,9 @@ for L-brackets, motor faceplates, and foot-mounted brackets.
 import math
 import struct
 from typing import List, Tuple
-from mdie.core.bracket_model import BracketModel
-from mdie.cad.assembly import MeshPrimitives, Point3D, Triangle
-from mdie.cad.step_assembly import MultiBodySTEPExporter, SolidPart
+from core.bracket_model import BracketModel
+from cad.assembly import MeshPrimitives, Point3D, Triangle
+from cad.step_assembly import MultiBodySTEPExporter, SolidPart
 
 
 class BracketCADEngine:

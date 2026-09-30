@@ -1,6 +1,6 @@
-"""Allow ``python -m mdie`` as an alias for the ``mdie`` console script."""
+"""Allow ``python -m cli`` as an alias for the ``mdie`` console script."""
 
-from mdie.cli import main
+from cli import main
 
 if __name__ == "__main__":
     main()

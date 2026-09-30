@@ -3,9 +3,9 @@ Test Suite: AGMA 2001-D04 / ISO 6336 Gear Physics & CAD
 """
 
 import pytest
-from mdie.components.gears import GearPairSpecification
-from mdie.physics.gears import GearSolver
-from mdie.cad.gears_cad import GearCADGenerator
+from components.gears import GearPairSpecification
+from physics.gears import GearSolver
+from cad.gears_cad import GearCADGenerator
 
 
 def test_spur_gear_physics_solver():

@@ -1,11 +1,11 @@
 """
 MDIE Physics Package
 """
-from mdie.physics.equilibrium import EquilibriumSolver
-from mdie.physics.stress import StressSolver, StressConcentration
-from mdie.physics.deflection import DeflectionSolver
-from mdie.physics.fatigue import FatigueSolver, MarinFactors
-from mdie.physics.solver import PhysicsSolver
+from physics.equilibrium import EquilibriumSolver
+from physics.stress import StressSolver, StressConcentration
+from physics.deflection import DeflectionSolver
+from physics.fatigue import FatigueSolver, MarinFactors
+from physics.solver import PhysicsSolver
 
 __all__ = [
     "EquilibriumSolver",

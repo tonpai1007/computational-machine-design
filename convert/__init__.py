@@ -12,7 +12,7 @@ drawing sheets::
 
 Documents (Markdown/HTML/DOCX/PDF/TXT) are translated through a common block
 model, so any source/target pair works. Mesh formats (STL/OBJ/3MF) convert in
-pure Python. B-rep formats (STEP/IGES) need FreeCAD - see :mod:`mdie.convert.solids`.
+pure Python. B-rep formats (STEP/IGES) need FreeCAD - see :mod:`convert.solids`.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from __future__ import annotations
 import warnings
 from pathlib import Path
 
-from mdie.convert.documents import (
+from convert.documents import (
     _RENDERERS,
     blocks_from_source,
     blocks_to_docx,
@@ -29,7 +29,7 @@ from mdie.convert.documents import (
     blocks_to_pdf,
     blocks_to_text,
 )
-from mdie.convert.registry import (
+from convert.registry import (
     DOCUMENT,
     EXTENSION_TO_FORMAT,
     FORMATS,
@@ -40,8 +40,8 @@ from mdie.convert.registry import (
     format_for_extension,
     missing_dependencies,
 )
-from mdie.convert.sheets import sheets_to_pdf, sheets_to_png, svg_to_pdf, svg_to_png
-from mdie.convert.solids import (
+from convert.sheets import sheets_to_pdf, sheets_to_png, svg_to_pdf, svg_to_png
+from convert.solids import (
     ConversionError,
     convert_mesh,
     convert_via_kernel,
@@ -125,7 +125,7 @@ def _convert_document(src: Path, src_format: str, fmt: str,
     # optional external install. Fall back to the in-repo renderer rather than
     # failing - but only for its absence, so real bridge errors still surface.
     if use_ai and fmt == "docx" and src_format == "html":
-        from mdie.convert import docx_bridge
+        from convert import docx_bridge
 
         if docx_bridge.is_available():
             result = docx_bridge.HTMLToDocxConverter.convert(
@@ -152,7 +152,7 @@ def _convert_document(src: Path, src_format: str, fmt: str,
 
 def _convert_solid(src: Path, src_format: str, dst: Path, fmt: str,
                    timeout: int = 300) -> Path:
-    from mdie.convert.solids import KERNEL_FORMATS, MESH_FORMATS
+    from convert.solids import KERNEL_FORMATS, MESH_FORMATS
 
     if src_format in MESH_FORMATS and fmt in MESH_FORMATS:
         return convert_mesh(src, src_format, dst, fmt)

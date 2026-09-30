@@ -224,7 +224,7 @@ class MultiBodySTEPExporter:
 
             stl_file = None
             if export_stl:
-                from mdie.cad.assembly import MeshPrimitives
+                from cad.assembly import MeshPrimitives
                 stl_file = output_dir / f"{target.name}.stl"
                 with open(stl_file, "wb") as f:
                     f.write(MeshPrimitives.export_binary_stl(target.triangles, model_name=target.name))

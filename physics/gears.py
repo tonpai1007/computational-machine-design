@@ -6,13 +6,13 @@ Lewis bending stress, AGMA contact pitting stress, and safety factors.
 
 import math
 from typing import Dict, Any, List, Optional
-from mdie.components.gears import (
+from components.gears import (
     GearPairSpecification,
     GearGeometry,
     GearStressResult,
     GearPairResult,
 )
-from mdie.materials.database import MaterialDatabase
+from materials.database import MaterialDatabase
 
 
 class GearSolver:

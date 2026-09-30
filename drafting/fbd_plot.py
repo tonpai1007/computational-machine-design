@@ -2,12 +2,12 @@
 
 Mermaid has no arrowhead, support, or dimension primitive, so the FBD is
 rendered with matplotlib instead. All forces come from the deterministic
-solver in :mod:`mdie.drafting.beam_diagram` -- nothing is hand-entered.
+solver in :mod:`drafting.beam_diagram` -- nothing is hand-entered.
 
 Usage::
 
-    python -m mdie.drafting.fbd_plot
-    python -m mdie.drafting.fbd_plot --format png --scale 2
+    python -m drafting.fbd_plot
+    python -m drafting.fbd_plot --format png --scale 2
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 
-from mdie.drafting.beam_diagram import SimplySupportedRail
+from drafting.beam_diagram import SimplySupportedRail
 
 DEFAULT_OUTDIR = Path("Project/chair/diagrams")
 

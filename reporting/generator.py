@@ -6,8 +6,8 @@ Includes executive compliance summary, equation trace, stress/deflection diagram
 
 from typing import Dict, Any, List, Optional
 import html
-from mdie.core.models import EngineeringModel, SolverResult
-from mdie.ai.critic import DesignCritic
+from core.models import EngineeringModel, SolverResult
+from ai.critic import DesignCritic
 
 class ReportGenerator:
     @staticmethod

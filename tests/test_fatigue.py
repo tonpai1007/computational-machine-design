@@ -3,10 +3,10 @@ Tests for Fatigue & Lifecycle Analysis
 """
 
 import pytest
-from mdie.core.models import SectionStress, EngineeringModel, ShaftSegment, Support, PointLoad
-from mdie.materials.database import MaterialDatabase
-from mdie.physics.fatigue import MarinFactors, FatigueSolver
-from mdie.physics.solver import PhysicsSolver
+from core.models import SectionStress, EngineeringModel, ShaftSegment, Support, PointLoad
+from materials.database import MaterialDatabase
+from physics.fatigue import MarinFactors, FatigueSolver
+from physics.solver import PhysicsSolver
 
 def test_marin_factors():
     # Steel with Sut = 600 MPa, diameter 25 mm

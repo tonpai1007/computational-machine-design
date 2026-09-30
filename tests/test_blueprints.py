@@ -3,11 +3,11 @@ Test Suite: Automated 2D Technical Drawing Blueprint Generator
 """
 
 import pytest
-from mdie.core.models import EngineeringModel, ShaftSegment
-from mdie.physics.solver import PhysicsSolver
-from mdie.drafting.blueprint_2d import Blueprint2DGenerator
-from mdie.components.gears import GearPairSpecification
-from mdie.physics.gears import GearSolver
+from core.models import EngineeringModel, ShaftSegment
+from physics.solver import PhysicsSolver
+from drafting.blueprint_2d import Blueprint2DGenerator
+from components.gears import GearPairSpecification
+from physics.gears import GearSolver
 
 
 def test_shaft_blueprint_svg_generation():

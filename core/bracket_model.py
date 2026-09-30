@@ -5,7 +5,7 @@ Supports L-brackets, flat faceplates, and foot-mounting brackets with bolt hole 
 
 from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
-from mdie.core.frame_model import StructuralMaterial, STRUCTURAL_MATERIALS
+from core.frame_model import StructuralMaterial, STRUCTURAL_MATERIALS
 
 
 class BoltHolePattern(BaseModel):

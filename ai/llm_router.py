@@ -10,7 +10,7 @@ import logging
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 
-logger = logging.getLogger("mdie.ai.llm_router")
+logger = logging.getLogger("ai.llm_router")
 
 
 def load_dotenv(env_path: Optional[Path] = None) -> None:

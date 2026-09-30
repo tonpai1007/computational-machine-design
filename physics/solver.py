@@ -7,19 +7,19 @@ and Marin/Goodman fatigue life verification. Generates verified results with ful
 from datetime import datetime
 import math
 from typing import Dict, Any, List, Optional
-from mdie.core.models import (
+from core.models import (
     EngineeringModel,
     SolverResult,
     SectionStress,
     ShaftSegment,
     Support,
 )
-from mdie.materials.database import MaterialDatabase, Material
-from mdie.physics.equilibrium import EquilibriumSolver
-from mdie.physics.stress import StressSolver
-from mdie.physics.deflection import DeflectionSolver
-from mdie.physics.fatigue import FatigueSolver
-from mdie.cad.openscad import OpenSCADGenerator
+from materials.database import MaterialDatabase, Material
+from physics.equilibrium import EquilibriumSolver
+from physics.stress import StressSolver
+from physics.deflection import DeflectionSolver
+from physics.fatigue import FatigueSolver
+from cad.openscad import OpenSCADGenerator
 
 class PhysicsSolver:
     @staticmethod
@@ -184,7 +184,7 @@ class PhysicsSolver:
         # 9. Standard Machine Components: Bearings & Keyways
         bearings_selected = []
         try:
-            from mdie.components.bearings import BearingCatalog
+            from components.bearings import BearingCatalog
             rpm = model.speed_rpm if (model.speed_rpm and model.speed_rpm > 0) else 1500.0
             for r in reactions:
                 d_at_sup, _, _ = StressSolver.get_diameter_and_segment_at(model, r.position)
@@ -199,7 +199,7 @@ class PhysicsSolver:
 
         keyway_analysis = None
         try:
-            from mdie.components.keys import KeyEngine
+            from components.keys import KeyEngine
             nominal_torque = model.calculate_nominal_torque()
             kw_seg = next((s for s in model.segments if s.keyway), None)
             if kw_seg and kw_seg.keyway and nominal_torque > 0:

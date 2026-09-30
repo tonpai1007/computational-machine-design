@@ -5,7 +5,7 @@ Guarantees transparent engineering assumptions with no silent hallucinations.
 """
 
 from typing import List, Dict, Any, Optional
-from mdie.core.models import EngineeringModel, EngineeringAssumption
+from core.models import EngineeringModel, EngineeringAssumption
 
 class AssumptionManager:
     @staticmethod

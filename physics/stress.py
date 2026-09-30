@@ -7,8 +7,8 @@ along with geometric (Kt) and fatigue (Kf) stress concentration factors.
 import math
 import numpy as np
 from typing import List, Dict, Any, Tuple, Optional
-from mdie.core.models import EngineeringModel, ShaftSegment, SectionStress
-from mdie.materials.database import Material
+from core.models import EngineeringModel, ShaftSegment, SectionStress
+from materials.database import Material
 
 class StressConcentration:
     @staticmethod

@@ -6,7 +6,7 @@ for shafts, keyways, shoulders, bearing seats, and structural machine members.
 
 from typing import Dict, Any, List, Optional
 import math
-from mdie.core.models import EngineeringModel, ShaftSegment
+from core.models import EngineeringModel, ShaftSegment
 
 class OpenSCADGenerator:
     @staticmethod
