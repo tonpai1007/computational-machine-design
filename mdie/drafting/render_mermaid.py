@@ -18,13 +18,13 @@ mmdc uses a Chrome/Edge already on the machine. Override with
 Usage
 -----
     # list blocks, write .mmd files, render to SVG next to the report
-    python mdie/reports/render_mermaid.py
+    python -m mdie.drafting.render_mermaid
 
     # PNG instead of SVG, custom output dir
-    python mdie/reports/render_mermaid.py --format png --outdir build/diagrams
+    python -m mdie.drafting.render_mermaid --format png --outdir build/diagrams
 
     # render without writing the intermediate .mmd files
-    python mdie/reports/render_mermaid.py --no-keep-source
+    python -m mdie.drafting.render_mermaid --no-keep-source
 
 First run installs mermaid-cli into a cache dir (~/.cache/mdie-mermaid).
 Pass --setup to force that install, or run:

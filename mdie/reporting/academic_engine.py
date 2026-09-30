@@ -28,7 +28,7 @@ from mdie.physics.frame_physics import FrameSolverResult
 from mdie.ai.llm_router import LLMRouter
 from mdie.ai.narrative_synthesizer import synthesize_academic_narrative
 
-logger = logging.getLogger("mdie.reports.academic_engine")
+logger = logging.getLogger("mdie.reporting.academic_engine")
 
 
 class AcademicAssignmentEngine:

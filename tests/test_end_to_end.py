@@ -10,7 +10,7 @@ from mdie.ai.critic import DesignCritic
 from mdie.physics.solver import PhysicsSolver
 from mdie.cad.openscad import OpenSCADGenerator
 from mdie.optimizer.design_search import DesignOptimizer
-from mdie.reports.generator import ReportGenerator
+from mdie.reporting.generator import ReportGenerator
 
 def test_full_pipeline_prompt():
     prompt = (

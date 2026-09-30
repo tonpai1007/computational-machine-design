@@ -14,8 +14,8 @@ Outputs per part:
 
 Run::
 
-    python -m mdie.reports.part_drawings
-    python -m mdie.reports.part_drawings --outdir Project/chair/drawings
+    python -m mdie.drafting.part_drawings
+    python -m mdie.drafting.part_drawings --outdir Project/chair/drawings
 """
 
 from __future__ import annotations
@@ -1281,7 +1281,7 @@ def render_html(model: FrameDesignModel, parts: list[PartDrawing]) -> str:
 
 def _print_pdf(html_path: Path, pdf_path: Path, chrome: str | None = None) -> bool:
     """Print the HTML sheet to a vector PDF via headless Chrome."""
-    from mdie.reports.render_mermaid import find_chrome
+    from mdie.drafting.render_mermaid import find_chrome
     import subprocess
 
     exe = find_chrome(chrome)

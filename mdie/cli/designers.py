@@ -1,176 +1,29 @@
-"""
-MDIE Command Line Interface (CLI)
-Type what you want in plain words -> AI writes the CAD and calculates forces for you.
-Clean deliverables (.step, .stl, .scad, .html) saved directly to your Project folder.
+"""Design-intent handlers.
+
+Each `handle_*` function turns one family of plain-language prompt into a
+full design run: parameters, geometry, structural checks and deliverables.
+`dispatch_prompt` in :mod:mdie.cli.app routes to the right handler.
 """
 
-import sys
+from __future__ import annotations
+
 import os
 import re
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional
+
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
-from rich.markdown import Markdown
-
-import subprocess
-import shutil
 
 console = Console()
-
-def find_cad_tools() -> dict:
-    """Detect local lightweight CAD viewers (OpenSCAD, FreeCAD, etc.)"""
-    tools = {}
-    
-    # OpenSCAD candidates
-    openscad_candidates = [
-        shutil.which("openscad"),
-        r"C:\Program Files\OpenSCAD\openscad.com",
-        r"C:\Program Files\OpenSCAD\openscad.exe",
-        r"C:\Program Files (x86)\OpenSCAD\openscad.com",
-        r"C:\Program Files (x86)\OpenSCAD\openscad.exe",
-        str(Path.home() / r"AppData\Local\Programs\OpenSCAD\openscad.com"),
-        str(Path.home() / r"AppData\Local\Programs\OpenSCAD\openscad.exe")
-    ]
-    for p in openscad_candidates:
-        if p and Path(p).exists():
-            tools["openscad"] = str(p)
-            break
-            
-    # FreeCAD candidates
-    freecad_candidates = [
-        shutil.which("freecad"),
-        shutil.which("FreeCAD"),
-        r"C:\Program Files\FreeCAD\bin\FreeCAD.exe",
-        r"C:\Program Files\FreeCAD 1.1\bin\FreeCAD.exe",
-        str(Path.home() / r"AppData\Local\Programs\FreeCAD 1.1\bin\FreeCAD.exe"),
-        str(Path.home() / r"AppData\Local\Programs\FreeCAD\bin\FreeCAD.exe"),
-    ]
-    for p in freecad_candidates:
-        if p and Path(p).exists():
-            tools["freecad"] = str(p)
-            break
-
-    return tools
-
-
-def launch_cad_viewer(target: Path, tool_type: Optional[str] = None) -> bool:
-    """Launch OpenSCAD or FreeCAD for a target folder or CAD file."""
-    tools = find_cad_tools()
-    file_to_open = None
-    chosen_tool = None
-    
-    if target.is_dir():
-        scad_files = list(target.glob("*.scad"))
-        step_files = list(target.glob("*.step")) + list(target.glob("*.stp"))
-        
-        if tool_type == "freecad" and step_files:
-            file_to_open = step_files[0]
-            chosen_tool = tools.get("freecad")
-        elif scad_files and tools.get("openscad") and tool_type != "freecad":
-            file_to_open = scad_files[0]
-            chosen_tool = tools.get("openscad")
-        elif step_files and tools.get("freecad"):
-            file_to_open = step_files[0]
-            chosen_tool = tools.get("freecad")
-        elif scad_files:
-            file_to_open = scad_files[0]
-            chosen_tool = tools.get("openscad")
-    else:
-        file_to_open = target
-        if file_to_open.suffix.lower() == ".scad":
-            chosen_tool = tools.get("openscad")
-        elif file_to_open.suffix.lower() in [".step", ".stp"]:
-            chosen_tool = tools.get("freecad")
-        elif tool_type == "freecad":
-            chosen_tool = tools.get("freecad")
-        else:
-            chosen_tool = tools.get("openscad") or tools.get("freecad")
-
-    if not file_to_open or not file_to_open.exists():
-        console.print(f"[bold red]Cannot find CAD file to open in: {target}[/bold red]")
-        return False
-
-    if not chosen_tool:
-        console.print(f"[bold yellow]File ready: {file_to_open}[/bold yellow]")
-        console.print("[dim]No OpenSCAD or FreeCAD executable found automatically. You can open the file manually.[/dim]")
-        return False
-
-    console.print(f"[bold green]>> Launching {Path(chosen_tool).stem} with: {file_to_open.name}[/bold green]")
-    try:
-        subprocess.Popen([chosen_tool, str(file_to_open.resolve())], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return True
-    except Exception as e:
-        console.print(f"[bold red]Failed to launch {chosen_tool}: {e}[/bold red]")
-        return False
-
-
-def process_prompt(prompt: str, output_dir: Optional[str] = None, auto_open: bool = False) -> bool:
-    """
-    Main dispatch pipeline:
-    Takes any prompt in plain English, calculates all physics forces,
-    generates CAD solid files (.step, .stl, .scad), and writes the HTML report.
-    """
-    p_lower = prompt.lower().strip()
-    if not p_lower:
-        return False
-
-    console.print(f"\n[bold cyan]>> Analyzing Prompt:[/bold cyan] [italic]{prompt}[/italic]")
-
-    from mdie.ai.classifier import DomainClassifier
-    domain, meta = DomainClassifier.classify(prompt)
-
-    # 1. Mounting Brackets & Flange Plates Domain
-    if domain == "bracket":
-        console.print(f"[bold cyan]>> Classified Domain:[/bold cyan] [bold green]Mounting Bracket & Flange Plate[/bold green] (confidence: {meta.get('confidence', 0.95):.0%})")
-        res = _handle_bracket(prompt, p_lower, output_dir)
-        if res and auto_open:
-            launch_cad_viewer(Path(output_dir or "Project/bracket"))
-        return res
-
-    # 2. 3D Space Frame / Truss Domain
-    elif domain == "space_frame":
-        console.print(f"[bold cyan]>> Classified Domain:[/bold cyan] [bold green]3D Space Frame & Truss[/bold green] (confidence: {meta.get('confidence', 0.95):.0%})")
-        res = _handle_space_frame(prompt, p_lower, output_dir)
-        if res and auto_open:
-            launch_cad_viewer(Path(output_dir or "Project/space_frame"))
-        return res
-
-    # 3. Furniture, Table & Multi-Body Frame Domain
-    elif domain == "frame":
-        console.print(f"[bold cyan]>> Classified Domain:[/bold cyan] [bold green]Structural Frame & Furniture[/bold green] (confidence: {meta.get('confidence', 0.95):.0%})")
-        res = _handle_chair(prompt, p_lower, output_dir)
-        if res and auto_open:
-            launch_cad_viewer(Path(output_dir or "Project/chair"))
-        return res
-
-    # 4. Rotating Shaft & Beam Domain
-    elif (any(w in p_lower for w in ["shaft", "spindle", "rotor", "axle", "bearing seat"]) or (domain == "shaft" and meta.get("confidence", 0.5) > 0.8)) and not any(w in p_lower for w in ["bolt", "fastener", "spring", "gear", "screw"]):
-        confidence = meta.get("confidence", 0.50)
-        conf_str = f" (confidence: {confidence:.0%})" if confidence < 0.9 else ""
-        console.print(f"[bold cyan]>> Classified Domain:[/bold cyan] [bold green]Rotating Shaft & Power Transmission[/bold green]{conf_str}")
-        res = _handle_shaft(prompt, p_lower, output_dir)
-        if res and auto_open:
-            launch_cad_viewer(Path(output_dir or "Project/shaft"))
-        return res
-
-    # 5. On-The-Fly Generative Engineering Agent (Gears, Springs, Screws, Bolts, Linkages, Mechanisms)
-    else:
-        console.print(f"[bold cyan]>> Engaging AI Generative Engineering Agent:[/bold cyan] [bold green]On-the-Fly CAD & Physics Synthesis[/bold green]")
-        res = _handle_generative(prompt, p_lower, output_dir)
-        if res and auto_open:
-            slug = meta.get("slug", "generative_part")
-            launch_cad_viewer(Path(output_dir or f"Project/{slug}"))
-        return res
-
 
 def _handle_bracket(prompt: str, p_lower: str, output_dir: Optional[str] = None) -> bool:
     from mdie.core.bracket_model import BracketModel, BracketGeometry, BracketLoads, BoltHolePattern
     from mdie.core.frame_model import STRUCTURAL_MATERIALS
     from mdie.physics.bracket_physics import BracketPhysicsSolver
     from mdie.cad.bracket_cad import BracketCADEngine
-    from mdie.reports.bracket_report import BracketReportGenerator
+    from mdie.reporting.bracket_report import BracketReportGenerator
 
     out_path = Path(output_dir or "Project/bracket")
     out_path.mkdir(parents=True, exist_ok=True)
@@ -330,8 +183,8 @@ def _handle_chair(prompt: str, p_lower: str, output_dir: Optional[str] = None) -
     from mdie.core.frame_model import FrameDesignModel, STRUCTURAL_MATERIALS
     from mdie.physics.frame_physics import FramePhysicsSolver
     from mdie.cad.assembly import FrameCADEngine
-    from mdie.reports.frame_report import FrameReportGenerator
-    from mdie.reports.academic_engine import AcademicAssignmentEngine
+    from mdie.reporting.frame_report import FrameReportGenerator
+    from mdie.reporting.academic_engine import AcademicAssignmentEngine
     from mdie.physics.fea_3d import build_chair_3d_fea_model
 
     out_path = Path(output_dir or "Project/chair")
@@ -621,7 +474,7 @@ def _handle_space_frame(prompt: str, p_lower: str, output_dir: Optional[str] = N
 
 def _handle_generative(prompt: str, p_lower: str, output_dir: Optional[str] = None) -> bool:
     from mdie.ai.generative_agent import GenerativeEngineeringAgent
-    from mdie.reports.blueprint_2d import Blueprint2DGenerator
+    from mdie.drafting.blueprint_2d import Blueprint2DGenerator
 
     # Extract clean project slug
     words = [w for w in re.findall(r'[a-zA-Z0-9]+', p_lower) if w not in ["design", "a", "an", "the", "with", "and", "for", "in", "of", "to"]]
@@ -688,7 +541,7 @@ def _handle_shaft(prompt: str, p_lower: str, output_dir: Optional[str] = None) -
     from mdie.cad.openscad import OpenSCADGenerator
     from mdie.cad.stl_exporter import STLExporter
     from mdie.cad.step_exporter import STEPExporter
-    from mdie.reports.generator import ReportGenerator
+    from mdie.reporting.generator import ReportGenerator
 
     out_path = Path(output_dir or "Project/shaft")
     out_path.mkdir(parents=True, exist_ok=True)
@@ -720,7 +573,7 @@ def _handle_shaft(prompt: str, p_lower: str, output_dir: Optional[str] = None) -
         f.write(ReportGenerator.generate_html_report(model, result))
 
     # 2D Technical Drawing Blueprint
-    from mdie.reports.blueprint_2d import Blueprint2DGenerator
+    from mdie.drafting.blueprint_2d import Blueprint2DGenerator
     bp_svg_file = out_path / "shaft_blueprint.svg"
     bp_svg = Blueprint2DGenerator.generate_shaft_blueprint_svg(model, result, theme="blueprint")
     with open(bp_svg_file, "w", encoding="utf-8") as f:
@@ -756,237 +609,3 @@ def _handle_shaft(prompt: str, p_lower: str, output_dir: Optional[str] = None) -
     )
     console.print(Panel(deliv_text, title="[bold green]CAD & Force Calculation Complete[/bold green]", border_style="green"))
     return True
-
-
-def interactive_repl():
-    """Interactive terminal prompt where user can type anything to generate CAD and calculate forces."""
-    console.print(Panel(
-        "[bold cyan]MACHINE DESIGN INTELLIGENCE ENGINE (MDIE)[/bold cyan]\n"
-        "AI Proposes CAD Solid Geometry. Physics Solves Forces & Stresses.\n"
-        "[italic]Type what you want in plain words (e.g. 'design a chair with 4 legs and two arms', 'shaft with keyway', or 'exit')[/italic]",
-        border_style="cyan"
-    ))
-
-    while True:
-        try:
-            prompt = console.input("\n[bold yellow]MDIE > [/bold yellow]").strip()
-            if not prompt:
-                continue
-            if prompt.lower() in ["exit", "quit", "q"]:
-                console.print("[cyan]Exiting MDIE CLI. Goodbye![/cyan]")
-                break
-            process_prompt(prompt)
-        except (KeyboardInterrupt, EOFError):
-            console.print("\n[cyan]Session ended.[/cyan]")
-            break
-        except Exception as e:
-            console.print(f"[bold red]Error: {str(e)}[/bold red]")
-
-
-def main():
-    # If arguments are passed directly, e.g. `py cli.py "design a chair with 4 legs"`
-    if len(sys.argv) > 1:
-        first_arg = sys.argv[1].strip()
-
-        if first_arg in ["-h", "--help", "help"]:
-            tools = find_cad_tools()
-            cad_status = []
-            for t_name in ["openscad", "freecad"]:
-                p = tools.get(t_name)
-                status_str = f"[green]Installed ({p})[/green]" if p else "[yellow]Not detected[/yellow]"
-                cad_status.append(f"  * {t_name.capitalize()}: {status_str}")
-            cad_info = "\n".join(cad_status)
-
-            from mdie.ai.llm_router import LLMRouter
-            providers = LLMRouter.get_configured_providers()
-            llm_status_str = f"[green]Active Cascade:[/green] {' -> '.join([p.upper() for p in providers])}" if providers else "[yellow]No API keys found (Using Deterministic Offline Heuristic Engine)[/yellow]"
-
-            console.print(Panel(
-                "[bold cyan]MDIE Command Line Interface[/bold cyan]\n\n"
-                "Usage:\n"
-                "  python cli.py \"<prompt>\" [--output-dir <path>] [--open]\n"
-                "  python cli.py docx [path_to_html] [--ai] [-o <output.docx>]\n"
-                "  python cli.py view [project_name_or_file] [--freecad]\n"
-                "  python cli.py                              (launches interactive prompt)\n\n"
-                "Examples:\n"
-                "  python cli.py \"motor mounting bracket with 4 bolt holes, 10 kg, steel\" --open\n"
-                "  python cli.py \"design a chair with 4 splayed legs, steel\" --open\n"
-                "  python cli.py docx Project/chair/academic_assignment_report.html --ai\n"
-                "  python cli.py view bracket                 (opens in OpenSCAD or FreeCAD)\n"
-                "  python cli.py view chair --freecad         (opens STEP in FreeCAD)\n\n"
-                f"[bold cyan]Detected Local CAD Tools:[/bold cyan]\n{cad_info}\n\n"
-                f"[bold cyan]AI / LLM Routing Status:[/bold cyan]\n  * {llm_status_str}\n"
-                "    [dim](Supports: GROQ_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY, OLLAMA_HOST)[/dim]",
-                border_style="cyan"
-            ))
-            return
-
-        if first_arg == "view":
-            target_name = "chair"
-            prefer_fc = False
-            for arg in sys.argv[2:]:
-                if arg in ["--freecad", "--fc"]:
-                    prefer_fc = True
-                elif not arg.startswith("-"):
-                    target_name = arg
-
-            target = Path(target_name)
-            if not target.exists():
-                if (Path("Project") / target_name).exists():
-                    target = Path("Project") / target_name
-                elif Path(f"{target_name}.scad").exists():
-                    target = Path(f"{target_name}.scad")
-            tool_type = "freecad" if prefer_fc else None
-            launch_cad_viewer(target, tool_type=tool_type)
-            return
-
-        # HTML to Word (.docx) Converter Subcommand
-        if first_arg in ["docx", "convert-docx", "word"]:
-            enable_ai = "--ai" in sys.argv
-            target_html = None
-            out_docx = None
-            custom_prompt = None
-            args_list = sys.argv[2:]
-            i = 0
-            while i < len(args_list):
-                arg = args_list[i]
-                if arg == "--ai":
-                    enable_ai = True
-                elif arg in ["-o", "--output"] and i + 1 < len(args_list):
-                    out_docx = args_list[i + 1]
-                    i += 1
-                elif arg in ["-p", "--prompt"] and i + 1 < len(args_list):
-                    custom_prompt = args_list[i + 1]
-                    i += 1
-                elif not arg.startswith("-") and target_html is None:
-                    target_html = arg
-                i += 1
-
-            if not target_html:
-                candidates = [
-                    Path("Project/chair/academic_assignment_report.html"),
-                    Path("Project/chair/chair_report.html"),
-                    Path("Project/bracket/bracket_report.html"),
-                    Path("Project/shaft/shaft_report.html"),
-                ]
-                for c in candidates:
-                    if c.exists():
-                        target_html = str(c)
-                        break
-
-            if not target_html or not Path(target_html).exists():
-                console.print(f"[bold red]Cannot find HTML report file: {target_html or '(none specified)'}[/bold red]")
-                console.print("[dim]Usage: python cli.py docx [path_to_html] [--ai] [-o output.docx][/dim]")
-                return
-
-            from mdie.reports.docx_converter import HTMLToDocxConverter
-            console.print(f"[bold cyan]>> Converting HTML Report to Word (.docx):[/bold cyan] {target_html}")
-            if enable_ai:
-                console.print("[bold green]>> AI Engineering Peer-Review & Executive Summary enabled (Cascading LLM)[/bold green]")
-            res_path = HTMLToDocxConverter.convert(
-                target_html,
-                output_docx_path=out_docx,
-                enable_ai=enable_ai,
-                custom_ai_instructions=custom_prompt
-            )
-            console.print(f"[bold green]>> Successfully generated Word document:[/bold green] [bold cyan]{res_path}[/bold cyan] ({res_path.stat().st_size / 1024:.1f} KB)")
-            return
-
-        elif first_arg in ["consolidate", "study"]:
-            target_file = None
-            if len(sys.argv) > 2 and not sys.argv[2].startswith("-"):
-                arg_target = sys.argv[2]
-                target_p = Path(arg_target)
-                if target_p.exists():
-                    target_file = target_p
-                else:
-                    candidates = [
-                        Path("Project") / arg_target / "academic_assignment_report.html",
-                        Path("Project") / arg_target / f"{arg_target}_report.html",
-                        Path("Project") / arg_target / "report.html",
-                    ]
-                    for c in candidates:
-                        if c.exists():
-                            target_file = c
-                            break
-            if not target_file:
-                target_file = Path("Project/chair/academic_assignment_report.html")
-
-            if not target_file.exists():
-                console.print(f"[bold red]Report file not found: {target_file}[/bold red]")
-                console.print("[dim]Usage: python cli.py consolidate [path_or_project_name] [--ai][/dim]")
-                return
-
-            enable_ai = "--ai" in sys.argv
-            from mdie.integrations.learning_tools import LearningToolsBridge
-            bridge = LearningToolsBridge()
-            console.print(f"[bold cyan]>> Consolidating Engineering Report using learning-tools:[/bold cyan] {target_file}")
-            console.print(f"[dim]Bridge mode: {'REST API (port 5000)' if bridge.is_online() else 'Direct Library Import'}[/dim]")
-
-            res = bridge.consolidate_report(
-                report_path=target_file,
-                convert_docx=True,
-                generate_summaries=True,
-                generate_notebooklm=True,
-                enable_ai=enable_ai
-            )
-
-            console.print(f"[bold green]>> Successfully consolidated report![/bold green] (Chunks: {res.get('chunks_count', 0)})")
-            for ftype, fpath in res.get("generated_files", {}).items():
-                console.print(f"   - [bold]{ftype.upper()}:[/bold] [cyan]{fpath}[/cyan]")
-            return
-
-        # Subcommand support for backward compatibility
-        if first_arg == "chair":
-            prompt = "Design a chair with two arms and four splayed legs"
-            out_dir = "Project/chair"
-            auto_open = "--open" in sys.argv
-            for i, arg in enumerate(sys.argv):
-                if arg == "--output-dir" and i + 1 < len(sys.argv):
-                    out_dir = sys.argv[i + 1]
-            process_prompt(prompt, output_dir=out_dir, auto_open=auto_open)
-            return
-
-        elif first_arg == "bracket":
-            prompt = "motor mounting bracket with 4 bolt holes, 10 kg, steel"
-            out_dir = "Project/bracket"
-            auto_open = "--open" in sys.argv
-            for i, arg in enumerate(sys.argv):
-                if arg == "--output-dir" and i + 1 < len(sys.argv):
-                    out_dir = sys.argv[i + 1]
-            process_prompt(prompt, output_dir=out_dir, auto_open=auto_open)
-            return
-
-        elif first_arg in ["solve", "optimize"]:
-            prompt = " ".join(sys.argv[2:]) if len(sys.argv) > 2 else "stepped shaft 500 mm long"
-            auto_open = "--open" in sys.argv
-            process_prompt(prompt, auto_open=auto_open)
-            return
-
-        elif first_arg.startswith("-"):
-            # Flag passed without prompt
-            interactive_repl()
-            return
-
-        # Check for optional --output-dir and --open
-        args = sys.argv[1:]
-        auto_open = False
-        if "--open" in args:
-            auto_open = True
-            args.remove("--open")
-
-        out_dir = None
-        if "--output-dir" in args:
-            idx = args.index("--output-dir")
-            if idx + 1 < len(args):
-                out_dir = args[idx + 1]
-                args = args[:idx] + args[idx + 2:]
-        full_prompt = " ".join(args)
-        process_prompt(full_prompt, output_dir=out_dir, auto_open=auto_open)
-    else:
-        # No arguments: launch interactive REPL terminal
-        interactive_repl()
-
-
-if __name__ == "__main__":
-    main()

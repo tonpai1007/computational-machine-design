@@ -80,67 +80,146 @@ AI is **never** treated as the source of truth for numerical engineering results
 
 ---
 
-## 3. Quick Start (Terminal CLI)
+## 3. Installation
+
+MDIE ships as an installable package with a `mdie` console script:
+
+```bash
+pip install -e .              # core engine + CLI
+pip install -e ".[convert]"   # + document/sheet conversion (python-docx, PyMuPDF)
+pip install -e ".[draw]"      # + matplotlib preview rendering
+pip install -e ".[ai]"        # + Google GenAI provider
+pip install -e ".[dev]"       # + pytest
+```
+
+Without installing, everything still runs from a checkout via
+`python -m mdie ...`. `mdie info` prints the detected CAD viewers, the active
+LLM cascade and which conversion formats are currently usable.
+
+### 3.1 Project Layout
+
+```text
+computational-machine-design/
+├── pyproject.toml            packaging + `mdie` console script
+├── mdie/
+│   ├── cli/                  command line interface (app, designers, viewers)
+│   ├── convert/              file converter (documents, solids, sheets)
+│   ├── drafting/             dimensioned drawing sheets, FBD plots, Mermaid
+│   ├── reporting/            HTML/Markdown engineering report generators
+│   ├── cad/                  solids, STEP/STL export, OpenSCAD emission
+│   ├── components/           bearings, gears, keys, springs, fasteners
+│   ├── core/                 geometry primitives, units, design model
+│   ├── physics/              stress, deflection, fatigue, buckling, FEA, frames
+│   ├── materials/            material property database
+│   ├── optimizer/            parameter search
+│   ├── ai/                   LLM routing, parser, critic, narrative synthesis
+│   ├── integrations/         external bridges (learning-tools)
+│   └── web/                  FastAPI application
+├── tests/
+└── Project/<name>/           generated deliverables (git-ignored)
+```
+
+---
+
+## 4. Quick Start (Terminal CLI)
 
 Type what you want in plain words. The CLI automatically calculates all physics forces and writes the manufactured CAD solid files (`.step`, `.stl`, `.scad`) and HTML calculation reports.
 
-### 3.1 Direct One-Liner Prompts
+### 4.1 Direct One-Liner Prompts
 
 #### Design a 4-Leg Armchair with 2 Arms:
 ```bash
-python cli.py "design a chair with 4 splayed legs and 2 armrests, steel, 1400 N seat load"
+mdie "design a chair with 4 splayed legs and 2 armrests, steel, 1400 N seat load"
 ```
 * Solves static equilibrium, 4-leg floor reactions, column buckling ($P_{cr}$), and 3D frame FEA (6 DOFs/node).
 * Generates `Project/chair/chair.step` (Multi-Body Solid Assembly), `chair.stl`, `chair.scad`, and `chair_report.html`.
 
 #### Design a Stepped Machine Shaft:
 ```bash
-python cli.py "design a stepped shaft 500 mm long, 30 mm bearing seats, power 10 kW at 1500 rpm, with a keyway at center"
+mdie "design a stepped shaft 500 mm long, 30 mm bearing seats, power 10 kW at 1500 rpm, with a keyway at center"
 ```
 * Solves transmitted torque, shear force, bending moments, Goodman fatigue, and bearing life.
 * Generates `Project/shaft/shaft.step`, `shaft.stl`, `shaft.scad`, `shaft_blueprint.svg`, and `shaft_report.html`.
 
 #### Design a Spur / Helical Gear Transmission (AGMA 2001-D04 / ISO 6336):
 ```bash
-python cli.py "design a spur gear pair for 15 kW at 1500 rpm, steel"
+mdie "design a spur gear pair for 15 kW at 1500 rpm, steel"
 ```
 * Solves pitch line velocity, tangential/radial/axial forces, Lewis bending stress, and AGMA contact pitting fatigue.
 * Generates parametric OpenSCAD 3D solid and 2D technical manufacturing blueprint.
 
 #### Design a Helical Spring (DIN 2089 / Shigley):
 ```bash
-python cli.py "helical compression spring for 200 N force, 3mm wire"
+mdie "helical compression spring for 200 N force, 3mm wire"
 ```
 * Solves Wahl curvature factor $K_w$, torsional shear stresses, spring rate $k$, solid clash height, and column buckling.
 
 #### Synthesize Custom Mechanisms & Fasteners on the Fly:
 ```bash
-python cli.py "24mm acme lead screw with 8 kN axial load"
-python cli.py "bolted joint M16 class 10.9 with 40 kN load"
-python cli.py "robotic gripper finger linkage with 120mm span, 150 N clamp force, aluminum 6061"
+mdie "24mm acme lead screw with 8 kN axial load"
+mdie "bolted joint M16 class 10.9 with 40 kN load"
+mdie "robotic gripper finger linkage with 120mm span, 150 N clamp force, aluminum 6061"
 ```
 
 #### Solve 3D Space Frame & Truss FEA:
 ```bash
-python cli.py "solve a 3D space frame tower under 3 kN wind load"
+mdie "solve a 3D space frame tower under 3 kN wind load"
 ```
 * Direct Stiffness Method (12x12 element stiffness, 3D direction cosines, Von Mises stresses).
 * Generates `Project/space_frame/space_frame_report.html`.
 
-### 3.2 Interactive Terminal Mode
+### 4.2 Interactive Terminal Mode
 Simply run without arguments to enter an interactive prompt:
 ```bash
-python cli.py
+mdie
 # MDIE > design a chair with 4 legs and two arms
 # MDIE > stepped shaft 600 mm long, 40 mm bearing seats
 # MDIE > spur gear pair 20 teeth module 3 with 50 mm face width
 ```
 
+### 4.3 File Converter
+
+`mdie convert` translates engineering files between documents, CAD solids and
+drawing sheets. Run `mdie convert --list-formats` for the live matrix.
+
+```bash
+# documents - any source/target pair, via a common block model
+mdie convert Project/chair/academic_assignment_report.html --to docx
+mdie convert Project/chair/chair_design_report.md --to pdf
+mdie convert Project/shaft/shaft_report.docx --to md
+
+# CAD solids - mesh formats convert in pure Python, no kernel needed
+mdie convert Project/chair/chair.stl --to 3mf
+mdie convert Project/chair/chair.stl --to obj
+mdie convert Project/chair/chair.step --to stl        # FreeCAD console binary
+mdie convert Project/chair/chair.scad --to stl        # OpenSCAD
+
+# drawing sheets - no headless Chrome required
+mdie convert Project/chair/drawings/Chair_Assembly.svg --to png --dpi 300
+mdie convert Project/chair/drawings/Chair_Assembly.svg --to pdf
+mdie convert Project/chair/drawings --to pdf          # merges all 10 sheets
+```
+
+| Group | Formats | Requirements |
+| --- | --- | --- |
+| Documents | `md` `html` `docx` `pdf` `txt` | python-docx + PyMuPDF for the binary targets |
+| CAD solids | `stl` `obj` `3mf` | none - pure Python |
+| CAD solids | `step` `stp` `iges` `igs` | FreeCAD, driven through its **console** binary `FreeCADCmd` |
+| CAD solids | `scad` | OpenSCAD CLI |
+| Sheets | `svg` `pdf` `png` | PyMuPDF |
+
+External CAD tools are invoked headlessly, under a timeout, and never through
+a GUI executable - only `FreeCADCmd` is considered, so a conversion can never
+open a window or block on a dialog. Drawing sheets are rendered with PyMuPDF,
+so no headless Chrome or ImageMagick is needed.
+
+Python API: `from mdie.convert import convert_file`.
+
 ---
 
-## 4. Key Capabilities
+## 5. Key Capabilities
 
-### 4.1 Natural Language $\rightarrow$ Engineering Model
+### 5.1 Natural Language $\rightarrow$ Engineering Model
 The AI parser extracts structured technical models from conversational queries:
 ```text
 "Design a shaft that transmits 5 kW at 1500 rpm, supports a 200 N radial load at the center, weighs less than 5 kg, safety factor above 2, survives 10 million cycles."
@@ -153,14 +232,14 @@ Extracted structured model:
 * **Loads:** $200\text{ N}$ point load at $x = 200\text{ mm}$
 * **Constraints:** $SF_{yield} \ge 2.0$, $SF_{fatigue} \ge 1.5$, $\delta_{max} \le 1.0\text{ mm}$, $N_f \ge 10^7\text{ cycles}$
 
-### 4.2 Engineering Assumption Manager
+### 5.2 Engineering Assumption Manager
 Every parameter is tracked with full audit transparency:
 * `CONFIRMED`: Explicitly given by user.
 * `ASSUMED`: Standard engineering default (e.g. machined finish $k_a$, 99% reliability $k_e = 0.814$).
 * `ESTIMATED`: Initial rule-of-thumb estimate.
 * `MISSING`: Flagged if essential boundary conditions are undefined.
 
-### 4.3 AI Design Critic & Verification Loop
+### 5.3 AI Design Critic & Verification Loop
 * Evaluates root causes: decomposes peak Von Mises stress into **Bending %** vs **Torsion %** vs **Stress Concentration $K_t$**.
 * Explains tradeoffs: *"Bending is the limiting condition (82% of stress); increasing shaft diameter or narrowing bearing span yields high stress reduction ($1/d^3$)."*
 * **AI Safety Override:** If AI asserts a design is safe while physics calculates $SF < 1.0$, the system issues a hard override:
@@ -170,7 +249,7 @@ Every parameter is tracked with full audit transparency:
   Physics solver takes precedence.
   ```
 
-### 4.4 OpenSCAD 3D Engine
+### 5.4 OpenSCAD 3D Engine
 * Generates standard OpenSCAD `.scad` scripts for:
   * Stepped cylindrical segments with smooth transitions.
   * DIN 6885 / ANSI standard keyway cuts (`difference()` operations).
@@ -178,13 +257,13 @@ Every parameter is tracked with full audit transparency:
   * Visual highlights: metallic steel body, golden bearing seats, and high-stress plane marker.
 * In-browser real-time 3D rendering powered by Three.js WebGL.
 
-### 4.5 Parametric Optimization
+### 5.5 Parametric Optimization
 * **Min Mass Optimizer:** Searches standardized shaft diameters ($12\text{ mm}$ to $120\text{ mm}$) to find the lightest geometry satisfying all constraints simultaneously.
 * **Tradeoff Matrix:** Explores multi-candidate comparisons (Candidates A, B, C...) across various alloy steels and aluminum alloys with mass and safety factor evaluations.
 
 ---
 
-## 5. Materials Database
+## 6. Materials Database
 
 Curated mechanical properties from standard engineering references (Shigley, ASM):
 
@@ -203,7 +282,7 @@ Curated mechanical properties from standard engineering references (Shigley, ASM
 
 ---
 
-## 6. Test Suite
+## 7. Test Suite
 
 Run all verification tests:
 ```bash
@@ -217,6 +296,6 @@ Includes:
 
 ---
 
-## 7. License
+## 8. License
 
 MIT License. Designed for computational mechanical engineering and machine design intelligence.

@@ -20,7 +20,13 @@ env/
 
 # Local agent scratch & cache
 .agents/
+.kilo/
 .kombai/
+
+# Build / packaging artifacts
+build/
+dist/
+*.egg-info/
 
 # Generated engineering run artifacts (keep project folders clean)
 Project/*/

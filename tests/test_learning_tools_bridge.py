@@ -8,14 +8,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from mdie.integrations.learning_tools import LearningToolsBridge
-from mdie.reports.docx_converter import HTMLToDocxConverter
+from mdie.convert.docx_bridge import HTMLToDocxConverter
 from mdie.web.app import app
 
 client = TestClient(app)
 
 
 def test_docx_converter_bridge_import():
-    """Verify that importing HTMLToDocxConverter from mdie.reports.docx_converter resolves properly."""
+    """Verify that importing HTMLToDocxConverter from mdie.convert.docx_bridge resolves properly."""
     assert HTMLToDocxConverter is not None
     assert hasattr(HTMLToDocxConverter, "convert")
 

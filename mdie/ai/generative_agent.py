@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 
 from mdie.ai.llm_router import LLMRouter
 from mdie.materials.database import MaterialDatabase
-from mdie.reports.blueprint_2d import Blueprint2DGenerator
+from mdie.drafting.blueprint_2d import Blueprint2DGenerator
 
 # Specialized physics engines for exact closed-form standards
 from mdie.physics.gears import GearSolver

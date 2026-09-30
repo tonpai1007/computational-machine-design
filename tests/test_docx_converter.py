@@ -6,7 +6,7 @@ from pathlib import Path
 import docx
 import pytest
 
-from mdie.reports.docx_converter import HTMLToDocxConverter
+from mdie.convert.docx_bridge import HTMLToDocxConverter
 
 
 def test_docx_conversion_basic(tmp_path: Path):

@@ -5,7 +5,7 @@ Test Suite: Automated 2D Technical Drawing Blueprint Generator
 import pytest
 from mdie.core.models import EngineeringModel, ShaftSegment
 from mdie.physics.solver import PhysicsSolver
-from mdie.reports.blueprint_2d import Blueprint2DGenerator
+from mdie.drafting.blueprint_2d import Blueprint2DGenerator
 from mdie.components.gears import GearPairSpecification
 from mdie.physics.gears import GearSolver
 

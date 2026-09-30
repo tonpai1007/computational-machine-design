@@ -19,7 +19,7 @@ from mdie.cad.openscad import OpenSCADGenerator
 from mdie.optimizer.design_search import DesignOptimizer
 from mdie.ai.parser import NLParser
 from mdie.ai.copilot import EngineeringCopilot
-from mdie.reports.generator import ReportGenerator
+from mdie.reporting.generator import ReportGenerator
 
 app = FastAPI(
     title="Machine Design Intelligence Engine (MDIE)",
@@ -377,7 +377,7 @@ def export_chair_scad(req: ChairSolveRequest):
 @app.post("/api/chair/report/html")
 def export_chair_report(req: ChairSolveRequest):
     from mdie.physics.frame_physics import FramePhysicsSolver as ChairPhysicsSolver
-    from mdie.reports.frame_report import FrameReportGenerator as ChairReportGenerator
+    from mdie.reporting.frame_report import FrameReportGenerator as ChairReportGenerator
     try:
         chair = _build_chair_from_request(req)
         res = ChairPhysicsSolver.solve(chair)

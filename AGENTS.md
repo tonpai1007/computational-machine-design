@@ -43,13 +43,33 @@ All internal calculations and models strictly use the mechanical engineering SI 
 
 ### 5. Primary Interface: CLI & Python Scripts (No Web Interface)
 - **Do NOT rely on or prioritize web browser interfaces.**
-- The primary user interface is the **CLI tool (`cli.py`, `mdie.bat`, `cli.bat`)** and direct Python library workflows.
+- The primary user interface is the **`mdie` CLI** (console script from `pyproject.toml`, or `python -m mdie`; `mdie.bat`/`cli.bat` wrap the module form) and direct Python library workflows.
+- Entry point is [`mdie/cli/`](file:///c:/codework/computational-machine-design/mdie/cli/): `app.py` holds argparse dispatch, `designers.py` the per-domain prompt handlers, `viewers.py` CAD viewer detection. Do not add a second root-level `cli.py`.
+- Subcommands: free-form prompt, `chair`/`bracket`, `shaft`, `convert`, `drawings`, `report`, `view`, `info`.
 - All runs must output directly to local files in `Project/<project_name>/`:
   - **`.step`** for ISO-10303 CAD solid assembly
   - **`.stl`** for watertight sliced 3D printing
   - **`.scad`** for parametric OpenSCAD scripts
   - **`.html`** for self-contained engineering reports
   - Rich terminal tables with forces, stresses, safety factors, and pass/fail verdicts.
+
+### 5.1 Package Layout
+Keep responsibilities separated - do not merge these back together:
+
+| Package | Owns |
+| --- | --- |
+| `mdie/core` | geometry primitives, units, the design data model |
+| `mdie/cad` | solids, STEP/STL export, OpenSCAD emission |
+| `mdie/components` | standard component sizing |
+| `mdie/physics` | stress, deflection, fatigue, buckling, FEA, frame solver |
+| `mdie/drafting` | dimensioned drawing sheets, FBD plots, Mermaid diagrams |
+| `mdie/reporting` | HTML/Markdown engineering report generators |
+| `mdie/convert` | the file converter: documents, CAD solids, drawing sheets |
+| `mdie/cli` | command line interface |
+
+- `mdie/drafting` must stay **model-derived**: read dimensions back off the actual primitives, never restate input parameters. The drawing regression tests enforce this.
+- `mdie/convert` must degrade gracefully when an optional dependency is missing - probe with `mdie.convert.registry.has_dependency` and raise a `ConversionError` that names the tool, rather than an `ImportError`.
+- The former `mdie/reports/` package no longer exists; it was split into `mdie/drafting/` and `mdie/reporting/`.
 
 ### 6. Dual-Tier Engineering Report Standards
 Engineering deliverables maintain a strict white-paper aesthetic (`#ffffff`, `#0f172a` ink, printable A4):
