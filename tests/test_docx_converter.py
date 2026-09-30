@@ -1,14 +1,60 @@
 """
-Tests for HTML to Word (.docx) Report Converter
+Tests for the HTML to Word (.docx) report converter.
+
+The rich converter behind the bridge lives in the separate learning-tools
+repository, so these are skipped when it is not installed. The in-repo
+renderer in ``mdie.convert.documents`` is covered unconditionally by
+``tests/test_converter.py``.
 """
 
 from pathlib import Path
 import docx
 import pytest
 
-from mdie.convert.docx_bridge import HTMLToDocxConverter
+from mdie.convert.docx_bridge import (
+    HTMLToDocxConverter,
+    is_available,
+    learning_tools_path,
+)
+
+requires_learning_tools = pytest.mark.skipif(
+    not is_available(),
+    reason="learning-tools checkout not present (set LEARNING_TOOLS_PATH)",
+)
 
 
+def test_bridge_imports_even_when_the_dependency_is_missing():
+    """A missing optional integration must never break an import."""
+    assert HTMLToDocxConverter is not None
+    assert isinstance(is_available(), bool)
+
+
+def test_learning_tools_path_is_none_or_a_real_checkout():
+    path = learning_tools_path()
+    if path is not None:
+        assert (path / "lt" / "docx_converter.py").exists()
+
+
+@pytest.mark.skipif(is_available(), reason="learning-tools is installed")
+def test_using_the_bridge_without_learning_tools_raises_a_clear_error(tmp_path):
+    from mdie.convert.docx_bridge import LearningToolsUnavailable
+
+    src = tmp_path / "r.html"
+    src.write_text("<html><body><p>hi</p></body></html>", encoding="utf-8")
+    with pytest.raises(LearningToolsUnavailable, match="LEARNING_TOOLS_PATH"):
+        HTMLToDocxConverter.convert(src, tmp_path / "r.docx")
+
+
+def test_bridge_degrades_to_none_when_the_checkout_is_absent(monkeypatch):
+    """Simulate a machine without learning-tools: load() must not raise."""
+    import mdie.convert.docx_bridge as bridge
+
+    monkeypatch.setattr(bridge, "learning_tools_path", lambda: None)
+    assert bridge._load() is None
+    assert bridge.is_available() is False
+
+
+@requires_learning_tools
 def test_docx_conversion_basic(tmp_path: Path):
     html_content = """<!DOCTYPE html>
     <html>
@@ -50,6 +96,7 @@ def test_docx_conversion_basic(tmp_path: Path):
     assert "Factor of safety > 2.0" in all_text
 
 
+@requires_learning_tools
 def test_docx_conversion_with_ai(tmp_path: Path):
     html_content = """<!DOCTYPE html>
     <html>

@@ -17,6 +17,7 @@ pure Python. B-rep formats (STEP/IGES) need FreeCAD - see :mod:`mdie.convert.sol
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 
 from mdie.convert.documents import (
@@ -121,14 +122,19 @@ def convert_file(source: str | Path, target_format: str | None = None,
 def _convert_document(src: Path, src_format: str, fmt: str,
                       dst: Path, use_ai: bool) -> Path:
     # The learning-tools bridge adds an AI peer-review pass, but it is an
-    # optional external install; fall back to the in-repo renderer.
+    # optional external install. Fall back to the in-repo renderer rather than
+    # failing - but only for its absence, so real bridge errors still surface.
     if use_ai and fmt == "docx" and src_format == "html":
-        try:
-            from mdie.convert.docx_bridge import HTMLToDocxConverter
-            result = HTMLToDocxConverter.convert(str(src), output_docx_path=str(dst), enable_ai=True)
+        from mdie.convert import docx_bridge
+
+        if docx_bridge.is_available():
+            result = docx_bridge.HTMLToDocxConverter.convert(
+                str(src), output_docx_path=str(dst), enable_ai=True)
             return Path(result)
-        except Exception:
-            pass
+        warnings.warn(
+            "AI peer-review pass skipped: the learning-tools DOCX converter is "
+            "not installed. Set LEARNING_TOOLS_PATH to enable it.",
+            RuntimeWarning, stacklevel=2)
 
     blocks = blocks_from_source(src, src_format)
 
