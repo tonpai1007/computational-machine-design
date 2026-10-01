@@ -50,6 +50,7 @@ def test_stl_binary_export():
     assert len(stl_bytes) > 84  # Header + triangle count + facets
     # Parse header and triangle count
     header = stl_bytes[:80]
+    assert len(header) == 80
     n_tris = struct.unpack("<I", stl_bytes[80:84])[0]
     assert n_tris > 0
     # Expected byte length = 84 + n_tris * 50

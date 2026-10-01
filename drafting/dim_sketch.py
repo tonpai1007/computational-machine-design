@@ -43,13 +43,13 @@ def dim_v(
         "",
         xy=(x, y1),
         xytext=(x, y0),
-        arrowprops=dict(
-            arrowstyle="<|-|>,head_width=0.2,head_length=0.5",
-            color=color,
-            lw=1.2,
-            shrinkA=0,
-            shrinkB=0,
-        ),
+        arrowprops={
+            "arrowstyle": "<|-|>,head_width=0.2,head_length=0.5",
+            "color": color,
+            "lw": 1.2,
+            "shrinkA": 0,
+            "shrinkB": 0,
+        },
     )
     for yy in (y0, y1):
         ax.plot([x - 14, x + 14], [yy, yy], color=color, lw=1.0)
@@ -70,13 +70,13 @@ def dim_h(ax: Axes, y: float, x0: float, x1: float, text: str, color: str = DIM)
         "",
         xy=(x1, y),
         xytext=(x0, y),
-        arrowprops=dict(
-            arrowstyle="<|-|>,head_width=0.2,head_length=0.5",
-            color=color,
-            lw=1.2,
-            shrinkA=0,
-            shrinkB=0,
-        ),
+        arrowprops={
+            "arrowstyle": "<|-|>,head_width=0.2,head_length=0.5",
+            "color": color,
+            "lw": 1.2,
+            "shrinkA": 0,
+            "shrinkB": 0,
+        },
     )
     for xx in (x0, x1):
         ax.plot([xx, xx], [y - 14, y + 14], color=color, lw=1.0)

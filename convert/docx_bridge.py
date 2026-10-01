@@ -20,6 +20,7 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 #: Candidate locations for the learning-tools checkout, most specific first.
 _CANDIDATES = (
@@ -44,7 +45,7 @@ class LearningToolsUnavailable(RuntimeError):
     """Raised when the optional learning-tools bridge is used but missing."""
 
 
-def _load():
+def _load() -> Any | None:
     """Import the real converter, or return ``None`` if it is unavailable."""
     path = learning_tools_path()
     if path is None:
@@ -67,7 +68,7 @@ class _UnavailableConverter:
     """Stand-in that fails with an actionable message instead of at import."""
 
     @staticmethod
-    def convert(*_args, **_kwargs):
+    def convert(*_args: Any, **_kwargs: Any) -> None:
         raise LearningToolsUnavailable(
             "The learning-tools DOCX converter is not installed. Set "
             "LEARNING_TOOLS_PATH to its checkout, or convert without the AI "

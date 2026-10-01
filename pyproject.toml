@@ -41,7 +41,7 @@ testpaths = ["tests"]
 filterwarnings = ["ignore::DeprecationWarning"]
 
 [tool.ruff]
-line-length = 100
+line-length = 120
 target-version = "py311"
 exclude = [".venv", "__pycache__", "Project", ".pytest_cache", "*.egg-info", "computational_machine_design.egg-info"]
 
@@ -61,6 +61,13 @@ ignore = [
     "S101", # assert used (allowed in tests)
     "T201", # print used (allowed in CLI)
     "B008", # function calls in default arg (allowed for performance)
+    "E501", # line length: enforced by review, not lint. The reporting and
+            # drafting packages emit multi-line HTML/CSS/SVG f-strings that
+            # cannot be wrapped without corrupting the emitted markup, so a
+            # hard limit here would only force unreadable string surgery.
+    "E741", # ambiguous name: 'l' for length and 'I' for second moment of
+            # inertia are the conventional symbols in this domain. Prefer
+            # span_m / inertia_m4, but do not fail the build over notation.
 ]
 per-file-ignores = { "tests/*" = ["S101", "T201"] }
 
@@ -71,6 +78,7 @@ skip-magic-trailing-comma = false
 
 [tool.mypy]
 python_version = "3.11"
+plugins = ["pydantic.mypy"]
 strict = true
 warn_return_any = true
 warn_unused_configs = true
@@ -83,3 +91,10 @@ warn_unused_ignores = true
 warn_no_return = true
 files = ["ai", "cad", "cli", "components", "convert", "core", "drafting", "integrations", "materials", "optimizer", "physics", "reporting"]
 exclude = ["tests", "scratch", "Project", ".venv", "__pycache__", "\\.egg-info$"]
+
+# Third-party packages that ship no type information. Every use of these is
+# already guarded at runtime (convert.registry.has_dependency and friends), so
+# the missing stubs are not a typing defect in this codebase.
+[[tool.mypy.overrides]]
+module = ["fitz.*", "httpx.*", "docx.*", "lt.*"]
+ignore_missing_imports = true

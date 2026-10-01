@@ -120,14 +120,14 @@ def _arrow(
         "",
         xy=(x, y1),
         xytext=(x, y0),
-        arrowprops=dict(
-            arrowstyle="-|>,head_width=0.32,head_length=0.7",
-            color=color,
-            linewidth=2.4,
-            shrinkA=0,
-            shrinkB=0,
-            zorder=6,
-        ),
+        arrowprops={
+            "arrowstyle": "-|>,head_width=0.32,head_length=0.7",
+            "color": color,
+            "linewidth": 2.4,
+            "shrinkA": 0,
+            "shrinkB": 0,
+            "zorder": 6,
+        },
     )
     ax.text(
         x + label_dx,
@@ -148,14 +148,14 @@ def _dim_line(ax: Axes, x0: float, x1: float, y: float, text: str) -> None:
         "",
         xy=(x1, y),
         xytext=(x0, y),
-        arrowprops=dict(
-            arrowstyle="<|-|>,head_width=0.22,head_length=0.5",
-            color=DIM,
-            linewidth=1.1,
-            shrinkA=0,
-            shrinkB=0,
-            zorder=5,
-        ),
+        arrowprops={
+            "arrowstyle": "<|-|>,head_width=0.22,head_length=0.5",
+            "color": DIM,
+            "linewidth": 1.1,
+            "shrinkA": 0,
+            "shrinkB": 0,
+            "zorder": 5,
+        },
     )
     ax.plot([x0, x0], [y - 14, y + 14], color=DIM, linewidth=1.0, zorder=5)
     ax.plot([x1, x1], [y - 14, y + 14], color=DIM, linewidth=1.0, zorder=5)
@@ -168,7 +168,7 @@ def _dim_line(ax: Axes, x0: float, x1: float, y: float, text: str) -> None:
         fontsize=9.5,
         color=DIM,
         zorder=6,
-        bbox=dict(boxstyle="round,pad=0.28", fc="white", ec="none"),
+        bbox={"boxstyle": "round,pad=0.28", "fc": "white", "ec": "none"},
     )
 
 
@@ -231,17 +231,17 @@ def plot_fbd(
         "",
         xy=(L * 1.06, -beam_h / 2 - 128),
         xytext=(0.0, -beam_h / 2 - 128),
-        arrowprops=dict(
-            arrowstyle="-|>,head_width=0.28,head_length=0.6", color=INK, linewidth=1.4, zorder=5
-        ),
+        arrowprops={
+            "arrowstyle": "-|>,head_width=0.28,head_length=0.6", "color": INK, "linewidth": 1.4, "zorder": 5
+        },
     )
     ax.annotate(
         "",
         xy=(-L * 0.06, beam_h / 2 + up + L * 0.10),
         xytext=(-L * 0.06, -beam_h / 2 - 128),
-        arrowprops=dict(
-            arrowstyle="-|>,head_width=0.28,head_length=0.6", color=INK, linewidth=1.4, zorder=5
-        ),
+        arrowprops={
+            "arrowstyle": "-|>,head_width=0.28,head_length=0.6", "color": INK, "linewidth": 1.4, "zorder": 5
+        },
     )
     ax.text(
         L * 1.07,

@@ -35,7 +35,7 @@ class FrameReportGenerator:
     @staticmethod
     def generate_html_report(model: FrameDesignModel, result: FrameSolverResult) -> str:
         g = model.geometry
-        l = model.loads
+        loads = model.loads
         m = model.material
         allowable_deflection_mm = getattr(m, "allowable_deflection_mm", 5.0)
 
@@ -175,7 +175,7 @@ class FrameReportGenerator:
             <!-- Splayed Columns / Legs -->
             <line x1="230" y1="210" x2="190" y2="310" stroke="#1e293b" stroke-width="6" stroke-linecap="round" />
             <line x1="470" y1="210" x2="510" y2="310" stroke="#1e293b" stroke-width="6" stroke-linecap="round" />
-            
+
             <!-- Stretcher Bracing -->
             <line x1="205" y1="270" x2="495" y2="270" stroke="#475569" stroke-width="3" stroke-dasharray="4,2" />
             <text x="350" y="264" fill="#334155" font-size="10" text-anchor="middle" font-family="Inter, sans-serif">Bracing Stretcher (Z = {g.stretcher_height_mm:.0f} mm)</text>
@@ -202,18 +202,18 @@ class FrameReportGenerator:
 
             <!-- Applied Seat Payload Force -->
             <line x1="350" y1="140" x2="350" y2="195" stroke="#dc2626" stroke-width="2.5" marker-end="url(#arrow-down)" />
-            <text x="350" y="152" fill="#b91c1c" font-size="11" font-weight="700" text-anchor="middle" font-family="'JetBrains Mono', monospace">F_load = {l.seat_vertical_load_n:.0f} N</text>
+            <text x="350" y="152" fill="#b91c1c" font-size="11" font-weight="700" text-anchor="middle" font-family="'JetBrains Mono', monospace">F_load = {loads.seat_vertical_load_n:.0f} N</text>
 
             <!-- Applied Arm Loads -->
             <line x1="215" y1="70" x2="215" y2="110" stroke="#dc2626" stroke-width="2" marker-end="url(#arrow-down)" />
-            <text x="215" y="65" fill="#b91c1c" font-size="10" font-weight="700" text-anchor="middle" font-family="'JetBrains Mono', monospace">F_arm = {l.left_arm_vertical_n:.0f} N</text>
+            <text x="215" y="65" fill="#b91c1c" font-size="10" font-weight="700" text-anchor="middle" font-family="'JetBrains Mono', monospace">F_arm = {loads.left_arm_vertical_n:.0f} N</text>
             <line x1="215" y1="120" x2="160" y2="120" stroke="#0284c7" stroke-width="2" marker-end="url(#arrow-lat)" />
-            <text x="155" y="115" fill="#0369a1" font-size="10" font-weight="700" text-anchor="end" font-family="'JetBrains Mono', monospace">{abs(l.left_arm_lateral_n):.0f} N (lat)</text>
+            <text x="155" y="115" fill="#0369a1" font-size="10" font-weight="700" text-anchor="end" font-family="'JetBrains Mono', monospace">{abs(loads.left_arm_lateral_n):.0f} N (lat)</text>
 
             <line x1="485" y1="70" x2="485" y2="110" stroke="#dc2626" stroke-width="2" marker-end="url(#arrow-down)" />
-            <text x="485" y="65" fill="#b91c1c" font-size="10" font-weight="700" text-anchor="middle" font-family="'JetBrains Mono', monospace">F_arm = {l.right_arm_vertical_n:.0f} N</text>
+            <text x="485" y="65" fill="#b91c1c" font-size="10" font-weight="700" text-anchor="middle" font-family="'JetBrains Mono', monospace">F_arm = {loads.right_arm_vertical_n:.0f} N</text>
             <line x1="485" y1="120" x2="540" y2="120" stroke="#0284c7" stroke-width="2" marker-end="url(#arrow-lat)" />
-            <text x="548" y="115" fill="#0369a1" font-size="10" font-weight="700" font-family="'JetBrains Mono', monospace">{abs(l.right_arm_lateral_n):.0f} N (lat)</text>
+            <text x="548" y="115" fill="#0369a1" font-size="10" font-weight="700" font-family="'JetBrains Mono', monospace">{abs(loads.right_arm_lateral_n):.0f} N (lat)</text>
 
             <!-- Support Floor Reactions -->
             <line x1="190" y1="360" x2="190" y2="315" stroke="#16a34a" stroke-width="3" marker-end="url(#arrow-up)" />
@@ -523,13 +523,13 @@ class FrameReportGenerator:
     </div>
     <p>
       Deterministic structural calculation sheet for the <strong>{model.name}</strong>.
-      Evaluated under design payload <strong>{l.seat_vertical_load_n:.0f} N</strong>, auxiliary armrest loads of
-      <strong>{l.left_arm_vertical_n:.0f} N</strong>, and lateral disturbance thrust of <strong>{abs(l.left_arm_lateral_n):.0f} N</strong>.
+      Evaluated under design payload <strong>{loads.seat_vertical_load_n:.0f} N</strong>, auxiliary armrest loads of
+      <strong>{loads.left_arm_vertical_n:.0f} N</strong>, and lateral disturbance thrust of <strong>{abs(loads.left_arm_lateral_n):.0f} N</strong>.
     </p>
     <div class="kpi-grid">
       <div class="kpi-card">
         <div class="kpi-label">Applied Seat Payload</div>
-        <div class="kpi-val">{l.seat_vertical_load_n:.0f} <span style="font-size: 11px; color: var(--text-muted);">N</span></div>
+        <div class="kpi-val">{loads.seat_vertical_load_n:.0f} <span style="font-size: 11px; color: var(--text-muted);">N</span></div>
         <div class="kpi-sub">Total Downward: {result.total_downward_load_n:.1f} N</div>
       </div>
       <div class="kpi-card">
@@ -858,7 +858,7 @@ class FrameReportGenerator:
         </tr>
         <tr>
           <td style="font-weight: 600;">Main Platform Deck</td>
-          <td>Payload W = {l.seat_vertical_load_n:.0f} N</td>
+          <td>Payload W = {loads.seat_vertical_load_n:.0f} N</td>
           <td class="num">&delta; = {result.seat_deflection_mm:.3f} mm</td>
           <td class="num">&le; {allowable_deflection_mm:.1f} mm</td>
           <td class="num">1.50</td>
@@ -867,7 +867,7 @@ class FrameReportGenerator:
         </tr>
         <tr>
           <td style="font-weight: 600;">Cantilever Armrests</td>
-          <td>F<sub>arm</sub> = {l.left_arm_vertical_n:.0f} N</td>
+          <td>F<sub>arm</sub> = {loads.left_arm_vertical_n:.0f} N</td>
           <td class="num">{arm_stress_str}</td>
           <td class="num">{m.yield_strength_mpa:.1f} MPa</td>
           <td class="num">2.00</td>

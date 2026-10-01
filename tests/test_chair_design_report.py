@@ -99,11 +99,11 @@ def test_section_properties_match_profiles(doc):
         (g.arm_profile, (5872.5, 114.23, 7.170, 533.9)),
         (g.stretcher_profile, (3180.1, 82.47, 6.210, 334.8)),
     ]:
-        I = prof.moment_of_inertia_m4 * 1e12
+        Ii = prof.moment_of_inertia_m4 * 1e12
         A = prof.area_m2 * 1e6
-        k = math.sqrt(I / A)
-        Z = I / (prof.outer_dimension_mm / 2.0)
-        for rep, act, dp in zip(vals, (I, A, k, Z), (1, 2, 3, 1)):
+        k = math.sqrt(Ii / A)
+        Z = Ii / (prof.outer_dimension_mm / 2.0)
+        for rep, act, dp in zip(vals, (Ii, A, k, Z), (1, 2, 3, 1), strict=False):
             assert abs(rep - act) < 10**-dp, f"section property drift: {rep} vs {act}"
 
 
@@ -140,12 +140,11 @@ def test_arm_matches_solver(doc, sol):
 def test_every_summary_row_clears_design_factor(sol):
     """No row in the reference-style summary may fall below n_d = 2.0."""
     m = FrameDesignModel()
-    g, l, mat = m.geometry, m.loads, m.material
+    g, ld, mat = m.geometry, m.loads, m.material
     SY = mat.yield_strength_mpa
     E = mat.elastic_modulus_gpa * 1000.0
     K = 0.85
 
-    ap = g.arm_profile
     arm = sol.armrests[0]
     # bracket: per-post share, CAD section 25 (length) x bracket_h x bracket_t.
     # Read the plate size from the model rather than re-deriving it from the
@@ -165,14 +164,14 @@ def test_every_summary_row_clears_design_factor(sol):
     )
     slam = K * s_len / sk
     sPcr = sA * (SY - (SY * slam / (2 * math.pi)) ** 2 / E)
-    n_stretcher = sPcr / (l.backrest_force_n / 2.0)
+    n_stretcher = sPcr / (ld.backrest_force_n / 2.0)
 
     # backrest post
     lp = g.leg_profile
     lA, lI = lp.area_m2 * 1e6, lp.moment_of_inertia_m4 * 1e12
     lZ = lI / (lp.outer_dimension_mm / 2.0)
     dz = g.backrest_height_above_seat_mm * math.cos(math.radians(g.backrest_angle_deg - 90.0))
-    Fb = l.backrest_force_n / 2.0
+    Fb = ld.backrest_force_n / 2.0
     n_backrest = SY / (Fb * dz / 1e3 / lZ + Fb / lA)
 
     # endurance limit

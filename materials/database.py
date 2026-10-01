@@ -244,7 +244,7 @@ class MaterialDatabase:
                 return v
 
         # Keyword search
-        for k, v in MATERIALS_DB.items():
+        for v in MATERIALS_DB.values():
             if norm in v.name.upper().replace("-", "_").replace(" ", "_"):
                 return v
 

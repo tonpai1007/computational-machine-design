@@ -57,7 +57,6 @@ class STEPExporter:
 
         # Unique vertex index mapping
         vertex_map: dict[tuple[float, float, float], int] = {}
-        vertex_ids: list[int] = []
 
         for v1, v2, v3 in triangles:
             for v in (v1, v2, v3):

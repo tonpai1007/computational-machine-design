@@ -65,7 +65,7 @@ class SpringSolver:
         stroke = delta_max - delta_min
 
         # Free length determination
-        if spec.free_length_l0_mm and spec.free_length_l0_mm > 0:
+        if spec.free_length_l0_mm and spec.free_length_l0_mm > 0:  # noqa: SIM108 - branch carries its own rationale
             l0 = spec.free_length_l0_mm
         else:
             # Generous clearance to solid (at least 20% clash allowance beyond max stroke)
@@ -104,12 +104,9 @@ class SpringSolver:
         tau_max = calc_tau(f_max)
         tau_solid = calc_tau(f_solid)
 
-        # Material Strengths (ASTM A228 Music wire empirical relation if not specified)
-        if spec.tensile_strength_sut_mpa:
-            sut = spec.tensile_strength_sut_mpa
-        else:
-            # Sut = A / d^m (A = 2211, m = 0.145)
-            sut = 2211.0 / (d**0.145)
+        # Material Strengths (ASTM A228 Music wire empirical relation if not
+        # specified): Sut = A / d^m (A = 2211, m = 0.145)
+        sut = spec.tensile_strength_sut_mpa or 2211.0 / (d**0.145)
 
         # Torsional yield strength Ssy approx 0.45 * Sut (unpreset) or 0.65 * Sut (preset)
         ssy = 0.45 * sut

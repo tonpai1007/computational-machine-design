@@ -26,7 +26,7 @@ def synthesize_academic_narrative(
     using LLMRouter (AI) with a deterministic domain-aware fallback.
     """
     g = model.geometry
-    l = model.loads
+    loads = model.loads
     m = model.material
 
     system_prompt = (
@@ -38,7 +38,7 @@ def synthesize_academic_narrative(
         f"ชื่อโครงงาน/เครื่องจักร: {model.name}\n"
         f"ประเภทโครงสร้าง: {g.topology_type} (จำนวนเสารองรับ {g.num_legs} ขา)\n"
         f"วัสดุหลัก: {m.name} (Yield = {m.yield_strength_mpa} MPa, Ultimate = {m.ultimate_strength_mpa} MPa, E = {m.elastic_modulus_gpa} GPa)\n"
-        f"ภาระบรรทุกใช้งานหลัก: {l.seat_vertical_load_n:.0f} N\n"
+        f"ภาระบรรทุกใช้งานหลัก: {loads.seat_vertical_load_n:.0f} N\n"
         f"รายการชิ้นส่วนที่ต้องอธิบาย: {', '.join(component_names)}\n\n"
         "จงตอบ JSON ที่มีคีย์ดังนี้:\n"
         "1. 'introduction': ข้อความบทนำ 2 ย่อหน้า อธิบายความสำคัญ วัตถุประสงค์การออกแบบ สรีรศาสตร์ ภาระบรรทุก และเกณฑ์ความปลอดภัย\n"
@@ -57,7 +57,7 @@ def synthesize_academic_narrative(
             if resp:
                 data = json.loads(resp)
                 if "introduction" in data and "components" in data:
-                    return data
+                    return dict(data)
         except Exception as e:
             logger.debug(f"AI narrative call note: {e}")
 
@@ -72,7 +72,7 @@ def synthesize_academic_narrative(
     intro = (
         f"ปัจจุบันโครงสร้าง {model.name} ซึ่งจัดเป็น {topo_th} มีบทบาทสำคัญอย่างยิ่งต่อการใช้งานอย่างปลอดภัยตามหลักสรีรศาสตร์และวิศวกรรมเครื่องกล "
         f"โดยโครงสร้างต้องสามารถรองรับภาระน้ำหนักบรรทุกใช้งานจริง (Service Payload) ได้อย่างมั่นคงและปลอดภัย "
-        f"การออกแบบคำนึงถึงภาระบรรทุกกดแนวดิ่งหลัก {l.seat_vertical_load_n:.0f} N "
+        f"การออกแบบคำนึงถึงภาระบรรทุกกดแนวดิ่งหลัก {loads.seat_vertical_load_n:.0f} N "
         f"รวมถึงภาระแรงกระทำร่วมและผลกระทบจากการใช้งาน เพื่อป้องกันความเสียหายจากขีดจำกัดความเค้นคราก (Yield Stress), "
         f"การโก่งเดาะของเสารองรับ (Column Buckling) และการรับภาระล้าแบบวัฏจักร (Fatigue Life Endurance) ตลอดอายุการใช้งาน\n\n"
         f"โครงสร้างเลือกใช้วัสดุ {m.name} ที่มีคุณสมบัติความแข็งแรงผลผลิตสูง ทนทานต่อแรงกดอัดตามแนวแกนและโมเมนต์ดัดได้ดีเยี่ยม "

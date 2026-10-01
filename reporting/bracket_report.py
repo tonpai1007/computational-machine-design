@@ -19,7 +19,7 @@ class BracketReportGenerator:
     @staticmethod
     def generate_html_report(model: BracketModel, result: BracketSolverResult) -> str:
         g = model.geometry
-        l = model.loads
+        loads = model.loads
         m = model.material
         pat = g.motor_bolt_pattern
         base_pat = g.base_bolt_pattern
@@ -76,7 +76,7 @@ class BracketReportGenerator:
 
             <!-- Motor Housing Phantom Box -->
             <rect x="208" y="100" width="160" height="120" rx="4" fill="#f8fafc" stroke="#475569" stroke-width="1.5" stroke-dasharray="5,5" />
-            <text x="288" y="165" fill="#0f172a" font-size="11" font-weight="700" font-family="Inter, sans-serif" text-anchor="middle">Electric Motor ({l.motor_mass_kg:.1f} kg)</text>
+            <text x="288" y="165" fill="#0f172a" font-size="11" font-weight="700" font-family="Inter, sans-serif" text-anchor="middle">Electric Motor ({loads.motor_mass_kg:.1f} kg)</text>
 
             <!-- Motor Pilot Bore -->
             <line x1="180" y1="160" x2="208" y2="160" stroke="#dc2626" stroke-width="2.5" />
@@ -92,11 +92,11 @@ class BracketReportGenerator:
             <line x1="208" y1="85" x2="288" y2="85" stroke="#64748b" stroke-width="1.2" />
             <line x1="208" y1="80" x2="208" y2="90" stroke="#64748b" stroke-width="1.2" />
             <line x1="288" y1="80" x2="288" y2="90" stroke="#64748b" stroke-width="1.2" />
-            <text x="248" y="78" fill="#475569" font-size="10" font-family="'JetBrains Mono', monospace" text-anchor="middle">Arm = {l.cantilever_arm_mm:.0f} mm</text>
+            <text x="248" y="78" fill="#475569" font-size="10" font-family="'JetBrains Mono', monospace" text-anchor="middle">Arm = {loads.cantilever_arm_mm:.0f} mm</text>
 
             <!-- Dynamic Torque Reaction Curved Arrow -->
             <path d="M 370 140 A 25 25 0 0 1 370 180" fill="none" stroke="#7c3aed" stroke-width="2.5" marker-end="url(#arr-blue)" />
-            <text x="405" y="165" fill="#6d28d9" font-size="11" font-weight="700" font-family="'JetBrains Mono', monospace">T = {l.motor_torque_nm:.1f} N·m</text>
+            <text x="405" y="165" fill="#6d28d9" font-size="11" font-weight="700" font-family="'JetBrains Mono', monospace">T = {loads.motor_torque_nm:.1f} N·m</text>
 
             <!-- Overturning Moment Reaction at Root -->
             <path d="M 160 270 A 30 30 0 0 1 190 250" fill="none" stroke="#d97706" stroke-width="2.5" marker-end="url(#arr-blue)" />
@@ -412,8 +412,8 @@ class BracketReportGenerator:
     </div>
     <p>
       This audit sheet provides deterministic stress, fastener shear, and plate bending verification for the
-      motor mounting bracket assembly supporting a <strong>{l.motor_mass_kg:.1f} kg</strong> drive motor with
-      an operating torque of <strong>{l.motor_torque_nm:.1f} N&middot;m</strong> cantilevered at <strong>{l.cantilever_arm_mm:.0f} mm</strong>.
+      motor mounting bracket assembly supporting a <strong>{loads.motor_mass_kg:.1f} kg</strong> drive motor with
+      an operating torque of <strong>{loads.motor_torque_nm:.1f} N&middot;m</strong> cantilevered at <strong>{loads.cantilever_arm_mm:.0f} mm</strong>.
     </p>
     <div class="kpi-grid">
       <div class="kpi-card">
@@ -559,8 +559,8 @@ class BracketReportGenerator:
       The cantilevered motor mass generates an overturning moment about the root bend:
     </p>
     <div class="calc-step">
-      <div class="equation-line">F<sub>g</sub> = m &times; g = {l.motor_mass_kg:.1f} kg &times; 9.807 m/s&sup2; = {result.motor_weight_n:.1f} N</div>
-      <div class="equation-line">M<sub>overturning</sub> = F<sub>g</sub> &times; L<sub>arm</sub> = {result.motor_weight_n:.1f} N &times; {l.cantilever_arm_mm:.1f} mm = {result.overturning_moment_nm:.1f} N&middot;m</div>
+      <div class="equation-line">F<sub>g</sub> = m &times; g = {loads.motor_mass_kg:.1f} kg &times; 9.807 m/s&sup2; = {result.motor_weight_n:.1f} N</div>
+      <div class="equation-line">M<sub>overturning</sub> = F<sub>g</sub> &times; L<sub>arm</sub> = {result.motor_weight_n:.1f} N &times; {loads.cantilever_arm_mm:.1f} mm = {result.overturning_moment_nm:.1f} N&middot;m</div>
     </div>
     <div style="margin: 14px 0;">
       {svg_diagram}
@@ -653,7 +653,7 @@ class BracketReportGenerator:
         </tr>
         <tr>
           <td style="font-weight: 600;">Mounting Fasteners (x{pat.num_holes})</td>
-          <td>T = {l.motor_torque_nm:.1f} N&middot;m + F<sub>g</sub></td>
+          <td>T = {loads.motor_torque_nm:.1f} N&middot;m + F<sub>g</sub></td>
           <td class="num">&tau;<sub>bolt</sub> = {result.motor_bolt_shear_stress_mpa:.1f} MPa</td>
           <td class="num">300.0 MPa</td>
           <td class="num">2.00</td>

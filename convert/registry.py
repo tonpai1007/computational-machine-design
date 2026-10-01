@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import importlib
 from dataclasses import dataclass
+from pathlib import Path
 
 DOCUMENT = "document"
 SOLID = "solid"
@@ -73,7 +74,7 @@ def has_dependency(package: str) -> bool:
         return False
 
 
-def format_for_extension(path) -> str | None:
+def format_for_extension(path: Path) -> str | None:
     """Map a filesystem path onto a known format name."""
     return EXTENSION_TO_FORMAT.get(path.suffix.lower())
 

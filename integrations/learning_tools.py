@@ -29,7 +29,7 @@ LEARNING_TOOLS_DIR = Path(
 DEFAULT_LT_URL = os.environ.get("LEARNING_TOOLS_URL", "http://127.0.0.1:5000")
 
 
-def ensure_lt_imported():
+def ensure_lt_imported() -> None:
     """Ensure learning-tools package is discoverable on sys.path."""
     if LEARNING_TOOLS_DIR.exists() and str(LEARNING_TOOLS_DIR) not in sys.path:
         sys.path.insert(0, str(LEARNING_TOOLS_DIR))
@@ -55,7 +55,7 @@ class LearningToolsBridge:
                 f"{self.base_url}/api/stats", headers={"User-Agent": "MDIE-Bridge/1.0"}
             )
             with urllib.request.urlopen(req, timeout=timeout) as resp:
-                return resp.status == 200
+                return int(resp.status) == 200
         except Exception:
             return False
 
@@ -77,7 +77,9 @@ class LearningToolsBridge:
         if not html_path.exists():
             raise FileNotFoundError(f"HTML file not found: {html_path}")
 
-        if output_docx_path is None:
+        # noqa rationale: the explicit branch keeps "default" and "coerce" visually
+        # distinct; a ternary would hide the Path() coercion at a glance.
+        if output_docx_path is None:  # noqa: SIM108
             output_docx_path = html_path.with_suffix(".docx")
         else:
             output_docx_path = Path(output_docx_path)
@@ -126,11 +128,13 @@ class LearningToolsBridge:
                 f"learning-tools DOCX conversion unavailable: {exc}. Install "
                 "beautifulsoup4, or start the learning-tools REST API on port 5000."
             ) from exc
-        return HTMLToDocxConverter.convert(
-            html_path=html_path,
-            output_docx_path=output_docx_path,
-            enable_ai=enable_ai,
-            custom_ai_instructions=custom_ai_instructions,
+        return Path(
+            HTMLToDocxConverter.convert(
+                html_path=html_path,
+                output_docx_path=output_docx_path,
+                enable_ai=enable_ai,
+                custom_ai_instructions=custom_ai_instructions,
+            )
         )
 
     # -------------------------------------------------------------------------
@@ -181,7 +185,7 @@ class LearningToolsBridge:
                     resp_data = json.loads(resp.read().decode("utf-8"))
                     if resp_data.get("status") == "ok":
                         logger.info(f"Consolidated report via learning-tools API: {resp_data}")
-                        return resp_data
+                        return dict(resp_data)
             except Exception as e:
                 logger.warning(
                     f"API call to learning-tools /api/consolidate failed ({e}); falling back to direct library."
@@ -214,7 +218,7 @@ class LearningToolsBridge:
         source = Source(report_path)
         chunks = chunk_sources([source])
 
-        generated_files = {}
+        generated_files: dict[str, str] = {}
 
         # Convert to DOCX if HTML
         if convert_docx and report_path.suffix.lower() in (".html", ".htm"):

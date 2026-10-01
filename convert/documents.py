@@ -18,8 +18,13 @@ import re
 from collections.abc import Iterable
 from html.parser import HTMLParser
 from pathlib import Path
+from typing import Any
 
-Block = tuple
+# A parsed block: ``("heading", level, text)`` ``("para", text)``
+# ``("bullet", text)`` ``("numbered", text)`` ``("code", text)``
+# ``("table", rows)`` ``("quote", text)``. The arity varies by kind, so the
+# model stays a heterogeneous tuple.
+Block = tuple[Any, ...]
 
 # ---------------------------------------------------------------- parsing: md
 
@@ -136,7 +141,7 @@ class _HtmlBlocks(HTMLParser):
         self._skip = False
 
     # -- helpers
-    def _flush(self, kind: str, extra=None) -> None:
+    def _flush(self, kind: str, extra: tuple[Any, ...] | None = None) -> None:
         text = re.sub(r"\s+", " ", "".join(self._buf)).strip()
         self._buf.clear()
         if not text and kind != "table":
@@ -144,7 +149,7 @@ class _HtmlBlocks(HTMLParser):
         self.blocks.append((kind, *(extra or ()), text) if extra else (kind, text))
 
     # -- parser hooks
-    def handle_starttag(self, tag, attrs):
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if tag in ("head", "style", "script"):
             self._skip = True
             return
@@ -174,7 +179,7 @@ class _HtmlBlocks(HTMLParser):
         elif tag in ("td", "th"):
             self._in_cell, self._cell = True, []
 
-    def handle_endtag(self, tag):
+    def handle_endtag(self, tag: str) -> None:
         if tag in ("head", "style", "script"):
             self._skip = False
             return
@@ -212,7 +217,7 @@ class _HtmlBlocks(HTMLParser):
                 self.blocks.append(("table", rows))
             self._table = None
 
-    def handle_data(self, data):
+    def handle_data(self, data: str) -> None:
         if self._skip:
             return
         if self._in_cell and self._cell is not None:
@@ -220,7 +225,7 @@ class _HtmlBlocks(HTMLParser):
             return
         self._buf.append(data)
 
-    def close(self):
+    def close(self) -> None:
         super().close()
         self._flush("para")
         if self._table:
@@ -248,7 +253,7 @@ def blocks_from_docx(path: Path) -> list[Block]:
         text = para.text.strip()
         if not text:
             continue
-        style = (para.style.name or "").lower()
+        style = ((para.style.name if para.style is not None else "") or "").lower()
         if style.startswith("heading"):
             digits = "".join(ch for ch in style if ch.isdigit())
             blocks.append(("heading", int(digits) if digits else 1, text))
@@ -441,25 +446,23 @@ def blocks_to_pdf(blocks: Iterable[Block], path: Path, title: str = "MDIE Docume
 
 # ------------------------------------------------------------- source routing
 
-_READERS = {
-    "md": blocks_from_markdown,
-    "html": blocks_from_html,
-    "docx": blocks_from_docx,
-    "pdf": blocks_from_pdf,
-    "txt": None,
-}
-
 
 def blocks_from_source(path: Path, source_format: str) -> list[Block]:
     """Dispatch a source document onto the right block parser."""
     if source_format == "txt":
         return blocks_from_markdown(path.read_text(encoding="utf-8", errors="replace"))
-    reader = _READERS.get(source_format)
-    if reader is None:
-        raise ValueError(f"cannot read '{source_format}' documents")
-    if source_format in ("docx", "pdf"):
-        return reader(path)
-    return reader(path.read_text(encoding="utf-8", errors="replace"))
+    # The binary formats take a path; the text formats take the decoded text.
+    # Dispatching per format rather than through one callable table keeps each
+    # parser called with the argument type it actually declares.
+    if source_format == "docx":
+        return blocks_from_docx(path)
+    if source_format == "pdf":
+        return blocks_from_pdf(path)
+    if source_format == "html":
+        return blocks_from_html(path.read_text(encoding="utf-8", errors="replace"))
+    if source_format == "md":
+        return blocks_from_markdown(path.read_text(encoding="utf-8", errors="replace"))
+    raise ValueError(f"cannot read '{source_format}' documents")
 
 
 _RENDERERS = {

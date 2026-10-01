@@ -41,14 +41,14 @@ class BracketPhysicsSolver:
     @staticmethod
     def solve(model: BracketModel) -> BracketSolverResult:
         g = model.geometry
-        l = model.loads
+        loads = model.loads
         m = model.material
         log: list[str] = []
 
         log.append(f"Solving structural verification for '{model.name}' ({m.name}).")
 
         # 1. Mass & Applied Gravity Force
-        f_grav_n = l.motor_mass_kg * 9.80665
+        f_grav_n = loads.motor_mass_kg * 9.80665
         vol_base_m3 = (
             (g.base_length_mm / 1000.0) * (g.base_width_mm / 1000.0) * (g.thickness_mm / 1000.0)
         )
@@ -63,11 +63,11 @@ class BracketPhysicsSolver:
         )
 
         # 2. Overturning Moment at Bracket Root / Bend
-        arm_m = l.cantilever_arm_mm / 1000.0
+        arm_m = loads.cantilever_arm_mm / 1000.0
         h_m = (g.upright_height_mm * 0.6) / 1000.0
         m_gravity_nm = f_grav_n * arm_m
-        m_thrust_nm = l.axial_thrust_n * h_m
-        m_torque_nm = l.motor_torque_nm
+        m_thrust_nm = loads.axial_thrust_n * h_m
+        m_torque_nm = loads.motor_torque_nm
         m_root_total_nm = m_gravity_nm + m_thrust_nm + m_torque_nm
 
         log.append(
@@ -105,7 +105,7 @@ class BracketPhysicsSolver:
 
         # Shear force per bolt from motor gravity + torque reaction
         f_shear_grav_per_bolt = f_grav_n / float(n_bolts)
-        f_shear_torque_per_bolt = l.motor_torque_nm / max(float(n_bolts) * r_bcd_m, 1e-6)
+        f_shear_torque_per_bolt = loads.motor_torque_nm / max(float(n_bolts) * r_bcd_m, 1e-6)
         f_bolt_total_shear_n = math.sqrt(f_shear_grav_per_bolt**2 + f_shear_torque_per_bolt**2)
 
         d_bolt_m = pat.hole_diameter_mm / 1000.0

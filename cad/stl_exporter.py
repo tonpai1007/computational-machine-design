@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import math
 import struct
-from typing import Any
 
 from core.models import EngineeringModel
 

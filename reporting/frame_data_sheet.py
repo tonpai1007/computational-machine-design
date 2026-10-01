@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import math
+from collections.abc import Sequence
 from pathlib import Path
 
 from core.frame_model import (
@@ -41,7 +42,7 @@ class FrameDataSheetGenerator:
     def __init__(self, model: FrameDesignModel | None = None):
         self.model = model or FrameDesignModel()
         self.g = self.model.geometry
-        self.l = self.model.loads
+        self.loads = self.model.loads
         self.m = self.model.material
         self.sol = FramePhysicsSolver.solve(self.model)
         self.ag = resolve_armrest(
@@ -53,7 +54,7 @@ class FrameDataSheetGenerator:
 
     # ---------------------------------------------------------------- inputs
     def _section_inputs(self) -> str:
-        g, l, m = self.g, self.l, self.m
+        g, loads, m = self.g, self.loads, self.m
         rows = [
             ("seat_height_mm", f"{g.seat_height_mm:g}"),
             ("seat_width_mm", f"{g.seat_width_mm:g}"),
@@ -69,13 +70,13 @@ class FrameDataSheetGenerator:
             ("armrest_bracket_height_mm", f"{g.armrest_bracket_height_mm:g}"),
             ("backrest_height_above_seat_mm", f"{g.backrest_height_above_seat_mm:g}"),
             ("backrest_angle_deg", f"{g.backrest_angle_deg:g}"),
-            ("seat_vertical_load_n", f"{l.seat_vertical_load_n:g}"),
-            ("seat_load_center_y_mm", f"{l.seat_load_center_y_mm:g}"),
-            ("left_arm_vertical_n", f"{l.left_arm_vertical_n:g}"),
-            ("left_arm_lateral_n", f"{l.left_arm_lateral_n:g}"),
-            ("left_arm_load_y_mm", f"{l.left_arm_load_y_mm:g}"),
-            ("right_arm_vertical_n", f"{l.right_arm_vertical_n:g}"),
-            ("backrest_force_n", f"{l.backrest_force_n:g}"),
+            ("seat_vertical_load_n", f"{loads.seat_vertical_load_n:g}"),
+            ("seat_load_center_y_mm", f"{loads.seat_load_center_y_mm:g}"),
+            ("left_arm_vertical_n", f"{loads.left_arm_vertical_n:g}"),
+            ("left_arm_lateral_n", f"{loads.left_arm_lateral_n:g}"),
+            ("left_arm_load_y_mm", f"{loads.left_arm_load_y_mm:g}"),
+            ("right_arm_vertical_n", f"{loads.right_arm_vertical_n:g}"),
+            ("backrest_force_n", f"{loads.backrest_force_n:g}"),
             ("yield_strength_mpa", f"{m.yield_strength_mpa:g}"),
             ("ultimate_strength_mpa", f"{m.ultimate_strength_mpa:g}"),
             ("elastic_modulus_gpa", f"{m.elastic_modulus_gpa:g}"),
@@ -153,13 +154,13 @@ class FrameDataSheetGenerator:
         out.append("|---|---|")
         for k, v in fields:
             out.append(f"| `{k}` | {v} |")
-        fr, rr = ag.post_reaction_fractions(self.l.left_arm_load_y_mm)
+        fr, rr = ag.post_reaction_fractions(self.loads.left_arm_load_y_mm)
         out += [
             "",
-            f"การแจกแรงที่จุดกด y = {self.l.left_arm_load_y_mm:g} mm (หลักคาน):",
+            f"การแจกแรงที่จุดกด y = {self.loads.left_arm_load_y_mm:g} mm (หลักคาน):",
             "",
-            f"- เสาหน้า: `{fr:.4f}` → {self.l.left_arm_vertical_n * fr:.1f} N",
-            f"- เสาหลัง: `{rr:.4f}` → {self.l.left_arm_vertical_n * rr:.1f} N",
+            f"- เสาหน้า: `{fr:.4f}` → {self.loads.left_arm_vertical_n * fr:.1f} N",
+            f"- เสาหลัง: `{rr:.4f}` → {self.loads.left_arm_vertical_n * rr:.1f} N",
         ]
         return "\n".join(out)
 
@@ -277,7 +278,7 @@ class FrameDataSheetGenerator:
         )
 
     def _rails_stretcher_back(self) -> str:
-        g, l, m = self.g, self.l, self.m
+        g, loads, m = self.g, self.loads, self.m
         r = self.sol.seat_frame
         sp = g.stretcher_profile
         sA = sp.area_m2 * 1e6
@@ -290,13 +291,13 @@ class FrameDataSheetGenerator:
         slam = kfac * s_len / sk
         E = m.elastic_modulus_gpa * 1000.0
         sPcr = sA * (m.yield_strength_mpa - (m.yield_strength_mpa * slam / (2 * math.pi)) ** 2 / E)
-        s_load = l.backrest_force_n / 2.0
+        s_load = loads.backrest_force_n / 2.0
 
         lp = g.leg_profile
         lZ = lp.moment_of_inertia_m4 * 1e12 / (lp.outer_dimension_mm / 2.0)
         lA = lp.area_m2 * 1e6
         dz = g.backrest_height_above_seat_mm * math.sin(math.radians(g.backrest_angle_deg - 90.0))
-        fb = l.backrest_force_n / 2.0
+        fb = loads.backrest_force_n / 2.0
         back_sigma = fb * dz / 1e3 / lZ + fb / lA
 
         return "\n".join(
@@ -388,7 +389,7 @@ class FrameDataSheetGenerator:
                 "> **ข้อควรระวัง**: ท่อแขนรับแรงจากน้ำหนักผู้นั่ง ซึ่งเป็นแรงสถิต",
                 "> ไม่ใช่แรงกลับทิศ การใช้ S_e (เกณฑ์ความทนทานของแรงกลับทิศเต็ม) จึงไม่ตรงกับลักษณะการโหลด",
                 "> และค่า n ที่ได้จึงเป็นการประเมินแบบเผื่อมาก ไม่ใช่เกณฑ์ที่ใช้ตัดสินจริง",
-                f"> ค่า n ที่ N_d = 5×10⁸ รอบ ได้ `{sn / sig:.4f}` ซึ่งต่ำกว่า 1.0",
+                f"> ค่า n ที่ N_d = 5×10⁸ รอบ ได้ `{sn / sig:.4f}` ซึ่ง **ต่ำกว่าเกณฑ์ n_d = 2.0**",
             ]
         )
 
@@ -399,8 +400,8 @@ class FrameDataSheetGenerator:
         lever rule rather than 50/50. The bracket bonded to the governing
         post carries that post's full axial share.
         """
-        r_front, r_rear = self.ag.post_reaction_fractions(self.l.left_arm_load_y_mm)
-        return self.l.left_arm_vertical_n * max(r_front, r_rear)
+        r_front, r_rear = self.ag.post_reaction_fractions(self.loads.left_arm_load_y_mm)
+        return self.loads.left_arm_vertical_n * max(r_front, r_rear)
 
     def _bracket_sigma(self) -> float:
         a = self.sol.armrests[0]
@@ -476,7 +477,7 @@ class FrameDataSheetGenerator:
             "แผ่นรองนั่ง",
         )
         rows = []
-        for i, (p, role) in enumerate(zip(prims, roles), 1):
+        for i, (p, role) in enumerate(zip(prims, roles, strict=True), 1):
             if p["kind"] == "box":
                 sx, sy, sz = p["s"]
                 dim = f"{sx:g} × {sy:g} × {sz:g}"
@@ -538,12 +539,12 @@ class FrameDataSheetGenerator:
             f"- ผ่านทุกเกณฑ์: `{s.all_safety_criteria_passed}`",
             f"- น้ำหนักตัวเอง: `{s.total_chair_weight_n:.2f}` N",
             f"- แรงลงรวม: `{s.total_downward_load_n:.2f}` N",
-            f"- SF การพลิกคว่าด้านข้าง: "
+            "- SF การพลิกคว่าด้านข้าง: "
             + (
                 f"`{s.tipping_safety_factor_lat:g}`"
                 if s.tipping_safety_factor_lat is not None
                 else "`None` — **ไม่มีกรณีนี้ให้ตรวจ** ไม่ใช่ค่าที่คำนวณได้ว่าปลอดภัยมาก "
-                f"(แรงข้าง ∓{abs(self.l.left_arm_lateral_n):g} N หักล้างกันพอดี จึงไม่มีโมเมนต์พลิกสุทธิ)"
+                f"(แรงข้าง ∓{abs(self.loads.left_arm_lateral_n):g} N หักล้างกันพอดี จึงไม่มีโมเมนต์พลิกสุทธิ)"
             ),
         ]
         return "\n".join(out)
@@ -652,7 +653,7 @@ class FrameDataSheetGenerator:
         return "\n".join(parts)
 
 
-def main(argv=None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--outdir", default="Project/chair")
     args = ap.parse_args(argv)

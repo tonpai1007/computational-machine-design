@@ -146,10 +146,10 @@ def test_arm_matches_solver(doc, sol):
 def test_arm_shows_governing_post_split(doc):
     """Not 50/50: the front post takes about 79%."""
     m = FrameDesignModel()
-    g, l = m.geometry, m.loads
-    front, _ = resolve_armrest(g).post_reaction_fractions(l.left_arm_load_y_mm)
+    g, ld = m.geometry, m.loads
+    front, _ = resolve_armrest(g).post_reaction_fractions(ld.left_arm_load_y_mm)
     _num(doc, front, 4)
-    _num(doc, l.left_arm_vertical_n * front, 1)
+    _num(doc, ld.left_arm_vertical_n * front, 1)
 
 
 def test_bracket_matches_bracket_method_a(doc):
@@ -159,13 +159,13 @@ def test_bracket_matches_bracket_method_a(doc):
     full lever-rule axial share and the base moment that post resists.
     """
     m = FrameDesignModel()
-    g, l = m.geometry, m.loads
+    g, ld = m.geometry, m.loads
     a = FramePhysicsSolver.solve(m).armrests[0]
     bW, bH = g.armrest_bracket_thickness_mm, g.armrest_bracket_height_mm
     Z = (bW * bH**3 / 12.0) / (bH / 2.0)
     ag = resolve_armrest(g)
-    r_front, r_rear = ag.post_reaction_fractions(l.left_arm_load_y_mm)
-    f_gov = l.left_arm_vertical_n * max(r_front, r_rear)
+    r_front, r_rear = ag.post_reaction_fractions(ld.left_arm_load_y_mm)
+    f_gov = ld.left_arm_vertical_n * max(r_front, r_rear)
     sigma = f_gov / (bW * bH) + (a.strut_base_moment_nm / 2.0) * 1e3 / Z
     _num(doc, sigma, 2)
     _num(doc, m.material.yield_strength_mpa / sigma, 2)

@@ -19,8 +19,8 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-Triangle = tuple
-Vec = tuple
+Vec = tuple[float, float, float]
+Triangle = tuple[Vec, Vec, Vec]
 
 MESH_FORMATS = {"stl", "obj", "3mf"}
 BREP_FORMATS = {"step", "iges"}
@@ -236,8 +236,8 @@ def mesh_bounds(tris: list[Triangle]) -> tuple[Vec, Vec]:
     pts = [v for tri in tris for v in tri]
     if not pts:
         raise ConversionError("empty mesh")
-    lo = tuple(min(p[i] for p in pts) for i in range(3))
-    hi = tuple(max(p[i] for p in pts) for i in range(3))
+    lo = (min(p[0] for p in pts), min(p[1] for p in pts), min(p[2] for p in pts))
+    hi = (max(p[0] for p in pts), max(p[1] for p in pts), max(p[2] for p in pts))
     return lo, hi
 
 
@@ -337,11 +337,11 @@ def convert_via_kernel(src: Path, dst: Path, dst_format: str, timeout: int = 300
                 creationflags=_NO_WINDOW,
                 env=env,
             )
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as exc:
             raise ConversionError(
                 f"FreeCAD did not finish within {timeout}s; "
                 "the kernel hung or the model is too large to tessellate"
-            )
+            ) from exc
         if not staged.exists():
             raise ConversionError(
                 "FreeCAD produced no mesh: "
@@ -392,8 +392,8 @@ def convert_scad(src: Path, dst: Path, dst_format: str, timeout: int = 300) -> P
                 timeout=timeout,
                 creationflags=_NO_WINDOW,
             )
-        except subprocess.TimeoutExpired:
-            raise ConversionError(f"OpenSCAD did not finish within {timeout}s")
+        except subprocess.TimeoutExpired as exc:
+            raise ConversionError(f"OpenSCAD did not finish within {timeout}s") from exc
         if not staged.exists():
             raise ConversionError(
                 "OpenSCAD produced no mesh: "

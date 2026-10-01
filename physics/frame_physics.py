@@ -189,7 +189,6 @@ class FramePhysicsSolver:
         # 3. External Applied Loads Compilation
         x_seat = (loads.seat_load_center_x_mm) / 1000.0
         y_seat = (loads.seat_load_center_y_mm) / 1000.0
-        z_seat = h_m
         f_seat_z = loads.seat_vertical_load_n
 
         f_arm_l_z = loads.left_arm_vertical_n if geom.has_arms else 0.0
@@ -436,8 +435,8 @@ class FramePhysicsSolver:
             restoring_moment_roll / abs(my_total) if abs(my_total) > 1.0 else None
         )
 
-        min_leg_buck = min(l.buckling_safety_factor for l in leg_results)
-        min_leg_yld = min(l.yield_safety_factor for l in leg_results)
+        min_leg_buck = min(col.buckling_safety_factor for col in leg_results)
+        min_leg_yld = min(col.yield_safety_factor for col in leg_results)
         min_arm_sf = min((a.arm_safety_factor for a in arm_results), default=99.0)
 
         # A None lateral margin means "no lateral tipping case exists" and must not
@@ -451,7 +450,7 @@ class FramePhysicsSolver:
 
         all_passed = (
             is_stable
-            and all(l.buckling_passed and l.yield_passed for l in leg_results)
+            and all(col.buckling_passed and col.yield_passed for col in leg_results)
             and all(a.passed for a in arm_results)
             and rail_result.passed
             and min_tip_sf >= 1.5

@@ -54,7 +54,7 @@ class ReportGenerator:
 
         # Build path points
         points = []
-        for x, y in zip(x_vals, y_vals):
+        for x, y in zip(x_vals, y_vals, strict=True):
             points.append(f"{map_x(x):.1f},{map_y(y):.1f}")
         polyline_pts = " ".join(points)
 
@@ -362,7 +362,7 @@ class ReportGenerator:
         }</strong>, Fatigue: <strong>{review["fatigue_review"]}</strong>, Deflection: <strong>{
             review["deflection_review"]
         }</strong>, Mass: <strong>{review["mass_review"]}</strong>.</p>
-      
+
       {
             "<h4>Critical Issues:</h4><ul>"
             + "".join(f"<li>{html.escape(iss)}</li>" for iss in review["critical_issues"])
@@ -370,7 +370,7 @@ class ReportGenerator:
             if review["critical_issues"]
             else ""
         }
-      
+
       <h4>Recommended Engineering Actions:</h4>
       <ul class="actions-list">
         {"".join(f"<li>{html.escape(r)}</li>" for r in review["recommendations"])}
@@ -466,7 +466,7 @@ class ReportGenerator:
 
     <!-- Standard Machine Components (Bearings & Keyways) -->
     <h2>6. Standard Machine Components: Bearings &amp; Keys</h2>
-    
+
     <h3>A. SKF Standard Rolling Bearings (ISO 281 L10h Life)</h3>
     {
             "<table><thead><tr><th>Location</th><th>Bearing Designation</th><th>Bore (d)</th><th>Outer (D)</th><th>Width (B)</th><th>Dynamic Capacity (C)</th><th>Equivalent Load (P)</th><th>Rating Life (L10h)</th><th>Suitability</th></tr></thead><tbody>"

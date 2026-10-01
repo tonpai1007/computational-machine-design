@@ -11,8 +11,6 @@ import struct
 from pathlib import Path
 from typing import Any
 
-Primitive = dict[str, Any]
-
 from cad.step_assembly import MultiBodySTEPExporter, SolidPart
 from core.frame_model import (
     ARM_PAD_THICKNESS_MM,
@@ -21,6 +19,7 @@ from core.frame_model import (
     resolve_armrest,
 )
 
+Primitive = dict[str, Any]
 Point3D = tuple[float, float, float]
 Triangle = tuple[Point3D, Point3D, Point3D]
 

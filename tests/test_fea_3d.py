@@ -20,8 +20,8 @@ def test_cantilever_beam_3d_fea():
     # Solid round bar, diameter 50 mm
     d = 0.050
     A = math.pi * (d**2) / 4.0
-    I = math.pi * (d**4) / 64.0
-    J = 2.0 * I
+    Ii = math.pi * (d**4) / 64.0
+    J = 2.0 * Ii
 
     n1 = solver.add_node(0.0, 0.0, 0.0, "Root")
     n2 = solver.add_node(L, 0.0, 0.0, "Tip")
@@ -31,13 +31,13 @@ def test_cantilever_beam_3d_fea():
     # 1000 N downward load on tip
     solver.add_nodal_load(n2, fz=P)
 
-    solver.add_member("Beam", n1, n2, E, G, A, I, I, J, d, yield_strength=350e6)
+    solver.add_member("Beam", n1, n2, E, G, A, Ii, Ii, J, d, yield_strength=350e6)
 
     res = solver.solve()
     assert res["passed"] is True
 
     # Analytical tip deflection
-    v_analytical = abs(P) * (L**3) / (3.0 * E * I)
+    v_analytical = abs(P) * (L**3) / (3.0 * E * Ii)
     v_fea = abs(n2.displacements[2])
     rel_error = abs(v_fea - v_analytical) / v_analytical
     assert rel_error < 0.001  # < 0.1% error!

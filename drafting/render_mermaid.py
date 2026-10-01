@@ -34,6 +34,7 @@ Pass --setup to force that install, or run:
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import re
 import shutil
@@ -46,6 +47,8 @@ from pathlib import Path
 
 DEFAULT_REPORT = Path("Project/chair/chair_design_report.md")
 CACHE_DIR = Path(os.environ.get("USERPROFILE", Path.home())) / ".cache" / "mdie-mermaid"
+
+logger = logging.getLogger("drafting.render_mermaid")
 
 # Common Windows install locations for Chrome/Edge, in preference order.
 CHROME_CANDIDATES = [
@@ -69,8 +72,10 @@ def force_utf8() -> None:
             reconfigure = getattr(s, "reconfigure", None)
             if reconfigure is not None:
                 reconfigure(encoding="utf-8")
-        except (AttributeError, ValueError):
-            pass
+        except (AttributeError, ValueError) as exc:
+            # Losing UTF-8 on a redirected stream only garbles box-drawing
+            # characters; it must never abort the render.
+            logger.debug("Could not reconfigure %r to UTF-8: %s", s, exc)
 
 
 def find_chrome(explicit: str | None = None) -> str | None:

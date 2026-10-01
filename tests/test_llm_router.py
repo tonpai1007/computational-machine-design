@@ -56,23 +56,23 @@ def test_provider_auto_detection():
 
 def test_cascading_failover():
     """Verify that if Groq hits 429 rate limit, it automatically cascades to OpenRouter."""
-    with patch.dict(
-        os.environ, {"GROQ_API_KEY": "gsk_test", "OPENROUTER_API_KEY": "sk-or-test"}, clear=True
-    ):
+    with (
+        patch.dict(
+            os.environ, {"GROQ_API_KEY": "gsk_test", "OPENROUTER_API_KEY": "sk-or-test"}, clear=True
+        ),
         # Mock _call_groq to fail with rate limit, and _call_openrouter to succeed
-        with patch.object(
-            LLMRouter, "_call_groq", side_effect=RuntimeError("HTTP 429: Rate limit reached")
-        ):
-            with patch.object(
-                LLMRouter, "_call_openrouter", return_value='{"name": "Shaft", "total_length": 0.5}'
-            ):
-                text, provider, logs = LLMRouter.call_chat_completion(
-                    system_prompt="Test system", user_prompt="stepped shaft 500 mm"
-                )
-                assert text is not None
-                assert provider == "openrouter"
-                assert any("Rate limit reached" in l for l in logs)
-                assert any("Successfully received response from 'OPENROUTER'" in l for l in logs)
+        patch.object(LLMRouter, "_call_groq", side_effect=RuntimeError("HTTP 429: Rate limit reached")),
+        patch.object(
+            LLMRouter, "_call_openrouter", return_value='{"name": "Shaft", "total_length": 0.5}'
+        ),
+    ):
+        text, provider, logs = LLMRouter.call_chat_completion(
+            system_prompt="Test system", user_prompt="stepped shaft 500 mm"
+        )
+        assert text is not None
+        assert provider == "openrouter"
+        assert any("Rate limit reached" in line for line in logs)
+        assert any("Successfully received response from 'OPENROUTER'" in line for line in logs)
 
 
 def test_offline_deterministic_fallback():
@@ -87,7 +87,7 @@ def test_offline_deterministic_fallback():
         assert model.speed_rpm == 1800.0
         res = PhysicsSolver.solve(model)
         assert res.applied_torque_nm > 100.0  # P / omega ~ 132.6 N*m
-        assert any("deterministic" in l.lower() or "offline" in l.lower() for l in logs)
+        assert any("deterministic" in msg.lower() or "offline" in msg.lower() for msg in logs)
 
 
 def test_llm_json_construction():

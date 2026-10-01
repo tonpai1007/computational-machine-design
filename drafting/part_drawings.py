@@ -152,7 +152,8 @@ TXT_SMALL = 3.2  # projection symbol caption
 
 # Armrest build constants, mirroring cad.assembly so the armrest
 # sheet's extents match the exported solid.
-ARM_PAD_THICKNESS_MM = 18.0
+# ARM_PAD_THICKNESS_MM is imported from core.frame_model (single source of
+# truth) -- do NOT redefine it here, or the sheet and the solid diverge.
 ARM_STANDOFF_MM = 25.0
 
 
@@ -350,10 +351,8 @@ def build_parts(model: FrameDesignModel) -> list[PartDrawing]:
     g = model.geometry
     L = _leg_len(g)
     rail_len = g.seat_width_mm
-    side_rail = g.seat_depth_mm
     arm_len = g.armrest_length_mm
     stretch = g.seat_width_mm
-    stretch_d = g.seat_depth_mm
     # Stretcher footprint: the legs are splayed, so at stretcher height the
     # perimeter is wider than the seat span by the splay offset *at that
     # height*, plus the tube radius on each side. See assembly.py
@@ -1436,7 +1435,7 @@ def render_assembly_svg(model: FrameDesignModel) -> str:
     ]
 
     drawn = []
-    for cx, (label, u, v) in zip(centers, labels):
+    for cx, (label, u, v) in zip(centers, labels, strict=True):
         box, T = _shape_view_raw(svg, cx, row_cy, prims, u, v, scale)
         drawn.append((box, T))
         _text(
@@ -1468,7 +1467,7 @@ def render_assembly_svg(model: FrameDesignModel) -> str:
     # ---- item balloons across a row above the front view ----
     balloon_y = view_top - 1.0
     anchors = []
-    for item, (name, qty, _desc) in enumerate(ASSEMBLY_ITEMS, start=1):
+    for item, (name, _qty, _desc) in enumerate(ASSEMBLY_ITEMS, start=1):
         plist = groups.get(name)
         if not plist:
             continue
@@ -1561,7 +1560,6 @@ def render_elevation_svg(part: PartDrawing, model: FrameDesignModel) -> str:
     svg.append(f'<rect width="{W}" height="{H}" fill="{PAPER}"/>')
     _rect(svg, 10, 10, W - 20, H - 20, INK, 0.8, fill="none")
 
-    g = model.geometry
     p = part.profile
     is_round = p.profile_type.startswith("round")
     r_out = p.outer_dimension_mm / 2.0

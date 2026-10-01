@@ -13,8 +13,10 @@ Usage shapes
 
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
+from typing import Any
 
 from rich.console import Console
 from rich.markdown import Markdown
@@ -58,7 +60,7 @@ CANNED = {
 }
 
 
-def _report_unsupported(meta: dict) -> None:
+def _report_unsupported(meta: dict[str, Any]) -> None:
     """Decline an out-of-scope request and list what MDIE can actually verify.
 
     MDIE only reports designs it has a deterministic solver for; declining is
@@ -366,17 +368,13 @@ def _cmd_report(argv: list[str]) -> int:
     if target_p.exists() and target_p.is_file():
         target_file = target_p
     else:
-        target_file = None
-        for cand in (
+        candidates = [
             Path("Project") / args.target / "academic_assignment_report.html",
             Path("Project") / args.target / f"{args.target}_report.html",
             Path("Project") / args.target / "report.html",
-        ):
-            if cand.exists():
-                target_file = cand
-                break
-        if target_file is None:
-            target_file = Path("Project/chair/academic_assignment_report.html")
+            Path("Project/chair/academic_assignment_report.html"),
+        ]
+        target_file = next((c for c in candidates if c.exists()), candidates[-1])
 
     if not target_file.exists():
         console.print(f"[bold red]Report file not found:[/bold red] {target_file}")
@@ -419,9 +417,7 @@ def _cmd_view(argv: list[str]) -> int:
     return 0
 
 
-def _build_parser():
-    import argparse
-
+def _build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         prog="mdie", add_help=False, description="MDIE - plain-language mechanical design."
     )

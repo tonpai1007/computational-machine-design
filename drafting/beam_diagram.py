@@ -20,6 +20,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import logging
 import re
 import sys
 from collections.abc import Sequence
@@ -33,6 +34,8 @@ from physics.frame_physics import FramePhysicsSolver
 
 REPORT_MD = Path("Project/chair/chair_design_report.md")
 
+logger = logging.getLogger("drafting.beam_diagram")
+
 
 def _force_utf8_stdout() -> None:
     """Thai labels cannot encode to cp1252; make stdout/stderr UTF-8."""
@@ -42,8 +45,10 @@ def _force_utf8_stdout() -> None:
             reconfigure = getattr(stream, "reconfigure", None)
             if reconfigure is not None:
                 reconfigure(encoding="utf-8")
-        except (AttributeError, ValueError):
-            pass
+        except (AttributeError, ValueError) as exc:
+            # Losing UTF-8 on a redirected stream only garbles box-drawing
+            # characters; it must never abort the render.
+            logger.debug("Could not reconfigure %r to UTF-8: %s", stream, exc)
 
 
 def _mac(x: float, a: float, power: int) -> float:

@@ -99,7 +99,6 @@ class StressSolver:
         x_arr = np.array(internal_dist["x"])
         m_arr = np.array(internal_dist["bending_moment"])
         t_arr = np.array(internal_dist["torque"])
-        v_arr = np.array(internal_dist["shear_force"])
         n_pts = len(x_arr)
 
         sigma_bending = np.zeros(n_pts)
@@ -143,13 +142,13 @@ class StressSolver:
             diameters[i] = do * 1000.0  # in mm for display
 
             c = do / 2.0
-            I = (math.pi / 64.0) * (do**4 - di**4) if do > 0 else 1e-12
+            I_area = (math.pi / 64.0) * (do**4 - di**4) if do > 0 else 1e-12
             J = (math.pi / 32.0) * (do**4 - di**4) if do > 0 else 1e-12
 
             # Nominal stresses (Pa)
             m_abs = abs(m_arr[i])
             t_abs = abs(t_arr[i])
-            sigma_b = (m_abs * c) / I
+            sigma_b = (m_abs * c) / I_area
             tau_t = (t_abs * c) / J
 
             # Check for stress concentration

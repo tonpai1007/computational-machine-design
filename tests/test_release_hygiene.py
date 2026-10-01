@@ -20,7 +20,7 @@ def _pyproject_text() -> str:
 def test_version_matches_pyproject():
     """``core.__version__`` and the packaged version must not drift apart."""
     text = _pyproject_text()
-    line = next(l for l in text.splitlines() if l.startswith("version ="))
+    line = next(ln for ln in text.splitlines() if ln.startswith("version ="))
     packaged = line.split("=", 1)[1].strip().strip('"').strip("'")
     assert packaged == core.__version__, (
         f"version drift: pyproject={packaged!r} core={core.__version__!r}"

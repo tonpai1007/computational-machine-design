@@ -18,10 +18,11 @@ pure Python. B-rep formats (STEP/IGES) need FreeCAD - see :mod:`convert.solids`.
 from __future__ import annotations
 
 import warnings
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from convert.documents import (
-    _RENDERERS,
     blocks_from_source,
     blocks_to_docx,
     blocks_to_html,
@@ -54,15 +55,20 @@ __all__ = [
     "available_formats",
     "missing_dependencies",
     "describe_formats",
+    "format_for_extension",
     "ConversionError",
+    "SHEET",
+    "describe_mesh",
+    "find_kernel",
 ]
 
-_DOC_RENDERERS = {
+# Only the renderers that take blocks and return text. The DOCX and PDF
+# renderers write their own file and take a destination, so they are called
+# directly rather than through this table.
+_DOC_RENDERERS: dict[str, Callable[[list[Any]], str]] = {
     "md": blocks_to_markdown,
     "html": blocks_to_html,
     "txt": blocks_to_text,
-    "docx": blocks_to_docx,
-    "pdf": blocks_to_pdf,
 }
 
 
@@ -135,7 +141,9 @@ def _convert_document(src: Path, src_format: str, fmt: str, dst: Path, use_ai: b
             result = docx_bridge.HTMLToDocxConverter.convert(
                 str(src), output_docx_path=str(dst), enable_ai=True
             )
-            return Path(result)
+            # The bridge reports where it wrote; fall back to the requested
+            # path when the optional external converter returns nothing.
+            return Path(result) if result is not None else dst
         warnings.warn(
             "AI peer-review pass skipped: the learning-tools DOCX converter is "
             "not installed. Set LEARNING_TOOLS_PATH to enable it.",

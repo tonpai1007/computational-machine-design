@@ -388,7 +388,7 @@ def build_chair_3d_fea_model(chair_model: Any) -> FEA3DSolver:
     Constructs a complete 3D space frame FEA model for the 4-leg armchair.
     """
     g = chair_model.geometry
-    l = chair_model.loads
+    loads = chair_model.loads
     m = chair_model.material
 
     solver = FEA3DSolver(name="Chair 3D Space Frame FEA")
@@ -699,12 +699,12 @@ def build_chair_3d_fea_model(chair_model: Any) -> FEA3DSolver:
         )
 
         # Split arm loads between front and rear posts (50/50 split)
-        left_force = l.left_arm_vertical_n / 2.0
-        solver.add_nodal_load(n_arm_l_front_top, fz=-left_force, fy=l.left_arm_lateral_n)
-        solver.add_nodal_load(n_arm_l_rear_top, fz=-left_force, fy=l.left_arm_lateral_n)
-        right_force = l.right_arm_vertical_n / 2.0
-        solver.add_nodal_load(n_arm_r_front_top, fz=-right_force, fy=l.right_arm_lateral_n)
-        solver.add_nodal_load(n_arm_r_rear_top, fz=-right_force, fy=l.right_arm_lateral_n)
+        left_force = loads.left_arm_vertical_n / 2.0
+        solver.add_nodal_load(n_arm_l_front_top, fz=-left_force, fy=loads.left_arm_lateral_n)
+        solver.add_nodal_load(n_arm_l_rear_top, fz=-left_force, fy=loads.left_arm_lateral_n)
+        right_force = loads.right_arm_vertical_n / 2.0
+        solver.add_nodal_load(n_arm_r_front_top, fz=-right_force, fy=loads.right_arm_lateral_n)
+        solver.add_nodal_load(n_arm_r_rear_top, fz=-right_force, fy=loads.right_arm_lateral_n)
 
     # 6. Backrest (if enabled)
     if g.has_backrest:
@@ -780,12 +780,12 @@ def build_chair_3d_fea_model(chair_model: Any) -> FEA3DSolver:
             Sy,
         )
         # Apply backrest horizontal thrust (backward in -Y direction)
-        f_back = l.backrest_force_n / 2.0
+        f_back = loads.backrest_force_n / 2.0
         solver.add_nodal_load(back_top_fl, fy=-f_back)
         solver.add_nodal_load(back_top_fr, fy=-f_back)
 
     # 7. Apply External Seat Load distributed on corner nodes
-    f_seat_per_corner = -l.seat_vertical_load_n / float(len(top_nodes))
+    f_seat_per_corner = -loads.seat_vertical_load_n / float(len(top_nodes))
     for tn in top_nodes:
         solver.add_nodal_load(tn, fz=f_seat_per_corner)
 
@@ -829,7 +829,7 @@ def build_space_truss_tower_model(
 
     # Store nodes level by level: [ [FL, FR, RR, RL] for each level ]
     level_nodes = []
-    for lvl_idx, (z, w) in enumerate(zip(levels_z, widths)):
+    for lvl_idx, (z, w) in enumerate(zip(levels_z, widths, strict=True)):
         hw = w / 2.0
         n_fl = solver.add_node(-hw, hw, z, f"Node_L{lvl_idx}_FL")
         n_fr = solver.add_node(hw, hw, z, f"Node_L{lvl_idx}_FR")

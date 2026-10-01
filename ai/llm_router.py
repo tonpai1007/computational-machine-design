@@ -36,8 +36,10 @@ def load_dotenv(env_path: Path | None = None) -> None:
                 val = val.strip().strip("'\"")
                 if key and key not in os.environ and val:
                     os.environ[key] = val
-    except Exception:
-        pass
+    except OSError as exc:
+        # A malformed/unreadable .env must not abort the CLI, but the user
+        # needs to know their API keys were not picked up.
+        logger.warning("Could not read %s: %s", env_path, exc)
 
 
 # Auto-load .env on import
@@ -260,7 +262,7 @@ class LLMRouter:
             if not candidates:
                 raise ValueError("Gemini returned empty candidates list.")
             text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-            return text
+            return str(text)
 
     @classmethod
     def _call_ollama(
@@ -296,7 +298,7 @@ class LLMRouter:
 
         with urllib.request.urlopen(req, timeout=30) as resp:
             resp_data = json.loads(resp.read().decode("utf-8"))
-            return resp_data.get("message", {}).get("content", "")
+            return str(resp_data.get("message", {}).get("content", ""))
 
     # =========================================================================
     # Common HTTP Dispatcher using httpx (or standard library urllib fallback)
@@ -315,9 +317,9 @@ class LLMRouter:
                 data = res.json()
                 choices = data.get("choices", [])
                 if not choices:
-                    raise RuntimeError("API returned empty choices list.")
-                return choices[0].get("message", {}).get("content", "")
-        except ImportError:
+                    raise RuntimeError("API returned empty choices list.") from None
+                return str(choices[0].get("message", {}).get("content", ""))
+        except ImportError:  # httpx absent: the stdlib path below is expected
             # Fallback to standard library urllib
             import urllib.request
 
@@ -327,5 +329,5 @@ class LLMRouter:
                 data = json.loads(resp.read().decode("utf-8"))
                 choices = data.get("choices", [])
                 if not choices:
-                    raise RuntimeError("API returned empty choices list.")
-                return choices[0].get("message", {}).get("content", "")
+                    raise RuntimeError("API returned empty choices list.") from None
+                return str(choices[0].get("message", {}).get("content", ""))

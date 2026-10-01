@@ -11,9 +11,9 @@ from rich.console import Console
 console = Console()
 
 
-def find_cad_tools() -> dict:
+def find_cad_tools() -> dict[str, str]:
     """Detect local lightweight CAD viewers (OpenSCAD, FreeCAD, etc.)"""
-    tools = {}
+    tools: dict[str, str] = {}
 
     # OpenSCAD candidates
     openscad_candidates = [

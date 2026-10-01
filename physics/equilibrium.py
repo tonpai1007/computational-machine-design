@@ -184,7 +184,7 @@ class EquilibriumSolver:
 
         # Uniform grid + critical points
         grid_uniform = np.linspace(0.0, L, num_points)
-        all_x = sorted(list(set(np.concatenate([grid_uniform, list(critical_x)]))))
+        all_x = sorted(set(np.concatenate([grid_uniform, list(critical_x)])))
         x_arr = np.array([x for x in all_x if 0.0 <= x <= L])
 
         shear = np.zeros_like(x_arr)

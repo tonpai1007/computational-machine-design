@@ -58,7 +58,7 @@ def test_stations_evenly_spaced(rail):
     assert len(xs) == 9
     assert xs[0] == pytest.approx(0.0)
     assert xs[-1] == pytest.approx(480.0)
-    steps = [round(b - a, 6) for a, b in zip(xs, xs[1:])]
+    steps = [round(b - a, 6) for a, b in zip(xs, xs[1:], strict=False)]
     assert len(set(steps)) == 1
 
 

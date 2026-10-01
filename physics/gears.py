@@ -65,7 +65,7 @@ class GearSolver:
         circular_pitch = math.pi * mt
 
         # Face width: default 10 * mn if not provided, min 8*mn
-        if spec.face_width_mm and spec.face_width_mm > 0:
+        if spec.face_width_mm and spec.face_width_mm > 0:  # noqa: SIM108 - explicit branch reads better
             face_w = spec.face_width_mm
         else:
             face_w = max(20.0, 10.0 * mn)
@@ -115,10 +115,7 @@ class GearSolver:
         a_const = 50.0 + 56.0 * (1.0 - b_exp)
         # velocity in ft/min for standard AGMA formula, or SI equivalent:
         v_fpm = v_pitch * 196.85
-        if v_fpm > 0:
-            kv = ((a_const + math.sqrt(v_fpm)) / a_const) ** b_exp
-        else:
-            kv = 1.0
+        kv = ((a_const + math.sqrt(v_fpm)) / a_const) ** b_exp if v_fpm > 0 else 1.0
         kv = max(1.05, min(2.5, kv))
 
         # Application factor Ko

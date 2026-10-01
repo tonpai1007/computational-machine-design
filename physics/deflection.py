@@ -31,9 +31,9 @@ class DeflectionSolver:
         curvature = np.zeros(n_pts)
         for i, x in enumerate(x_arr):
             do, di, _ = StressSolver.get_diameter_and_segment_at(model, x)
-            I = (math.pi / 64.0) * (do**4 - di**4) if do > 0 else 1e-12
-            # Curvature d2v/dx2 = M / (E*I)
-            curvature[i] = m_arr[i] / (E * I)
+            I_area = (math.pi / 64.0) * (do**4 - di**4) if do > 0 else 1e-12
+            # Curvature d2v/dx2 = M / (E*I_area)
+            curvature[i] = m_arr[i] / (E * I_area)
 
         # Numerical integration using cumulative trapezoid
         # theta_0(x) = integral(curvature dx)

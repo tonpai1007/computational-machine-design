@@ -51,13 +51,7 @@ class MarinFactors:
     @staticmethod
     def load_factor(load_type: str = "bending") -> float:
         """Marin load factor kc: bending=1.0, axial=0.85, torsion=0.59."""
-        if load_type == "bending":
-            return 1.0
-        elif load_type == "axial":
-            return 0.85
-        elif load_type == "torsion":
-            return 0.59
-        return 1.0
+        return {"bending": 1.0, "axial": 0.85, "torsion": 0.59}.get(load_type, 1.0)
 
     @staticmethod
     def reliability_factor(reliability: float = 0.99) -> float:

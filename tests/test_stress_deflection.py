@@ -46,8 +46,8 @@ def test_deflection_simply_supported():
     d = 0.04  # 40 mm diameter
     mat = MaterialDatabase.get("AISI_1045_CD")
     E = mat.elastic_modulus_pa
-    I = (math.pi / 64.0) * (d**4)
-    expected_defl_m = (P * (L**3)) / (48.0 * E * I)
+    Ii = (math.pi / 64.0) * (d**4)
+    expected_defl_m = (P * (L**3)) / (48.0 * E * Ii)
     expected_defl_mm = expected_defl_m * 1000.0
 
     model = EngineeringModel(

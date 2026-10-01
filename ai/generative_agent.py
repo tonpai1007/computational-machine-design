@@ -5,6 +5,7 @@ on the fly from any natural language prompt.
 """
 
 import re
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -123,7 +124,13 @@ class GenerativeEngineeringAgent:
     """
 
     @staticmethod
-    def _select_size(sizes, solve_fn, passed_fn, requested=None, order_key=None):
+    def _select_size(
+        sizes: Sequence[Any],
+        solve_fn: Callable[[Any], Any],
+        passed_fn: Callable[[Any], bool],
+        requested: Any = None,
+        order_key: Callable[[Any], Any] | None = None,
+    ) -> tuple[Any, Any, list[tuple[Any, Any]], bool]:
         """Pick the smallest catalogue size whose solver result passes.
 
         This is the design move an engineer makes by hand: size the part from a
@@ -244,7 +251,7 @@ class GenerativeEngineeringAgent:
             else:
                 requested_mn = 2.0
 
-        def _solve_mn(candidate_mn: float):
+        def _solve_mn(candidate_mn: float) -> tuple[Any, Any]:
             spec = GearPairSpecification(
                 name="Parametric_Gear_Transmission",
                 gear_type="helical" if is_helical else "spur",
@@ -330,7 +337,7 @@ class GenerativeEngineeringAgent:
         dia_match = re.search(r"(\d+(?:\.\d+)?)\s*mm\s*(?:wire|diameter)?", p_lower)
         requested_d = float(dia_match.group(1)) if dia_match else (3.0 if max_f > 150 else 2.0)
 
-        def _solve_d(candidate_d: float):
+        def _solve_d(candidate_d: float) -> tuple[Any, Any]:
             spec = SpringSpecification(
                 name="Helical_Compression_Spring",
                 wire_diameter_d_mm=candidate_d,
@@ -415,7 +422,7 @@ class GenerativeEngineeringAgent:
 
         pclass = "10.9" if "10.9" in p_lower else ("12.9" if "12.9" in p_lower else "8.8")
 
-        def _solve_bolt(candidate: str):
+        def _solve_bolt(candidate: str) -> tuple[Any, Any]:
             spec = BoltedJointSpecification(
                 name=f"Bolted_Flange_Joint_{candidate}",
                 bolt_designation=candidate,
@@ -514,7 +521,7 @@ color([0.7, 0.75, 0.8]) bolted_joint();
         load_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:kn|kilonewton)", p_lower)
         load_n = float(load_match.group(1)) * 1000.0 if load_match else 8000.0
 
-        def _solve_d(candidate_d: float):
+        def _solve_d(candidate_d: float) -> tuple[Any, Any]:
             spec = PowerScrewSpecification(
                 name="Power_Lead_Screw",
                 nominal_diameter_d_mm=candidate_d,

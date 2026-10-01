@@ -136,7 +136,7 @@ def test_every_dimension_has_a_label(parts, model):
             r'<text x="([\d.\-]+)" y="([\d.\-]+)"[^>]*fill="' + DIMC + r'"[^>]*>([^<]*)</text>', svg
         )
         assert dim_labels, p.key
-        for x, y, text in dim_labels:
+        for _x, _y, text in dim_labels:
             assert text.strip(), f"{p.key}: empty dimension label"
 
 
@@ -394,10 +394,10 @@ def test_feature_dimensions_land_on_the_feature_they_measure(parts, model):
         orig = pd._shape_view
 
         def spy(
-            svg, cx, cy, prims, u, v, scale, label, dims_h=(), dims_v=(), right_edge=None, _o=orig
+            svg, cx, cy, prims, u, v, scale, label, dims_h=(), dims_v=(), right_edge=None, _o=orig, _s=seen
         ):
             box = _o(svg, cx, cy, prims, u, v, scale, label, dims_h, dims_v, right_edge)
-            seen.append((label, box, list(dims_h)))
+            _s.append((label, box, list(dims_h)))
             return box
 
         pd._shape_view = spy
@@ -440,7 +440,7 @@ def test_three_view_sheets_carry_extension_lines(parts, model):
 
 def test_no_text_runs_off_the_sheet(parts, model):
     """Text must stay inside the A4 drawing border at readable sizes."""
-    W, H, BORDER = 297.0, 210.0, 10.0
+    W, BORDER = 297.0, 10.0
     for p in parts:
         svg = render_part_svg(p, model)
         for body, x0, x1 in _approx_text_extents(svg):
@@ -466,7 +466,7 @@ def test_title_block_values_fit_inside_the_block(parts, model):
             for (body, x0, x1) in _approx_text_extents(svg)
             if x0 >= bx - 0.5 and x1 > bx
         ]
-        for body, x0, x1 in inside:
+        for body, _x0, x1 in inside:
             assert x1 <= bx + bw + 0.5, (
                 f"{p.key}: title-block text {body[:30]!r} exceeds block ({x1:.1f} > {bx + bw:.1f})"
             )
@@ -669,8 +669,8 @@ def test_assembly_primitives_match_exported_solids(model):
     for name, prims in groups.items():
         mine = bbox(primitives_to_triangles(prims))
         theirs = solids[name].get_bounding_box()
-        for axis, (a, b) in enumerate(zip(mine, theirs)):
-            for end, (x, y) in enumerate(zip(a, b)):
+        for axis, (a, b) in enumerate(zip(mine, theirs, strict=True)):
+            for end, (x, y) in enumerate(zip(a, b, strict=True)):
                 assert x == pytest.approx(y, abs=1e-6), (
                     f"{name} bbox axis {axis} end {end}: {x} != {y}"
                 )

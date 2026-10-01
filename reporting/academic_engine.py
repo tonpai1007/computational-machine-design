@@ -72,7 +72,7 @@ class AcademicAssignmentEngine:
         blueprint_svg: str | None = None,
     ) -> str:
         g = model.geometry
-        l = model.loads
+        loads = model.loads
         m = model.material
         allowable_deflection_mm = getattr(m, "allowable_deflection_mm", 5.0)
 
@@ -211,7 +211,7 @@ class AcademicAssignmentEngine:
             <!-- Splayed Columns / Legs -->
             <line x1="230" y1="210" x2="190" y2="310" stroke="#1e293b" stroke-width="6" stroke-linecap="round" />
             <line x1="470" y1="210" x2="510" y2="310" stroke="#1e293b" stroke-width="6" stroke-linecap="round" />
-            
+
             <!-- Stretcher Bracing -->
             <line x1="205" y1="270" x2="495" y2="270" stroke="#475569" stroke-width="3" stroke-dasharray="4,2" />
             <text x="350" y="264" fill="#334155" font-size="10" text-anchor="middle" font-family="Inter, sans-serif">Bracing Stretcher (Z = {g.stretcher_height_mm:.0f} mm)</text>
@@ -238,18 +238,18 @@ class AcademicAssignmentEngine:
 
             <!-- Applied Seat Payload Force -->
             <line x1="350" y1="140" x2="350" y2="195" stroke="#dc2626" stroke-width="2.5" marker-end="url(#arrow-down)" />
-            <text x="350" y="152" fill="#b91c1c" font-size="11" font-weight="700" text-anchor="middle" font-family="'JetBrains Mono', monospace">F_load = {l.seat_vertical_load_n:.0f} N</text>
+            <text x="350" y="152" fill="#b91c1c" font-size="11" font-weight="700" text-anchor="middle" font-family="'JetBrains Mono', monospace">F_load = {loads.seat_vertical_load_n:.0f} N</text>
 
             <!-- Applied Arm Loads -->
             <line x1="215" y1="70" x2="215" y2="110" stroke="#dc2626" stroke-width="2" marker-end="url(#arrow-down)" />
-            <text x="215" y="65" fill="#b91c1c" font-size="10" font-weight="700" text-anchor="middle" font-family="'JetBrains Mono', monospace">F_arm = {l.left_arm_vertical_n:.0f} N</text>
+            <text x="215" y="65" fill="#b91c1c" font-size="10" font-weight="700" text-anchor="middle" font-family="'JetBrains Mono', monospace">F_arm = {loads.left_arm_vertical_n:.0f} N</text>
             <line x1="215" y1="120" x2="160" y2="120" stroke="#0284c7" stroke-width="2" marker-end="url(#arrow-lat)" />
-            <text x="155" y="115" fill="#0369a1" font-size="10" font-weight="700" text-anchor="end" font-family="'JetBrains Mono', monospace">{abs(l.left_arm_lateral_n):.0f} N (lat)</text>
+            <text x="155" y="115" fill="#0369a1" font-size="10" font-weight="700" text-anchor="end" font-family="'JetBrains Mono', monospace">{abs(loads.left_arm_lateral_n):.0f} N (lat)</text>
 
             <line x1="485" y1="70" x2="485" y2="110" stroke="#dc2626" stroke-width="2" marker-end="url(#arrow-down)" />
-            <text x="485" y="65" fill="#b91c1c" font-size="10" font-weight="700" text-anchor="middle" font-family="'JetBrains Mono', monospace">F_arm = {l.right_arm_vertical_n:.0f} N</text>
+            <text x="485" y="65" fill="#b91c1c" font-size="10" font-weight="700" text-anchor="middle" font-family="'JetBrains Mono', monospace">F_arm = {loads.right_arm_vertical_n:.0f} N</text>
             <line x1="485" y1="120" x2="540" y2="120" stroke="#0284c7" stroke-width="2" marker-end="url(#arrow-lat)" />
-            <text x="548" y="115" fill="#0369a1" font-size="10" font-weight="700" font-family="'JetBrains Mono', monospace">{abs(l.right_arm_lateral_n):.0f} N (lat)</text>
+            <text x="548" y="115" fill="#0369a1" font-size="10" font-weight="700" font-family="'JetBrains Mono', monospace">{abs(loads.right_arm_lateral_n):.0f} N (lat)</text>
 
             <!-- Support Floor Reactions -->
             <line x1="190" y1="360" x2="190" y2="315" stroke="#16a34a" stroke-width="3" marker-end="url(#arrow-up)" />
@@ -769,7 +769,7 @@ class AcademicAssignmentEngine:
   <!-- ================= สารบัญ (TABLE OF CONTENTS) ================= -->
   <div class="toc-wrapper page-break">
     <div class="toc-title">สารบัญ (Table of Contents)</div>
-    
+
     <div class="toc-entry">
       <span class="toc-name">บทที่ 1 บทนำ วัตถุประสงค์ และข้อมูลจำเพาะการทำงาน</span>
       <span class="toc-dots"></span>
@@ -859,20 +859,20 @@ class AcademicAssignmentEngine:
       <span style="font-size: 11px; font-weight: 400; color: var(--text-muted);">Executive Brief</span>
     </div>
     <p>
-      รายงานฉบับนี้จัดทำขึ้นเพื่อนำเสนอผลการคำนวณออกแบบและตรวจสอบความแข็งแรงทางวิศวกรรมของ <strong>{model.name}</strong> 
-      ตามมาตรฐานวิชาชีพและการออกแบบเครื่องจักรกล โครงสร้างนี้ถูกออกแบบมาเพื่อรองรับภาระน้ำหนักบรรทุกใช้งาน (Service Payload) 
+      รายงานฉบับนี้จัดทำขึ้นเพื่อนำเสนอผลการคำนวณออกแบบและตรวจสอบความแข็งแรงทางวิศวกรรมของ <strong>{model.name}</strong>
+      ตามมาตรฐานวิชาชีพและการออกแบบเครื่องจักรกล โครงสร้างนี้ถูกออกแบบมาเพื่อรองรับภาระน้ำหนักบรรทุกใช้งาน (Service Payload)
       โดยคำนึงถึงความแข็งแรงเชิงสถิตยศาสตร์ เสถียรภาพการโก่งเดาะของเสารองรับ (Column Buckling) ความเค้นรวมในชิ้นส่วน และความเสถียรต่อการล้มคว่ำ
     </p>
     <p>
-      ภาระบรรทุกที่ใช้ในการคำนวณประกอบด้วย น้ำหนักกดแนวดิ่งบนเบาะรองนั่ง <strong>{l.seat_vertical_load_n:.0f} N</strong> 
-      (เทียบเท่าผู้ใช้งานน้ำหนัก 130 kg รวมผลกระทบการกระแทก dynamic impact), แรงกดแนวดิ่งบนที่พักแขน <strong>{l.left_arm_vertical_n:.0f} N</strong> 
-      และแรงผลักออกด้านข้าง <strong>{abs(l.left_arm_lateral_n):.0f} N</strong> รวมถึงน้ำหนักโครงสร้างในตัว
+      ภาระบรรทุกที่ใช้ในการคำนวณประกอบด้วย น้ำหนักกดแนวดิ่งบนเบาะรองนั่ง <strong>{loads.seat_vertical_load_n:.0f} N</strong>
+      (เทียบเท่าผู้ใช้งานน้ำหนัก 130 kg รวมผลกระทบการกระแทก dynamic impact), แรงกดแนวดิ่งบนที่พักแขน <strong>{loads.left_arm_vertical_n:.0f} N</strong>
+      และแรงผลักออกด้านข้าง <strong>{abs(loads.left_arm_lateral_n):.0f} N</strong> รวมถึงน้ำหนักโครงสร้างในตัว
     </p>
 
     <div class="kpi-grid">
       <div class="kpi-card">
         <div class="kpi-label">Applied Payload</div>
-        <div class="kpi-val">{l.seat_vertical_load_n:.0f} <span style="font-size: 11px; color: var(--text-muted);">N</span></div>
+        <div class="kpi-val">{loads.seat_vertical_load_n:.0f} <span style="font-size: 11px; color: var(--text-muted);">N</span></div>
         <div class="kpi-sub">Total Downward: {result.total_downward_load_n:.1f} N</div>
       </div>
       <div class="kpi-card">
@@ -902,7 +902,7 @@ class AcademicAssignmentEngine:
       <span style="font-size: 11px; font-weight: 400; color: var(--text-muted);">Parametric 3D CAD</span>
     </div>
     <p>
-      โครงสร้างได้รับการขึ้นรูปเป็นโมเดลของแข็ง 3 มิติ (3D Solid Assembly) และส่งออกเป็นไฟล์มาตรฐานอุตสาหกรรม 
+      โครงสร้างได้รับการขึ้นรูปเป็นโมเดลของแข็ง 3 มิติ (3D Solid Assembly) และส่งออกเป็นไฟล์มาตรฐานอุตสาหกรรม
       ISO-10303 STEP (<code>chair.step</code>), ไฟล์พิมพ์ 3 มิติ Watertight Mesh (<code>chair.stl</code>), และไฟล์สคริปต์พารามิเตอร์ (<code>chair.scad</code>)
     </p>
     {cad_preview_html}
@@ -1066,10 +1066,10 @@ class AcademicAssignmentEngine:
       <span><span class="section-num">บทที่ 6</span> ขั้นตอนการคำนวณความแข็งแรงทางวิศวกรรม (Mechanical Calculations)</span>
       <span style="font-size: 11px; font-weight: 400; color: var(--text-muted);">Shigley Chapter 4 Verification</span>
     </div>
-    
+
     <p><strong>6.1 อัตราส่วนความชะลูดและการโก่งเดาะของเสา (Euler vs. J.B. Johnson Buckling):</strong></p>
     <p>
-      สำหรับชิ้นส่วนเสาที่รับแรงกดตามแนวแกน ค่าอัตราส่วนความชะลูดวิกฤต (&lambda;<sub>1</sub>) ใช้แบ่งระหว่างการโก่งเดาะแบบไม่ยืดหยุ่น (Johnson Buckling) 
+      สำหรับชิ้นส่วนเสาที่รับแรงกดตามแนวแกน ค่าอัตราส่วนความชะลูดวิกฤต (&lambda;<sub>1</sub>) ใช้แบ่งระหว่างการโก่งเดาะแบบไม่ยืดหยุ่น (Johnson Buckling)
       และการโก่งเดาะแบบยืดหยุ่น (Euler Buckling):
     </p>
     <div class="calc-step">
@@ -1210,7 +1210,7 @@ class AcademicAssignmentEngine:
         </tr>
         <tr>
           <td style="font-weight: 600;">แผ่นโครงสร้างเบาะรองนั่ง</td>
-          <td>น้ำหนักบรรทุก W = {l.seat_vertical_load_n:.0f} N</td>
+          <td>น้ำหนักบรรทุก W = {loads.seat_vertical_load_n:.0f} N</td>
           <td class="num">&delta; = {result.seat_deflection_mm:.3f} mm</td>
           <td class="num">&le; {allowable_deflection_mm:.1f} mm</td>
           <td class="num">1.50</td>
@@ -1219,7 +1219,7 @@ class AcademicAssignmentEngine:
         </tr>
         <tr>
           <td style="font-weight: 600;">ชิ้นส่วนคานยื่นที่พักแขน</td>
-          <td>F<sub>arm</sub> = {l.left_arm_vertical_n:.0f} N</td>
+          <td>F<sub>arm</sub> = {loads.left_arm_vertical_n:.0f} N</td>
           <td class="num">{arm_stress_str}</td>
           <td class="num">{m.yield_strength_mpa:.1f} MPa</td>
           <td class="num">2.00</td>
@@ -1366,7 +1366,7 @@ class AcademicAssignmentEngine:
         - NO Academic sign-off block
         """
         g = model.geometry
-        l = model.loads
+        loads = model.loads
         m = model.material
 
         # Collect active components dynamically from model configuration
@@ -1416,7 +1416,7 @@ class AcademicAssignmentEngine:
 
         def kb_size(d_mm: float) -> float:
             """Shigley size factor for 2.79 <= d <= 51 mm."""
-            return 1.24 * (d_mm**-0.107)
+            return float(1.24 * (d_mm**-0.107))
 
         components_html = []
         summary_rows = []
@@ -1586,7 +1586,7 @@ class AcademicAssignmentEngine:
 
         # Central point load, simply supported: M_max = P L / 4. This is the
         # same idealisation the frame solver uses, so the two cannot drift.
-        seat_load_per_rail_N = (l.seat_vertical_load_n) / 2.0
+        seat_load_per_rail_N = (loads.seat_vertical_load_n) / 2.0
         beam_P_N = seat_load_per_rail_N
         beam_R_N = beam_P_N / 2.0
         beam_M_max_Nm = (beam_P_N * rail_span_m) / 4.0
@@ -1629,7 +1629,7 @@ class AcademicAssignmentEngine:
 
   <h3 class="step-title">Step 2 : หาแรงที่กระทำและ V-M diagram</h3>
   <div class="math-block">
-    ภาระกดกลางคานต่อคาน P = {beam_P_N:.1f} N (ครึ่งหนึ่งของภาระที่นั่ง {l.seat_vertical_load_n:.0f} N)<br>
+    ภาระกดกลางคานต่อคาน P = {beam_P_N:.1f} N (ครึ่งหนึ่งของภาระที่นั่ง {loads.seat_vertical_load_n:.0f} N)<br>
     R₁ = R₂ = {beam_R_N:.2f} N<br>
     V(x) = R₁ &minus; P (x / l) &rarr; Vmax = {beam_R_N:.2f} N<br>
     M(x) = R₁ x &minus; P x&sup2; / (2 l) &rarr; Mmax = P l / 4 = {beam_M_max_Nm:.2f} N&middot;m
@@ -1667,7 +1667,7 @@ class AcademicAssignmentEngine:
   <h3 class="step-title">Step 6 : หาการเบี่ยงเบนตามเกณฑ์การใช้งาน (Serviceability)</h3>
   <div class="math-block">
     &delta; = P l&sup3; / (48 E I) = {beam_delta_mm:.4f} mm<br>
-    เกณฑ์ l / 250 = {beam_delta_limit_mm:.4f} mm &rarr; &delta; {"&lt;" if beam_delta_mm < beam_delta_limit_mm else "&ge;"} เกณฑ์ {"ผ่าน" if beam_delta_mm < beam_delta_limit_mm else "ไม่ผ่าน"}
+    เกณฑ์ loads / 250 = {beam_delta_limit_mm:.4f} mm &rarr; &delta; {"&lt;" if beam_delta_mm < beam_delta_limit_mm else "&ge;"} เกณฑ์ {"ผ่าน" if beam_delta_mm < beam_delta_limit_mm else "ไม่ผ่าน"}
   </div>
 
   <h3 class="step-title">Step 7 : หา Actual endurance limit ( Se ) และ Fatigue Strength ( Sf )</h3>
@@ -1726,7 +1726,7 @@ class AcademicAssignmentEngine:
 
             # The stretcher braces the legs, so it is governed by compression
             # buckling, not by a transverse foot impact.
-            str_F_axial_N = l.backrest_force_n / 2.0
+            str_F_axial_N = loads.backrest_force_n / 2.0
             if str_slenderness < crit_slenderness:
                 str_Pcr_N = str_A_m2 * (
                     (Sy * 1e6)
@@ -1766,7 +1766,7 @@ class AcademicAssignmentEngine:
 
   <h3 class="step-title">Step 2 : หาแรงอัดตามแกน</h3>
   <div class="math-block">
-    คานค้ำยันรับแรงดันจากพลังหลังนั่ง แบ่งสองข้าง F = {l.backrest_force_n:.0f} N / 2 = {str_F_axial_N:.1f} N
+    คานค้ำยันรับแรงดันจากพลังหลังนั่ง แบ่งสองข้าง F = {loads.backrest_force_n:.0f} N / 2 = {str_F_axial_N:.1f} N
   </div>
 
   <h3 class="step-title">Step 3 : หาการโก่งเดาะ (Buckling)</h3>
@@ -1820,9 +1820,9 @@ class AcademicAssignmentEngine:
             arm_Z_m3 = arm_I_m4 / arm_c_m
 
             arm_ag = resolve_armrest(g)
-            front_frac, rear_frac = arm_ag.post_reaction_fractions(l.left_arm_load_y_mm)
-            arm_v_load_N = l.left_arm_vertical_n
-            arm_lat_load_N = abs(l.left_arm_lateral_n)
+            front_frac, rear_frac = arm_ag.post_reaction_fractions(loads.left_arm_load_y_mm)
+            arm_v_load_N = loads.left_arm_vertical_n
+            arm_lat_load_N = abs(loads.left_arm_lateral_n)
             arm_post_h_m = g.armrest_height_above_seat_mm / 1000.0
             arm_M_cant_Nm = ares.overhang_moment_nm
             arm_M_base_Nm = ares.strut_base_moment_nm
@@ -1862,7 +1862,7 @@ class AcademicAssignmentEngine:
 
   <h3 class="step-title">Step 2 : หาแรงกดที่กระจายลงเสาหน้าและเสาหลัง</h3>
   <div class="math-block">
-    เสาหน้า y = {arm_ag.front_post_y_mm:.1f} mm , เสาหลัง y = {arm_ag.rear_post_y_mm:.1f} mm , จุดกด y = {l.left_arm_load_y_mm:.1f} mm<br>
+    เสาหน้า y = {arm_ag.front_post_y_mm:.1f} mm , เสาหลัง y = {arm_ag.rear_post_y_mm:.1f} mm , จุดกด y = {loads.left_arm_load_y_mm:.1f} mm<br>
     เสาหน้ารับสัดส่วน = {front_frac:.4f} &rarr; {arm_F_gov_N:.1f} N (เป็นเสาที่รับแรงมากที่สุด)<br>
     เสาหลังรับสัดส่วน = {rear_frac:.4f} &rarr; {arm_v_load_N * rear_frac:.1f} N
   </div>
@@ -1915,7 +1915,6 @@ class AcademicAssignmentEngine:
             brk_c_mm = bH_mm / 2.0
             brk_Z_mm3 = brk_I_mm4 / brk_c_mm
             brk_A_cross_mm2 = bW_mm * bH_mm
-            brk_A_gross_mm2 = bL_mm * bW_mm * bH_mm
             brk_sigma_mpa = (arm_F_gov_N / brk_A_cross_mm2) + (
                 arm_M_base_Nm / 2.0
             ) * 1e3 / brk_Z_mm3
