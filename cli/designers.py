@@ -466,7 +466,7 @@ def _handle_space_frame(prompt: str, p_lower: str, output_dir: Optional[str] = N
         f"  * [bold cyan]{stl_file.name}[/bold cyan]  -> Watertight 3D Printable Mesh ({len(stl_bytes)/1024:.1f} KB)\n"
         f"  * [bold cyan]{scad_file.name}[/bold cyan] -> Parametric OpenSCAD Script (with stress color gradient)\n"
         f"  * [bold cyan]{rep_path.name}[/bold cyan] -> Engineering Calculation Audit Sheet\n"
-        f"  * [bold yellow]View in CAD:[/bold yellow] Run [cyan]python cli.py view {out_path.name}[/cyan] (OpenSCAD / FreeCAD)"
+        f"  * [bold yellow]View in CAD:[/bold yellow] Run [cyan]python -m cli view {out_path.name}[/cyan] (OpenSCAD / FreeCAD)"
     )
     console.print(Panel(deliv_text, title="[bold green]CAD & Force Calculation Complete[/bold green]", border_style="green"))
     return True
@@ -529,7 +529,7 @@ def _handle_generative(prompt: str, p_lower: str, output_dir: Optional[str] = No
         f"  * [bold cyan]{bp_svg_file.name}[/bold cyan] -> 2D Technical Drawing Blueprint (ISO 128 / ANSI Y14.5)\n"
         f"  * [bold cyan]{bp_html_file.name}[/bold cyan] -> Printable Vector Blueprint Sheet\n"
         f"  * [bold cyan]{rep_file.name}[/bold cyan] -> Engineering Calculation Audit Sheet\n"
-        f"  * [bold yellow]View in CAD:[/bold yellow] Run [cyan]python cli.py view {out_path.name}[/cyan]"
+        f"  * [bold yellow]View in CAD:[/bold yellow] Run [cyan]python -m cli view {out_path.name}[/cyan]"
     )
     console.print(Panel(deliv_text, title=f"[bold green]{res.title} Complete[/bold green]", border_style="green"))
     return True

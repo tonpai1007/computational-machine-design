@@ -31,6 +31,27 @@ from components.bolted_joints import BoltedJointSpecification
 from physics.power_screws import PowerScrewSolver
 from components.power_screws import PowerScrewSpecification
 
+# Preferred (catalogue) size series, ascending. A designer specifies a standard
+# size rather than an arbitrary one, so when a prompt does not name a size the
+# solver walks these upward until its own deterministic criteria are satisfied.
+GEAR_MODULES_MM: Tuple[float, ...] = (
+    1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0, 12.0)
+SPRING_WIRE_DIAMETERS_MM: Tuple[float, ...] = (
+    0.8, 1.0, 1.2, 1.6, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0, 8.0, 10.0, 12.0)
+POWER_SCREW_DIAMETERS_MM: Tuple[float, ...] = (
+    10.0, 12.0, 16.0, 20.0, 24.0, 28.0, 32.0, 40.0, 50.0, 60.0, 70.0, 80.0)
+BOLT_DESIGNATIONS: Tuple[str, ...] = (
+    "M6", "M8", "M10", "M12", "M14", "M16", "M20", "M24",
+    "M30", "M36", "M42", "M48", "M56", "M64")
+
+# Rectangular solid-section heights (mm), ascending. The open-ended synthesis
+# path models an unclassified request as a solid rectangular cantilever
+# (section b = h/2) and walks these standard heights until the deterministic
+# stress criterion passes. Every candidate is solved by the real formula.
+BEAM_SECTION_HEIGHTS_MM: Tuple[float, ...] = (
+    6.0, 8.0, 10.0, 12.0, 16.0, 20.0, 25.0, 30.0, 40.0,
+    50.0, 60.0, 80.0, 100.0, 120.0, 160.0, 200.0)
+
 
 class GenerativeDesignResult(BaseModel):
     title: str
@@ -53,6 +74,45 @@ class GenerativeEngineeringAgent:
     On-the-fly agent that translates any mechanical prompt into
     parametric 3D CAD, deterministic stress verification, and 2D engineering blueprints.
     """
+
+    @staticmethod
+    def _select_size(sizes, solve_fn, passed_fn, requested=None, order_key=None):
+        """Pick the smallest catalogue size whose solver result passes.
+
+        This is the design move an engineer makes by hand: size the part from a
+        rule of thumb, solve it, and step up the standard size until the
+        deterministic criteria are met. Every candidate is solved by the real
+        solver, so the returned result is verified, never estimated.
+
+        ``order_key`` maps a candidate to a sortable magnitude. It is required
+        for non-numeric series (bolt designations sort wrongly as plain
+        strings - "M16" would precede "M6").
+
+        Returns ``(result, size, tried, pinned)`` where ``tried`` is the ordered
+        list of ``(size, result)`` attempts and ``pinned`` is True when an
+        explicitly requested size was honoured. If nothing passes, the largest
+        attempted size is returned so the caller can report an honest failure.
+        """
+        key = order_key or (lambda s: s)
+        ordered = sorted(sizes, key=key)
+        tried: List[Tuple[Any, Any]] = []
+
+        if requested is not None:
+            first = solve_fn(requested)
+            tried.append((requested, first))
+            if passed_fn(first):
+                return first, requested, tried, True
+
+        for size in ordered:
+            if requested is not None and key(size) <= key(requested):
+                continue
+            result = solve_fn(size)
+            tried.append((size, result))
+            if passed_fn(result):
+                return result, size, tried, False
+
+        size, result = tried[-1]
+        return result, size, tried, requested is not None
 
     @classmethod
     def process(cls, prompt: str, output_dir: Optional[Path] = None) -> GenerativeDesignResult:
@@ -102,27 +162,45 @@ class GenerativeEngineeringAgent:
         z1 = 20
         z2 = int(round(z1 * ratio))
 
-        # Module determination heuristic based on power
-        if power_kw > 30:
-            mn = 4.0
-        elif power_kw > 10:
-            mn = 3.0
-        else:
-            mn = 2.0
+        material_id = ("AISI_4140_QT" if "steel" in p_lower or "4140" in p_lower
+                       else "AISI_1045")
 
-        spec = GearPairSpecification(
-            name="Parametric_Gear_Transmission",
-            gear_type="helical" if is_helical else "spur",
-            power_kw=power_kw,
-            pinion_speed_rpm=rpm,
-            pinion_teeth=z1,
-            gear_teeth=z2,
-            normal_module_mm=mn,
-            helix_angle_deg=helix_deg,
-            material_id="AISI_4140_QT" if "steel" in p_lower or "4140" in p_lower else "AISI_1045",
+        # Honour an explicitly requested module; otherwise start from the
+        # power-based rule of thumb and step up until the gear passes.
+        mod_match = re.search(r'module\s*(?:of\s*)?(\d+(?:\.\d+)?)', p_lower)
+        requested_mn = float(mod_match.group(1)) if mod_match else None
+        if requested_mn is None:
+            if power_kw > 30:
+                requested_mn = 4.0
+            elif power_kw > 10:
+                requested_mn = 3.0
+            else:
+                requested_mn = 2.0
+
+        def _solve_mn(candidate_mn: float):
+            spec = GearPairSpecification(
+                name="Parametric_Gear_Transmission",
+                gear_type="helical" if is_helical else "spur",
+                power_kw=power_kw,
+                pinion_speed_rpm=rpm,
+                pinion_teeth=z1,
+                gear_teeth=z2,
+                normal_module_mm=candidate_mn,
+                helix_angle_deg=helix_deg,
+                material_id=material_id,
+            )
+            return spec, GearSolver.solve(spec)
+
+        res, mn, tried, pinned = cls._select_size(
+            GEAR_MODULES_MM,
+            _solve_mn,
+            lambda r: r[1].stress.all_safety_criteria_passed,
+            requested=requested_mn,
         )
+        spec = res[0]
+        steps = ", ".join(f"m{s:g}" for s, _ in tried)
+        res = res[1]
 
-        res = GearSolver.solve(spec)
         scad_code = GearCADGenerator.generate_scad(res)
         blueprint_svg = Blueprint2DGenerator.generate_gear_blueprint_svg(res, theme="blueprint")
 
@@ -163,6 +241,8 @@ class GenerativeEngineeringAgent:
             key_metrics={
                 "Power (kW)": power_kw,
                 "Pinion Speed (RPM)": rpm,
+                "Module Tried": steps,
+                "Selected Module (mm)": mn,
                 "Center Distance (mm)": res.geometry.center_distance_mm,
                 "Bending SF": res.stress.bending_safety_factor_pinion,
                 "Contact SF": res.stress.contact_safety_factor,
@@ -177,17 +257,27 @@ class GenerativeEngineeringAgent:
         max_f = float(force_match.group(1)) if force_match else 250.0
 
         dia_match = re.search(r'(\d+(?:\.\d+)?)\s*mm\s*(?:wire|diameter)?', p_lower)
-        wire_d = float(dia_match.group(1)) if dia_match else (3.0 if max_f > 150 else 2.0)
+        requested_d = float(dia_match.group(1)) if dia_match else (3.0 if max_f > 150 else 2.0)
 
-        spec = SpringSpecification(
-            name="Helical_Compression_Spring",
-            wire_diameter_d_mm=wire_d,
-            active_coils_na=8.0,
-            max_operating_force_n=max_f,
-            min_operating_force_n=max_f * 0.2,
+        def _solve_d(candidate_d: float):
+            spec = SpringSpecification(
+                name="Helical_Compression_Spring",
+                wire_diameter_d_mm=candidate_d,
+                active_coils_na=8.0,
+                max_operating_force_n=max_f,
+                min_operating_force_n=max_f * 0.2,
+            )
+            return spec, SpringSolver.solve(spec)
+
+        res, wire_d, tried, pinned = cls._select_size(
+            SPRING_WIRE_DIAMETERS_MM,
+            _solve_d,
+            lambda r: r[1].all_criteria_passed,
+            requested=requested_d,
         )
-
-        res = SpringSolver.solve(spec)
+        spec = res[0]
+        steps = ", ".join(f"d{s:g}" for s, _ in tried)
+        res = res[1]
         scad_code = SpringCADGenerator.generate_scad(res)
 
         # Clean generic SVG blueprint for spring
@@ -235,6 +325,8 @@ class GenerativeEngineeringAgent:
                 "Spring Rate (N/mm)": res.spring_rate_k_n_mm,
                 "Free Length (mm)": res.geometry.free_length_l0_mm,
                 "Max Force (N)": max_f,
+                "Wire Dia Tried": steps,
+                "Selected Wire Dia (mm)": wire_d,
                 "Solid Yield SF": res.solid_yield_safety_factor,
                 "Fatigue SF": res.fatigue_safety_factor,
             },
@@ -252,15 +344,26 @@ class GenerativeEngineeringAgent:
 
         pclass = "10.9" if "10.9" in p_lower else ("12.9" if "12.9" in p_lower else "8.8")
 
-        spec = BoltedJointSpecification(
-            name=f"Bolted_Flange_Joint_{bolt_desig}",
-            bolt_designation=bolt_desig,
-            property_class=pclass,
-            applied_max_load_n=load_n,
-            clamped_length_mm=45.0,
-        )
+        def _solve_bolt(candidate: str):
+            spec = BoltedJointSpecification(
+                name=f"Bolted_Flange_Joint_{candidate}",
+                bolt_designation=candidate,
+                property_class=pclass,
+                applied_max_load_n=load_n,
+                clamped_length_mm=45.0,
+            )
+            return spec, BoltedJointSolver.solve(spec)
 
-        res = BoltedJointSolver.solve(spec)
+        res, bolt_desig, tried, pinned = cls._select_size(
+            BOLT_DESIGNATIONS,
+            _solve_bolt,
+            lambda r: r[1].all_safety_criteria_passed,
+            requested=bolt_desig,
+            order_key=lambda d: float(d[1:]),
+        )
+        spec = res[0]
+        steps = ", ".join(str(s) for s, _ in tried)
+        res = res[1]
 
         # CAD code for bolt & flange assembly
         scad_code = f"""// MDIE Bolted Joint Assembly: {bolt_desig} Class {pclass}
@@ -322,6 +425,7 @@ color([0.7, 0.75, 0.8]) bolted_joint();
             report_html=report_html,
             key_metrics={
                 "Bolt Designation": bolt_desig,
+                "Bolt Sizes Tried": steps,
                 "Preload (N)": res.tightening_preload_fi_n,
                 "Tightening Torque (N*m)": res.recommended_torque_nm,
                 "Separation SF": res.separation_safety_factor,
@@ -334,22 +438,31 @@ color([0.7, 0.75, 0.8]) bolted_joint();
     def _solve_power_screw_generative(cls, prompt: str, p_lower: str) -> GenerativeDesignResult:
         """Dynamically extract power screw requirements and solve via ASME/DIN 103 engine."""
         dia_match = re.search(r'(\d+(?:\.\d+)?)\s*mm', p_lower)
-        d_nom = float(dia_match.group(1)) if dia_match else 24.0
+        requested_d = float(dia_match.group(1)) if dia_match else 24.0
 
         load_match = re.search(r'(\d+(?:\.\d+)?)\s*(?:kn|kilonewton)', p_lower)
         load_n = float(load_match.group(1)) * 1000.0 if load_match else 8000.0
 
-        pitch = 5.0 if d_nom >= 20 else 4.0
+        def _solve_d(candidate_d: float):
+            spec = PowerScrewSpecification(
+                name="Power_Lead_Screw",
+                nominal_diameter_d_mm=candidate_d,
+                pitch_p_mm=5.0 if candidate_d >= 20 else 4.0,
+                axial_load_n=load_n,
+                thread_type="acme",
+            )
+            return spec, PowerScrewSolver.solve(spec)
 
-        spec = PowerScrewSpecification(
-            name="Power_Lead_Screw",
-            nominal_diameter_d_mm=d_nom,
-            pitch_p_mm=pitch,
-            axial_load_n=load_n,
-            thread_type="acme",
+        res, d_nom, tried, pinned = cls._select_size(
+            POWER_SCREW_DIAMETERS_MM,
+            _solve_d,
+            lambda r: r[1].all_safety_criteria_passed,
+            requested=requested_d,
         )
-
-        res = PowerScrewSolver.solve(spec)
+        spec = res[0]
+        steps = ", ".join(f"d{s:g}" for s, _ in tried)
+        res = res[1]
+        pitch = spec.pitch_p_mm
 
         scad_code = f"""// MDIE Lead Screw Model: d={d_nom} mm, pitch={pitch} mm
 $fn = 40;
@@ -404,6 +517,7 @@ color([0.75, 0.8, 0.85]) lead_screw();
             report_html=report_html,
             key_metrics={
                 "Diameter (mm)": d_nom,
+                "Diameter Tried": steps,
                 "Pitch (mm)": pitch,
                 "Torque (N*m)": res.total_torque_raise_nm,
                 "Power (W)": res.required_motor_power_w,
@@ -414,97 +528,206 @@ color([0.75, 0.8, 0.85]) lead_screw();
 
     @classmethod
     def _synthesize_on_the_fly(cls, prompt: str, p_lower: str) -> GenerativeDesignResult:
-        """
-        Synthesize completely arbitrary machine mechanisms on the fly via LLM + Deterministic Stress Solver.
-        """
-        providers = LLMRouter.get_configured_providers()
+        """Deterministically size a generic beam element straight from the prompt.
 
-        # Extract material
-        mat_id = "AISI_4140_QT" if "steel" in p_lower else ("AL_6061_T6" if "aluminum" in p_lower else "AISI_1018")
+        There is no closed-form standard for an arbitrary machine element, so
+        this path makes exactly one explicit, conservative modelling choice - a
+        solid rectangular cantilever, fixed at one end with the load at the free
+        end - and then sizes it with the real cantilever formulae. Span, load,
+        material and any pin/bolt holes are read from the prompt; anything the
+        prompt omits is defaulted and reported as an assumption. Nothing about
+        the geometry is hard-coded: the emitted solid is built from the section
+        the deterministic solver actually selected.
+        """
+        assumptions: List[str] = []
+
+        # --- Span (mm) ---------------------------------------------------
+        span_match = re.search(r'(\d+(?:\.\d+)?)\s*mm', p_lower)
+        if span_match:
+            span_mm = float(span_match.group(1))
+        else:
+            span_mm = 100.0
+            assumptions.append("Span not stated; assumed 100 mm (verify before manufacture).")
+        span_mm = max(span_mm, 5.0)
+
+        # --- Load (N) ----------------------------------------------------
+        load_n: Optional[float] = None
+        kn_match = re.search(r'(\d+(?:\.\d+)?)\s*(?:kn|kilonewton)', p_lower)
+        n_match = re.search(r'(\d+(?:\.\d+)?)\s*(?:n|newton)', p_lower)
+        kg_match = re.search(r'(\d+(?:\.\d+)?)\s*kg', p_lower)
+        if kn_match:
+            load_n = float(kn_match.group(1)) * 1000.0
+        elif n_match:
+            load_n = float(n_match.group(1))
+        elif kg_match:
+            load_n = float(kg_match.group(1)) * 9.80665
+            assumptions.append("Load stated as mass; converted with g = 9.80665 m/s^2.")
+        if load_n is None:
+            load_n = 500.0
+            assumptions.append("Load not stated; assumed 500 N.")
+        load_n = max(load_n, 1.0)
+
+        # --- Material ----------------------------------------------------
+        if "stainless" in p_lower or "304" in p_lower:
+            mat_id = "AISI_304_SS"
+        elif "titanium" in p_lower:
+            mat_id = "TI_6AL_4V"
+        elif "aluminum" in p_lower or "aluminium" in p_lower or "6061" in p_lower:
+            mat_id = "AL_6061_T6"
+        elif "4140" in p_lower:
+            mat_id = "AISI_4140_QT"
+        elif "steel" in p_lower:
+            mat_id = "AISI_1045_CD"
+        else:
+            mat_id = "AISI_1018_CD"
+            assumptions.append("Material not stated; assumed AISI 1018 cold-drawn steel.")
         mat = MaterialDatabase.get(mat_id)
 
-        # Numerical estimate for load
-        load_match = re.search(r'(\d+(?:\.\d+)?)\s*(?:n|newton|kg)', p_lower)
-        load_n = float(load_match.group(1)) if load_match else 500.0
+        # --- Optional pin / bolt holes ----------------------------------
+        hole_dia_mm: Optional[float] = None
+        hole_count = 0
+        dia_match = re.search(
+            r'(\d+(?:\.\d+)?)\s*mm\s*(?:pin\s*|bolt\s*|mounting\s*|through\s*)?holes?',
+            p_lower)
+        if dia_match:
+            hole_dia_mm = float(dia_match.group(1))
+        count_match = re.search(
+            r'(\d+|two|three|four|five|six)\s*(?:\d+(?:\.\d+)?\s*mm\s*)?'
+            r'(?:pin\s*|bolt\s*|mounting\s*)?holes?',
+            p_lower)
+        if count_match:
+            token = count_match.group(1)
+            hole_count = {"two": 2, "three": 3, "four": 4,
+                          "five": 5, "six": 6}.get(token, 0) or int(token)
+        if hole_count and hole_dia_mm is None:
+            hole_dia_mm = 8.0
+            assumptions.append("Hole diameter not stated; assumed 8 mm.")
+        if hole_dia_mm and not hole_count:
+            hole_count = 2
+        hole_count = min(hole_count, 6)
 
-        if providers:
-            sys_prompt = (
-                "You are an expert computational mechanical design engine.\n"
-                "The user requested an arbitrary machine design element or mechanism.\n"
-                "Synthesize a clean, fully parametric OpenSCAD 3D solid script (.scad) for this component.\n"
-                "Rules:\n"
-                "1. Output ONLY valid OpenSCAD code enclosed in ```openscad code blocks.\n"
-                "2. Include dimensions, smooth geometry ($fn=48), and proper mounting features.\n"
-                "3. Ensure the solid is watertight."
+        # --- Deterministic sizing of a solid rectangular cantilever -----
+        #   fixed at x=0, tip load F  ->  M = F*L
+        #   section b = h/2, I = b*h^3/12, c = h/2
+        #   sigma_b = M*c/I = 6*F*L/(b*h^2)      (bending, outer fibre)
+        #   delta   = F*L^3/(3*E*I)              (tip deflection)
+        target_sf = 2.0
+        span_m = span_mm / 1000.0
+
+        def _solve_height(h_mm: float) -> Dict[str, float]:
+            h_m = h_mm / 1000.0
+            b_m = h_m / 2.0
+            moment_nm = load_n * span_m
+            inertia_m4 = (b_m * h_m ** 3) / 12.0
+            sigma_mpa = (moment_nm * (h_m / 2.0)) / inertia_m4 / 1e6
+            sf_yield = mat.yield_strength_mpa / sigma_mpa if sigma_mpa > 0 else 999.0
+            delta_mm = (load_n * span_m ** 3) / (
+                3.0 * mat.elastic_modulus_pa * inertia_m4) * 1000.0
+            return {
+                "height_mm": h_mm,
+                "width_mm": round(b_m * 1000.0, 1),
+                "moment_nm": moment_nm,
+                "sigma_mpa": sigma_mpa,
+                "sf_yield": sf_yield,
+                "deflection_mm": delta_mm,
+            }
+
+        section, height_mm, tried, pinned = cls._select_size(
+            BEAM_SECTION_HEIGHTS_MM,
+            _solve_height,
+            lambda r: r["sf_yield"] >= target_sf,
+        )
+        steps = ", ".join(f"h{h:g}" for h, _ in tried)
+        width_mm = section["width_mm"]
+        sigma_mpa = section["sigma_mpa"]
+        sf_yield = section["sf_yield"]
+        deflection_mm = section["deflection_mm"]
+        passed = sf_yield >= target_sf
+
+        # --- Parametric OpenSCAD from the SELECTED section (authored, not canned) ---
+        hole_scad = ""
+        if hole_count and hole_dia_mm:
+            r_hole = hole_dia_mm / 2.0
+            if hole_count == 2:
+                xs = [-span_mm * 0.35, span_mm * 0.35]
+            else:
+                step = (span_mm * 0.7) / (hole_count - 1)
+                xs = [-span_mm * 0.35 + i * step for i in range(hole_count)]
+            cylinders = "\n".join(
+                f"        translate([{x:.2f}, 0, 0]) "
+                f"cylinder(r={r_hole:.2f}, h={width_mm + 4:.2f}, center=true, $fn=32);"
+                for x in xs)
+            hole_scad = (
+                f"        // {hole_count} x {hole_dia_mm:g} mm mounting holes (from prompt)\n"
+                "        rotate([90, 0, 0])\n"
+                "        union() {\n"
+                f"{cylinders}\n"
+                "        }\n"
             )
-            raw_scad, _, _ = LLMRouter.call_chat_completion(
-                system_prompt=sys_prompt,
-                user_prompt=prompt,
-                response_format_json=False,
-                max_tokens=1500,
-                temperature=0.2
-            )
-            # Extract code block
-            scad_match = re.search(r'```(?:openscad)?(.*?)```', raw_scad or "", re.DOTALL)
-            scad_code = scad_match.group(1).strip() if scad_match else (raw_scad or "// Generated model\ncube([50, 50, 50], center=true);")
-        else:
-            # Offline parametric CSG fallback
-            scad_code = f"""// MDIE Deterministic Offline Solid: {prompt}
+
+        scad_code = f"""// MDIE deterministic synthesis of "{prompt[:60]}"
+// Modelling assumption: solid rectangular cantilever, fixed at x=0,
+// load applied at the free end.  Section b = h/2.
+//   span L = {span_mm:g} mm   load F = {load_n:g} N   material = {mat.name}
+//   solver-selected section  b x h = {width_mm:g} x {height_mm:g} mm
 $fn = 48;
-module custom_element() {{
+module synthesized_element() {{
     difference() {{
-        cube([100, 60, 20], center=true);
-        // Bolt holes
-        translate([35, 18, 0]) cylinder(r=4.5, h=30, center=true);
-        translate([-35, 18, 0]) cylinder(r=4.5, h=30, center=true);
-        translate([35, -18, 0]) cylinder(r=4.5, h=30, center=true);
-        translate([-35, -18, 0]) cylinder(r=4.5, h=30, center=true);
-    }}
+        // Beam body: length (X) x section width (Y) x section height (Z)
+        translate([{span_mm / 2.0:.2f}, 0, 0])
+        cube([{span_mm:.2f}, {width_mm:.2f}, {height_mm:.2f}], center=true);
+{hole_scad}    }}
 }}
-color([0.65, 0.75, 0.85]) custom_element();
+color([0.72, 0.76, 0.82]) synthesized_element();
 """
 
-        # Deterministic Stress & SF calculation (AI proposes, physics verifies)
-        # Bending stress formula: M = F * L / 4, W = b*h^2 / 6 => sigma = M / W
-        span_mm = 100.0
-        width_mm = 60.0
-        thick_mm = 20.0
-        bending_moment_n_mm = (load_n * span_mm) / 4.0
-        section_mod_w = (width_mm * (thick_mm ** 2)) / 6.0
-        sigma_mpa = bending_moment_n_mm / section_mod_w if section_mod_w > 0 else 0.0
-
-        sf_yield = mat.yield_strength_mpa / sigma_mpa if sigma_mpa > 0 else 999.0
-        passed = sf_yield >= 2.0
-
+        box_w = min(span_mm * 1.6, 520)
+        box_h = max(height_mm * 3.0, 24)
         svg_blueprint = f"""<svg viewBox="0 0 1000 650" xmlns="http://www.w3.org/2000/svg" font-family="Consolas, monospace">
   <rect width="1000" height="650" fill="#091424" />
   <rect x="30" y="30" width="940" height="590" fill="none" stroke="#38bdf8" stroke-width="2" />
-  <text x="50" y="70" fill="#38bdf8" font-size="18" font-weight="bold">MACHINE DESIGN INTELLIGENCE ENGINE &mdash; SYNTHESIZED BLUEPRINT</text>
-  <text x="50" y="95" fill="#94a3b8" font-size="12">PROMPT: {prompt[:65]}</text>
-  <!-- Schematic Box -->
-  <rect x="250" y="200" width="350" height="150" fill="rgba(56,189,248,0.15)" stroke="#38bdf8" stroke-width="2" />
-  <text x="425" y="280" fill="#38bdf8" font-size="14" text-anchor="middle">SYNTHESIZED 3D PARAMETRIC SOLID</text>
-  <!-- Title Block -->
-  <rect x="570" y="470" width="400" height="150" fill="#091424" stroke="#38bdf8" stroke-width="1.5" />
-  <text x="585" y="500" fill="#38bdf8" font-size="13" font-weight="bold">TITLE: ON-THE-FLY SYNTHESIS</text>
-  <text x="585" y="525" fill="#e2e8f0" font-size="11">MATERIAL: {mat.name}</text>
-  <text x="585" y="550" fill="#10b981" font-size="11">PEAK STRESS: {sigma_mpa:.1f} MPa (SF: {sf_yield:.2f})</text>
-  <text x="585" y="575" fill="#94a3b8" font-size="10">STATUS: {'PASS' if passed else 'FAIL'}</text>
+  <text x="50" y="70" fill="#38bdf8" font-size="18" font-weight="bold">MDIE DETERMINISTIC SYNTHESIS &#8212; RECTANGULAR CANTILEVER</text>
+  <text x="50" y="95" fill="#94a3b8" font-size="12">PROMPT: {prompt[:70]}</text>
+  <text x="50" y="150" fill="#e2e8f0" font-size="12">SPAN L = {span_mm:g} mm   |   SECTION b x h = {width_mm:g} x {height_mm:g} mm   |   F = {load_n:g} N</text>
+  <rect x="120" y="240" width="{box_w:.0f}" height="{box_h:.0f}" fill="rgba(56,189,248,0.15)" stroke="#38bdf8" stroke-width="2" />
+  <text x="120" y="{240 + box_h + 30:.0f}" fill="#38bdf8" font-size="13">CANTILEVER SCHEMATIC (fixed at left end)</text>
+  <rect x="560" y="450" width="410" height="170" fill="#091424" stroke="#38bdf8" stroke-width="1.5" />
+  <text x="575" y="480" fill="#38bdf8" font-size="13" font-weight="bold">TITLE: ON-THE-FLY SYNTHESIS</text>
+  <text x="575" y="505" fill="#e2e8f0" font-size="11">MATERIAL: {mat.name}</text>
+  <text x="575" y="530" fill="#e2e8f0" font-size="11">PEAK BENDING: {sigma_mpa:.1f} MPa</text>
+  <text x="575" y="555" fill="#10b981" font-size="11">YIELD SF: {sf_yield:.2f} (target {target_sf:.1f})</text>
+  <text x="575" y="580" fill="#94a3b8" font-size="10">TIP DEFLECTION: {deflection_mm:.3f} mm</text>
+  <text x="575" y="600" fill="#94a3b8" font-size="10">STATUS: {'PASS' if passed else 'FAIL'}</text>
 </svg>"""
 
+        assumption_html = "".join(f"<li>{a}</li>" for a in assumptions) or \
+            "<li>All inputs were read from the prompt.</li>"
         report_html = f"""<!DOCTYPE html>
 <html>
 <body style="background:#030712; color:#f3f4f6; font-family:sans-serif; padding:20px;">
-  <h2>Synthesized Mechanical Element: {'PASS' if passed else 'FAIL'}</h2>
+  <h2>Synthesized Rectangular Cantilever: {'PASS' if passed else 'FAIL'}</h2>
   <p>Prompt: <em>{prompt}</em></p>
-  <p>Material: <strong>{mat.name}</strong> (Yield: {mat.yield_strength_mpa} MPa)</p>
-  <p>Calculated Peak Stress: <strong>{sigma_mpa:.2f} MPa</strong></p>
-  <p>Yield Safety Factor: <strong>{sf_yield:.2f}</strong></p>
+  <p>Model: solid rectangular cantilever (b = h/2), fixed at one end, tip load.</p>
+  <p>Span L = <strong>{span_mm:g} mm</strong> &middot; Section b x h = <strong>{width_mm:g} x {height_mm:g} mm</strong> &middot; F = <strong>{load_n:g} N</strong></p>
+  <p>Material: <strong>{mat.name}</strong> (Sy = {mat.yield_strength_mpa} MPa)</p>
+  <p>Bending moment M = <strong>{section['moment_nm']:.2f} N&middot;m</strong></p>
+  <p>Peak bending stress: <strong>{sigma_mpa:.2f} MPa</strong></p>
+  <p>Yield safety factor: <strong>{sf_yield:.2f}</strong> (target {target_sf:.1f})</p>
+  <p>Tip deflection: <strong>{deflection_mm:.3f} mm</strong></p>
+  <p><strong>Assumptions</strong></p>
+  <ul>{assumption_html}</ul>
 </body>
 </html>"""
 
+        recommendations = list(assumptions) + [
+            "Modelled as a solid rectangular cantilever; verify the boundary "
+            "condition matches the application.",
+            "Every dimension above comes from the deterministic solver, not a "
+            "rule-of-thumb guess.",
+        ]
+
         return GenerativeDesignResult(
-            title=f"Synthesized Machine Element ({prompt[:30]})",
+            title=f"Synthesized Rectangular Cantilever (L={span_mm:g} mm, F={load_n:g} N)",
             category="Custom Synthesis",
             material_name=mat.name,
             yield_strength_mpa=mat.yield_strength_mpa,
@@ -516,10 +739,14 @@ color([0.65, 0.75, 0.85]) custom_element();
             blueprint_svg=svg_blueprint,
             report_html=report_html,
             key_metrics={
-                "Applied Load (N)": load_n,
+                "Span (mm)": span_mm,
+                "Load (N)": load_n,
+                "Section b x h (mm)": f"{width_mm:g} x {height_mm:g}",
+                "Section Tried": steps,
                 "Material": mat.name,
-                "Peak Stress (MPa)": sigma_mpa,
-                "Safety Factor": sf_yield,
+                "Peak Stress (MPa)": round(sigma_mpa, 2),
+                "Safety Factor": round(sf_yield, 2),
+                "Tip Deflection (mm)": round(deflection_mm, 3),
             },
-            recommendations=["Generated on the fly from user prompt.", "Deterministic stress verification completed."],
+            recommendations=recommendations,
         )

@@ -24,9 +24,11 @@ All internal calculations and models strictly use the mechanical engineering SI 
 ### 3. Testing and Command Execution
 - Always invoke test suites with:
   ```powershell
-  python -m pytest
+  .venv\Scripts\python.exe -m pytest
   ```
-  *(Using plain `pytest` on Windows may fail to resolve the root `mdie` module).*
+  *(Prefer the project-local `.venv` interpreter. Using the ambient `python`
+  on Windows may fail to resolve the root packages, and a bare `pytest` may
+  land in the wrong environment entirely.)*
 - Keep all unit and integration tests passing (100% green) before concluding any code changes.
 - Full specification: [`.agents/rules/testing-and-dev.md`](file:///c:/codework/computational-machine-design/.agents/rules/testing-and-dev.md).
 
@@ -43,7 +45,7 @@ All internal calculations and models strictly use the mechanical engineering SI 
 
 ### 5. Primary Interface: CLI & Python Scripts (No Web Interface)
 - **Do NOT rely on or prioritize web browser interfaces.**
-- The primary user interface is the **`mdie` CLI** (console script from `pyproject.toml`, or `python -m cli`; `mdie.bat`/`cli.bat` wrap the module form) and direct Python library workflows.
+- The primary user interface is the **`computational-machine-design` CLI** (console script from `pyproject.toml`, or `python -m cli`; `computational-machine-design.bat` wraps the module form) and direct Python library workflows.
 - Entry point is [`cli/`](file:///c:/codework/computational-machine-design/cli/): `app.py` holds argparse dispatch, `designers.py` the per-domain prompt handlers, `viewers.py` CAD viewer detection. Do not add a second root-level `cli.py`.
 - Subcommands: free-form prompt, `chair`/`bracket`, `shaft`, `convert`, `drawings`, `report`, `view`, `info`.
 - All runs must output directly to local files in `Project/<project_name>/`:
@@ -74,7 +76,6 @@ Keep responsibilities separated - do not merge these back together:
 | `materials` | the material property database and derived elastic/shear moduli |
 | `optimizer` | parametric design search over candidate geometries |
 | `integrations` | bridges to external toolchains (e.g. the learning-tools project) |
-| `web` | optional HTTP surface; the CLI in `cli/` stays the primary interface |
 
 - `drafting` must stay **model-derived**: read dimensions back off the actual primitives, never restate input parameters. The drawing regression tests enforce this.
 - `convert` must degrade gracefully when an optional dependency is missing - probe with `convert.registry.has_dependency` and raise a `ConversionError` that names the tool, rather than an `ImportError`.

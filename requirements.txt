@@ -1,8 +1,6 @@
 # Convenience install for a plain checkout.
 # pyproject.toml is the authoritative dependency declaration; this file exists
 # only for `pip install -r requirements.txt` workflows. Keep both in sync.
-fastapi>=0.110.0
-uvicorn>=0.28.0
 pydantic>=2.7.0
 scipy>=1.12.0
 numpy>=1.26.0

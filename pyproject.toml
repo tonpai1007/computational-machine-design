@@ -3,41 +3,38 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mdie"
+name = "computational-machine-design"
 version = "0.2.0"
-description = "Mechanical Design Intelligence Engine - AI-driven CAD, structural analysis and drawing generation"
+description = "AI-driven mechanical design CLI: CAD, structural analysis and drawing generation"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = { text = "MIT" }
 dependencies = [
-    "rich>=13.7.0",
-    "jinja2>=3.1.0",
-    "numpy>=1.26.0",
-    "scipy>=1.12.0",
-    "pydantic>=2.7.0",
-    "fastapi>=0.110.0",
-    "uvicorn>=0.28.0",
+    "rich>=13.7.0,<16",
+    "jinja2>=3.1.0,<4",
+    "numpy>=1.26.0,<3",
+    "scipy>=1.12.0,<2",
+    "pydantic>=2.7.0,<3",
 ]
 
 [project.optional-dependencies]
-draw = ["matplotlib>=3.8.0"]
+draw = ["matplotlib>=3.8.0,<4"]
 convert = ["python-docx>=1.1.0", "Markdown>=3.5", "PyMuPDF>=1.24.0", "Pillow>=10.0.0"]
 ai = ["google-genai>=1.0.0"]
-dev = ["pytest>=8.0.0"]
+# python-docx backs the DOCX converter tests; matplotlib backs the drawing
+# regression tests. Both are needed for a full `python -m pytest` run.
+dev = ["pytest>=8.0.0,<10", "python-docx>=1.1.0", "matplotlib>=3.8.0,<4"]
 
 [project.scripts]
-mdie = "cli:main"
+computational-machine-design = "cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = [
     "ai*", "cad*", "cli*", "components*", "convert*", "core*", "drafting*",
-    "integrations*", "materials*", "optimizer*", "physics*", "reporting*", "web*",
+    "integrations*", "materials*", "optimizer*", "physics*", "reporting*",
 ]
 exclude = ["tests*", "scratch*", "Project*"]
-
-[tool.setuptools.package-data]
-"web" = ["static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

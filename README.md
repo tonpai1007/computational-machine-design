@@ -3,9 +3,8 @@
 > **An AI-assisted computational engineering platform for machine design, structural analysis, material selection, optimization, OpenSCAD 3D modeling, and verified engineering reports.**
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-Modern%20API-teal.svg)](https://fastapi.tiangolo.com/)
+[![CI](https://github.com/tonpai1007/computational-machine-design/actions/workflows/ci.yml/badge.svg)](https://github.com/tonpai1007/computational-machine-design/actions/workflows/ci.yml)
 [![OpenSCAD](https://img.shields.io/badge/CAD-OpenSCAD%20Parametric-orange.svg)](https://openscad.org/)
-[![Three.js](https://img.shields.io/badge/WebGL-Three.js%203D-black.svg)](https://threejs.org/)
 [![Physics Solver](https://img.shields.io/badge/Physics-Deterministic%20Authority-green.svg)]()
 
 ---
@@ -23,7 +22,7 @@ AI is **never** treated as the source of truth for numerical engineering results
 * **Deflection & Slope:** Numerical Euler-Bernoulli integration $\frac{d^2 v}{dx^2} = \frac{M(x)}{E \cdot I(x)}$ along stepped diameter shafts
 * **Fatigue Analysis:** Marin endurance modification factors ($k_a, k_b, k_c, k_d, k_e$), modified endurance limit $S_e$, multiaxial Modified Goodman, Gerber, ASME-Elliptic, and Soderberg criteria
 * **Lifecycle Prediction:** S-N Basquin curve calculations ($N_f$) and Palmgren-Miner cumulative damage
-* **Parametric CAD:** Automatic generation of 3D OpenSCAD (`.scad`) source scripts with WebGL interactive visualizer
+* **Parametric CAD:** Automatic generation of 3D OpenSCAD (`.scad`) source scripts
 * **Engineering Reports:** Audit-ready calculation sheets in interactive HTML, scalable SVG diagrams, and Markdown
 
 ---
@@ -64,7 +63,7 @@ AI is **never** treated as the source of truth for numerical engineering results
     ┌───────────────────────────┐   ┌───────────────────────────┐
     │    OPTIMIZATION ENGINE    │   │      OPENSCAD ENGINE      │
     │   Min Mass / Min Cost     │   │   Parametric .scad Code   │
-    │   Standardized Diameters  │   │   Three.js WebGL 3D Mesh  │
+    │   Standardized Diameters  │   │   STEP / STL / SVG Export │
     └─────────────┬─────────────┘   └─────────────┬─────────────┘
                   │                               │
                   └───────────────┬───────────────┘
@@ -72,7 +71,7 @@ AI is **never** treated as the source of truth for numerical engineering results
                                   ▼
                   ┌───────────────────────────────┐
                   │      VERIFIED DELIVERABLES    │
-                  │   Interactive Web Dashboard   │
+                  │   CLI-run Audit Report         │
                   │   Audit Calculation Report    │
                   │   Downloadable OpenSCAD (.scad)
                   └───────────────────────────────┘
@@ -82,28 +81,37 @@ AI is **never** treated as the source of truth for numerical engineering results
 
 ## 3. Installation
 
-MDIE ships as an installable package with a `mdie` console script:
+`computational-machine-design` ships as an installable package with a matching
+console script:
 
 ```bash
-pip install -e .              # core engine + CLI
-pip install -e ".[convert]"   # + document/sheet conversion (python-docx, PyMuPDF)
-pip install -e ".[draw]"      # + matplotlib preview rendering
-pip install -e ".[ai]"        # + Google GenAI provider
-pip install -e ".[dev]"       # + pytest
+python -m venv .venv                       # project-local interpreter
+.venv\Scripts\python.exe -m pip install -e ".[dev,convert]"
 ```
 
-Without installing, everything still runs from a checkout via
-`python -m cli ...`. `mdie info` prints the detected CAD viewers, the active
+```bash
+.venv\Scripts\python.exe -m pip install -e .              # core engine + CLI
+.venv\Scripts\python.exe -m pip install -e ".[convert]"   # + document/sheet conversion
+.venv\Scripts\python.exe -m pip install -e ".[draw]"      # + matplotlib preview rendering
+.venv\Scripts\python.exe -m pip install -e ".[ai]"        # + Google GenAI provider
+.venv\Scripts\python.exe -m pip install -e ".[dev]"       # + pytest and test deps
+```
+
+Use the project-local `.venv` so your code never shares an interpreter with
+other tooling. Without installing, everything still runs from a checkout via
+`python -m cli ...`. `computational-machine-design info` (or
+`python -m cli info`) prints the detected CAD viewers, the active
 LLM cascade and which conversion formats are currently usable.
 
 ### 3.1 Project Layout
 
-The repository root **is** MDIE — all packages are top level, with no
+The repository root **is** the project — all packages are top level, with no
 enclosing `mdie/` wrapper.
 
 ```text
 computational-machine-design/
-├── pyproject.toml            packaging + `mdie` console script
+├── pyproject.toml            packaging + `computational-machine-design` script
+├── computational-machine-design.bat   launcher (uses .venv when present)
 ├── cli/                      command line interface (app, designers, viewers)
 ├── convert/                  file converter (documents, solids, sheets)
 ├── drafting/                 dimensioned drawing sheets, FBD plots, Mermaid
@@ -116,7 +124,6 @@ computational-machine-design/
 ├── optimizer/                parameter search
 ├── ai/                       LLM routing, parser, critic, narrative synthesis
 ├── integrations/             external bridges (learning-tools)
-├── web/                      FastAPI application
 ├── tests/
 └── Project/<name>/           generated deliverables (git-ignored)
 ```
@@ -257,7 +264,7 @@ Every parameter is tracked with full audit transparency:
   * DIN 6885 / ANSI standard keyway cuts (`difference()` operations).
   * Bearing journals and mounting shoulders.
   * Visual highlights: metallic steel body, golden bearing seats, and high-stress plane marker.
-* In-browser real-time 3D rendering powered by Three.js WebGL.
+* Renders in any OpenSCAD-compatible viewer (the CLI detects OpenSCAD/FreeCAD).
 
 ### 5.5 Parametric Optimization
 * **Min Mass Optimizer:** Searches standardized shaft diameters ($12\text{ mm}$ to $120\text{ mm}$) to find the lightest geometry satisfying all constraints simultaneously.
@@ -288,13 +295,19 @@ Curated mechanical properties from standard engineering references (Shigley, ASM
 
 Run all verification tests:
 ```bash
-python -m pytest tests/ -v
+python -m pytest tests/ -q
 ```
-Includes:
+Continuous integration runs the same command on every push and pull request
+(see `.github/workflows/ci.yml`). Includes:
 * `test_equilibrium.py`: Reactions for simply-supported and cantilever systems.
 * `test_stress_deflection.py`: Bending, torsion, Peterson $K_t$, and Euler-Bernoulli deflection.
 * `test_fatigue.py`: Marin factors, endurance limit, and lifecycle predictions.
+* `test_generative_agent.py` / `test_generative_sizing.py`: Prompt-derived generative sizing.
+* `test_release_hygiene.py`: Version/licence/dependency release guards.
 * `test_end_to_end.py`: Full workflow from natural language prompt to report generation.
+
+For a fully reproducible environment, `requirements-lock.txt` pins the exact
+versions the suite is verified against.
 
 ---
 
