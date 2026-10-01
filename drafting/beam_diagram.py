@@ -38,7 +38,10 @@ def _force_utf8_stdout() -> None:
     """Thai labels cannot encode to cp1252; make stdout/stderr UTF-8."""
     for stream in (sys.stdout, sys.stderr):
         try:
-            stream.reconfigure(encoding="utf-8")
+            # reconfigure() exists only on TextIOWrapper, not every stream.
+            reconfigure = getattr(stream, "reconfigure", None)
+            if reconfigure is not None:
+                reconfigure(encoding="utf-8")
         except (AttributeError, ValueError):
             pass
 

@@ -29,7 +29,15 @@ W, D, H, T = 480.0, 460.0, 450.0, 22.0
 OUT = Path("Project/chair/diagrams/dim_sketch.png")
 
 
-def dim_v(ax, x, y0, y1, text, color=DIM, off=0.0):
+def dim_v(
+    ax: plt.Axes,
+    x: float,
+    y0: float,
+    y1: float,
+    text: str,
+    color: str = DIM,
+    off: float = 0.0,
+) -> None:
     ax.annotate(
         "",
         xy=(x, y1),
@@ -56,7 +64,7 @@ def dim_v(ax, x, y0, y1, text, color=DIM, off=0.0):
     )
 
 
-def dim_h(ax, y, x0, x1, text, color=DIM):
+def dim_h(ax: plt.Axes, y: float, x0: float, x1: float, text: str, color: str = DIM) -> None:
     ax.annotate(
         "",
         xy=(x1, y),
