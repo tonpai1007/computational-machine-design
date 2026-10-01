@@ -21,7 +21,7 @@ import matplotlib
 matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
-from matplotlib.patches import Polygon
+from matplotlib.patches import Circle, Polygon, Rectangle
 
 from drafting.beam_diagram import SimplySupportedRail
 
@@ -39,7 +39,7 @@ plt.rcParams["font.family"] = ["Tahoma", "DejaVu Sans", "sans-serif"]
 plt.rcParams["axes.unicode_minus"] = False
 
 
-def _support_pinned(ax, x: float, y: float, size: float, label: str) -> None:
+def _support_pinned(ax: plt.Axes, x: float, y: float, size: float, label: str) -> None:
     """Pinned support: triangle on a hatched ground line."""
     tri = [
         (x, y),
@@ -68,7 +68,7 @@ def _support_pinned(ax, x: float, y: float, size: float, label: str) -> None:
     )
 
 
-def _support_roller(ax, x: float, y: float, size: float, label: str) -> None:
+def _support_roller(ax: plt.Axes, x: float, y: float, size: float, label: str) -> None:
     """Roller support: triangle on rollers."""
     tri = [
         (x, y),
@@ -103,7 +103,7 @@ def _support_roller(ax, x: float, y: float, size: float, label: str) -> None:
 
 
 def _arrow(
-    ax,
+    ax: plt.Axes,
     x: float,
     y0: float,
     y1: float,
@@ -141,7 +141,7 @@ def _arrow(
     )
 
 
-def _dim_line(ax, x0: float, x1: float, y: float, text: str) -> None:
+def _dim_line(ax: plt.Axes, x0: float, x1: float, y: float, text: str) -> None:
     """Horizontal dimension line with end ticks and a centred label."""
     ax.annotate(
         "",
@@ -191,7 +191,7 @@ def plot_fbd(
 
     # Beam
     ax.add_patch(
-        plt.Rectangle(
+        Rectangle(
             (0.0, -beam_h / 2),
             L,
             beam_h,
