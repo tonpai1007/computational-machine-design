@@ -41,6 +41,7 @@ import subprocess
 import sys
 import tempfile
 import unicodedata
+from collections.abc import Sequence
 from pathlib import Path
 
 DEFAULT_REPORT = Path("Project/chair/chair_design_report.md")
@@ -64,7 +65,10 @@ MERMAID_RE = re.compile(r"```mermaid\n(.*?)```", re.DOTALL)
 def force_utf8() -> None:
     for s in (sys.stdout, sys.stderr):
         try:
-            s.reconfigure(encoding="utf-8")
+            # reconfigure() exists only on TextIOWrapper, not every stream.
+            reconfigure = getattr(s, "reconfigure", None)
+            if reconfigure is not None:
+                reconfigure(encoding="utf-8")
         except (AttributeError, ValueError):
             pass
 
@@ -79,7 +83,7 @@ def find_chrome(explicit: str | None = None) -> str | None:
     return None
 
 
-def ensure_mmdc(setup: bool = False) -> str:
+def ensure_mmdc(setup: bool = False) -> list[str]:
     """
     Return a command that runs mmdc. Prefer a local cache install, then any
     mmdc already on PATH, then npx (which may download on first use).
@@ -180,7 +184,7 @@ def render_one(
     return True
 
 
-def main(argv=None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     force_utf8()
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
