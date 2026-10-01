@@ -45,6 +45,29 @@ CANNED = {
 }
 
 
+def _report_unsupported(meta: dict) -> None:
+    """Decline an out-of-scope request and list what MDIE can actually verify.
+
+    MDIE only reports designs it has a deterministic solver for; declining is
+    the honest response where synthesising would be a guess.
+    """
+    domain = meta.get("unsupported_domain", "this domain")
+    console.print(Panel(
+        f"[bold yellow]Unsupported domain:[/bold yellow] {domain}\n\n"
+        "MDIE only verifies designs it has a deterministic solver for, so it "
+        "declines this request rather than emitting a guess.\n\n"
+        "[bold cyan]Supported design families:[/bold cyan]\n"
+        '  1. Rotating shafts / power transmission  (e.g. "stepped shaft 500 mm, 10 kW")\n'
+        '  2. Frames & furniture                     (e.g. "chair with 4 splayed legs")\n'
+        '  3. 3D space frames & trusses              (e.g. "transmission tower, 5 kN")\n'
+        '  4. Mounting brackets & flange plates      (e.g. "motor bracket, 4 bolt holes")\n'
+        "  5. Power-transmission elements: gears, springs, bolted joints, lead/power screws\n\n"
+        "[dim]Rephrase using one of the families above.[/dim]",
+        title="[bold red]Out of Scope[/bold red]",
+        border_style="yellow",
+    ))
+
+
 def process_prompt(prompt: str, output_dir: Optional[str] = None,
                    auto_open: bool = False) -> bool:
     """Classify a plain-English prompt and run the matching design pipeline."""
@@ -77,6 +100,19 @@ def process_prompt(prompt: str, output_dir: Optional[str] = None,
         if res and auto_open:
             launch_cad_viewer(Path(output_dir or "Project/chair"))
         return res
+
+    if domain == "unsupported":
+        from ai.generative_agent import GenerativeEngineeringAgent
+        if GenerativeEngineeringAgent.is_specialized(prompt):
+            console.print("[bold cyan]>> Classified Domain:[/bold cyan] [bold green]Specialized Power-Transmission Element[/bold green]")
+            res = _handle_generative(prompt, p_lower, output_dir)
+            if res and auto_open:
+                slug = meta.get("slug", "generative_part")
+                launch_cad_viewer(Path(output_dir or f"Project/{slug}"))
+            return res
+        # Truly out of scope: decline explicitly instead of synthesising a guess.
+        _report_unsupported(meta)
+        return False
 
     if (any(w in p_lower for w in ["shaft", "spindle", "rotor", "axle", "bearing seat"])
             or (domain == "shaft" and meta.get("confidence", 0.5) > 0.8)) and not any(

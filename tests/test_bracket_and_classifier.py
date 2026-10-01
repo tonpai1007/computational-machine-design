@@ -157,3 +157,26 @@ def test_end_to_end_bracket_cli_run(tmp_path):
     assert (out_dir / "bracket.stl").stat().st_size > 100
     assert (out_dir / "bracket.step").stat().st_size > 1000
     assert (out_dir / "bracket_report.html").stat().st_size > 1000
+
+
+def test_unsupported_domain_is_declined_by_cli(tmp_path):
+    """A domain MDIE has no solver for must be declined, not silently synthesised."""
+    out_dir = tmp_path / "pressure_vessel"
+    ok = process_prompt(
+        "design a pressure vessel 2 m diameter for 5 MPa internal pressure",
+        output_dir=str(out_dir), auto_open=False,
+    )
+    assert ok is False
+    assert not out_dir.exists()
+
+
+def test_specialized_element_routes_through_cli(tmp_path):
+    """Gears/springs/etc. have real solvers and must run through the generative path."""
+    out_dir = tmp_path / "gear_pair"
+    ok = process_prompt(
+        "design a spur gear pair for 15 kW at 1500 rpm, steel",
+        output_dir=str(out_dir), auto_open=False,
+    )
+    assert ok is True
+    assert out_dir.exists()
+    assert any(out_dir.iterdir())

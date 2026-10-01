@@ -114,33 +114,54 @@ class GenerativeEngineeringAgent:
         size, result = tried[-1]
         return result, size, tried, requested is not None
 
+    # Keyword families handled by dedicated closed-form solvers. Order matters:
+    # a lead/power-screw request must be claimed before the generic fastener
+    # family, otherwise the "screw" keyword would route it to the bolt solver.
+    SPECIALIZED_KEYWORDS = (
+        ("gears", ("gear", "pinion", "sprocket", "gearbox")),
+        ("springs", ("spring", "coil spring", "suspension spring")),
+        ("power_screws", ("lead screw", "power screw", "acme screw", "ball screw", "jack screw")),
+        ("fasteners", ("bolt", "screw joint", "flange bolt", "preload", "tightening torque")),
+    )
+
+    @classmethod
+    def specialized_family(cls, prompt: str) -> Optional[str]:
+        """Return the dedicated solver family for a prompt, or ``None``.
+
+        This is the single source of truth for "does MDIE have a real solver
+        for this request?", shared by the routing below and by the CLI so an
+        out-of-scope request is declined instead of silently synthesised.
+        """
+        p = prompt.lower().strip()
+        for family, keywords in cls.SPECIALIZED_KEYWORDS:
+            if any(w in p for w in keywords):
+                return family
+        return None
+
+    @classmethod
+    def is_specialized(cls, prompt: str) -> bool:
+        """True when a dedicated closed-form solver handles this prompt."""
+        return cls.specialized_family(prompt) is not None
+
     @classmethod
     def process(cls, prompt: str, output_dir: Optional[Path] = None) -> GenerativeDesignResult:
         """
-        Main pipeline: analyzes prompt, routes to specialized closed-form solvers if applicable,
-        or synthesizes parametric CAD and verified physics on the fly.
+        Main pipeline: routes to a specialized closed-form solver when one
+        exists, otherwise deterministically synthesises a generic element.
         """
         p_lower = prompt.lower().strip()
+        family = cls.specialized_family(prompt)
 
-        # 1. Specialized High-Precision Solvers
-        # A. Gear Pairs (Spur / Helical)
-        if any(w in p_lower for w in ["gear", "pinion", "sprocket", "gearbox"]):
+        if family == "gears":
             return cls._solve_gear_generative(prompt, p_lower)
-
-        # B. Helical Springs
-        if any(w in p_lower for w in ["spring", "coil spring", "suspension spring"]):
+        if family == "springs":
             return cls._solve_spring_generative(prompt, p_lower)
-
-        # C. Bolted Fasteners & Joint Preload
-        if any(w in p_lower for w in ["bolt", "screw joint", "flange bolt", "preload", "tightening torque"]):
-            if "lead screw" not in p_lower and "power screw" not in p_lower and "ball screw" not in p_lower:
-                return cls._solve_bolted_joint_generative(prompt, p_lower)
-
-        # D. Power Screws & Lead Screws
-        if any(w in p_lower for w in ["lead screw", "power screw", "acme screw", "ball screw", "jack screw"]):
+        if family == "power_screws":
             return cls._solve_power_screw_generative(prompt, p_lower)
+        if family == "fasteners":
+            return cls._solve_bolted_joint_generative(prompt, p_lower)
 
-        # 2. General Open-Ended Mechanical Synthesis (LLM + Deterministic Physics)
+        # General open-ended synthesis for a generic, unclassified element.
         return cls._synthesize_on_the_fly(prompt, p_lower)
 
     @classmethod
