@@ -13,6 +13,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.axes import Axes
 from matplotlib.patches import Arc, Rectangle
 
 plt.rcParams["font.family"] = ["Tahoma", "DejaVu Sans", "sans-serif"]
@@ -30,7 +31,7 @@ OUT = Path("Project/chair/diagrams/dim_sketch.png")
 
 
 def dim_v(
-    ax: plt.Axes,
+    ax: Axes,
     x: float,
     y0: float,
     y1: float,
@@ -64,7 +65,7 @@ def dim_v(
     )
 
 
-def dim_h(ax: plt.Axes, y: float, x0: float, x1: float, text: str, color: str = DIM) -> None:
+def dim_h(ax: Axes, y: float, x0: float, x1: float, text: str, color: str = DIM) -> None:
     ax.annotate(
         "",
         xy=(x1, y),

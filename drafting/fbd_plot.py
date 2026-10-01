@@ -69,7 +69,7 @@ def _support_pinned(ax: Axes, x: float, y: float, size: float, label: str) -> No
     )
 
 
-def _support_roller(ax: plt.Axes, x: float, y: float, size: float, label: str) -> None:
+def _support_roller(ax: Axes, x: float, y: float, size: float, label: str) -> None:
     """Roller support: triangle on rollers."""
     tri = [
         (x, y),
@@ -104,7 +104,7 @@ def _support_roller(ax: plt.Axes, x: float, y: float, size: float, label: str) -
 
 
 def _arrow(
-    ax: plt.Axes,
+    ax: Axes,
     x: float,
     y0: float,
     y1: float,
@@ -142,7 +142,7 @@ def _arrow(
     )
 
 
-def _dim_line(ax: plt.Axes, x0: float, x1: float, y: float, text: str) -> None:
+def _dim_line(ax: Axes, x0: float, x1: float, y: float, text: str) -> None:
     """Horizontal dimension line with end ticks and a centred label."""
     ax.annotate(
         "",
