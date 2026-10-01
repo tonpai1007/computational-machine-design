@@ -188,7 +188,7 @@ class Blueprint2DGenerator:
 
         # Front View: Render shaft stepped segments
         svg.append("  <!-- Shaft Front Contour -->")
-        curr_x = view_x0
+        curr_x = float(view_x0)
         for seg in model.segments:
             seg_len_mm = (seg.end_pos - seg.start_pos) * 1000.0
             seg_dia_mm = seg.outer_diameter * 1000.0
@@ -239,8 +239,8 @@ class Blueprint2DGenerator:
             # Render keyway slot if present
             if seg.keyway:
                 kw = seg.keyway
-                kw_len_px = kw.length_mm * draw_scale
-                kw_depth_px = kw.depth_mm * draw_scale
+                kw_len_px = kw.length * 1000.0 * draw_scale
+                kw_depth_px = kw.depth * 1000.0 * draw_scale
                 kw_x = curr_x + (w_px - kw_len_px) / 2.0
                 kw_y = top_y
                 svg.append("  <!-- Keyway Slot -->")
@@ -248,7 +248,7 @@ class Blueprint2DGenerator:
                     f'  <rect x="{kw_x:.1f}" y="{kw_y:.1f}" width="{kw_len_px:.1f}" height="{kw_depth_px:.1f}" fill="{bg_col}" stroke="{dim_col}" stroke-width="1.5" stroke-dasharray="4,2" />'
                 )
                 svg.append(
-                    f'  <text x="{kw_x + kw_len_px / 2.0:.1f}" y="{kw_y + kw_depth_px + 12:.1f}" fill="{dim_col}" font-size="8" text-anchor="middle">DIN 6885-1 ({kw.width_mm:.0f}x{kw.depth_mm:.1f})</text>'
+                    f'  <text x="{kw_x + kw_len_px / 2.0:.1f}" y="{kw_y + kw_depth_px + 12:.1f}" fill="{dim_col}" font-size="8" text-anchor="middle">DIN 6885-1 ({kw.width * 1000.0:.0f}x{kw.depth * 1000.0:.1f})</text>'
                 )
 
             curr_x += w_px
