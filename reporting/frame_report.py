@@ -6,9 +6,27 @@ Strictly follows clean white-paper professional engineering standard (Engineervi
 """
 
 import math
-from typing import Dict, Any, List
+
 from core.frame_model import FrameDesignModel
 from physics.frame_physics import FrameSolverResult
+
+
+def _lat_tip_display(result: FrameSolverResult) -> tuple[str, str, str]:
+    """Render the lateral tipping margin honestly.
+
+    Returns (cell_value, verdict, css_class). A ``None`` margin means the
+    lateral loads cancel exactly and no tipping case exists -> report "N/A",
+    never a fabricated large safety factor (physics-determinism rule).
+    """
+    if result.tipping_safety_factor_lat is None:
+        return (
+            '<span style="color:#64748b;font-style:italic;">N/A</span>',
+            "N/A (no case)",
+            "text-muted",
+        )
+    sf = result.tipping_safety_factor_lat
+    cls = "text-pass" if sf >= 1.5 else "text-fail"
+    return f"{sf:.2f}", ("PASS" if sf >= 1.5 else "FAIL"), cls
 
 
 class FrameReportGenerator:
@@ -19,7 +37,7 @@ class FrameReportGenerator:
         g = model.geometry
         l = model.loads
         m = model.material
-        allowable_deflection_mm = getattr(m, 'allowable_deflection_mm', 5.0)
+        allowable_deflection_mm = getattr(m, "allowable_deflection_mm", 5.0)
 
         # Overall Status Badge
         overall_badge = (
@@ -39,7 +57,13 @@ class FrameReportGenerator:
 
         # Johnson transition slenderness ratio (C = 1.0 pinned-pinned baseline)
         c_end = 1.0
-        trans_slenderness = math.sqrt(2.0 * (math.pi ** 2) * c_end * (m.elastic_modulus_gpa * 1000.0) / max(m.yield_strength_mpa, 1.0))
+        trans_slenderness = math.sqrt(
+            2.0
+            * (math.pi**2)
+            * c_end
+            * (m.elastic_modulus_gpa * 1000.0)
+            / max(m.yield_strength_mpa, 1.0)
+        )
 
         # Column Reaction Rows
         leg_rows = ""
@@ -48,7 +72,9 @@ class FrameReportGenerator:
             buckling_cls = "text-pass" if leg.buckling_passed else "text-fail"
             yield_cls = "text-pass" if leg.yield_passed else "text-fail"
             status_text = "PASS" if (leg.buckling_passed and leg.yield_passed) else "FAIL"
-            buckling_mode = "Euler (Long)" if leg.slenderness_ratio >= trans_slenderness else "Johnson (Int.)"
+            buckling_mode = (
+                "Euler (Long)" if leg.slenderness_ratio >= trans_slenderness else "Johnson (Int.)"
+            )
 
             leg_rows += f"""
             <tr>
@@ -57,7 +83,7 @@ class FrameReportGenerator:
                 <td class="num">{leg.horizontal_shear_n:.1f} N</td>
                 <td class="num">{leg.slenderness_ratio:.1f}</td>
                 <td style="text-align: center; font-size: 11px; color: #475569;">{buckling_mode}</td>
-                <td class="num">{(leg.critical_buckling_load_n/1000.0):.2f} kN</td>
+                <td class="num">{(leg.critical_buckling_load_n / 1000.0):.2f} kN</td>
                 <td class="num {buckling_cls}" style="font-weight: 700;">{leg.buckling_safety_factor:.2f}</td>
                 <td class="num">{leg.combined_stress_mpa:.1f} MPa</td>
                 <td class="num {yield_cls}" style="font-weight: 700;">{leg.yield_safety_factor:.2f}</td>
@@ -67,7 +93,9 @@ class FrameReportGenerator:
 
         # Armrest Rows
         arm_rows = ""
-        arm_stress_str = f"{result.armrests[0].strut_combined_stress_mpa:.1f} MPa" if result.armrests else "N/A"
+        arm_stress_str = (
+            f"{result.armrests[0].strut_combined_stress_mpa:.1f} MPa" if result.armrests else "N/A"
+        )
         if result.armrests:
             for arm in result.armrests:
                 arm_cls = "text-pass" if arm.passed else "text-fail"
@@ -92,9 +120,37 @@ class FrameReportGenerator:
             </tr>
             """
 
-        # Support reaction values for FBD display
-        r_left_val = (result.floor_reactions[0].axial_reaction_n + result.floor_reactions[-1].axial_reaction_n)/2.0 if len(result.floor_reactions) >= 4 else result.floor_reactions[0].axial_reaction_n
-        r_right_val = (result.floor_reactions[1].axial_reaction_n + result.floor_reactions[2].axial_reaction_n)/2.0 if len(result.floor_reactions) >= 4 else (result.floor_reactions[1].axial_reaction_n if len(result.floor_reactions) > 1 else result.floor_reactions[0].axial_reaction_n)
+        # Support reaction values for FBD display.
+        # These are the SUM of the reactions in each leg pair: the FBD arrows
+        # represent the total load carried by that side of the chair. Averaging
+        # them here made sum(R) exactly half the applied load (equilibrium broken).
+        if len(result.floor_reactions) >= 4:
+            r_left_val = (
+                result.floor_reactions[0].axial_reaction_n
+                + result.floor_reactions[-1].axial_reaction_n
+            )
+            r_right_val = (
+                result.floor_reactions[1].axial_reaction_n
+                + result.floor_reactions[2].axial_reaction_n
+            )
+        elif len(result.floor_reactions) >= 2:
+            r_left_val = result.floor_reactions[0].axial_reaction_n
+            r_right_val = sum(
+                r.axial_reaction_n for r in result.floor_reactions[1:]
+            )
+        else:
+            r_left_val = r_right_val = result.floor_reactions[0].axial_reaction_n
+
+        # Lateral tipping margin may legitimately not exist (balanced side loads).
+        lat_tip_val, lat_tip_verdict, lat_tip_cls = _lat_tip_display(result)
+        tip_sf_values = [
+            v for v in (result.tipping_safety_factor_fwd,
+                        result.tipping_safety_factor_rear,
+                        result.tipping_safety_factor_lat)
+            if v is not None
+        ]
+        min_tip_sf = min(tip_sf_values) if tip_sf_values else float("inf")
+
 
         # SVG Free-Body Diagram (White paper / academic style)
         svg_fbd = f"""
@@ -440,7 +496,7 @@ class FrameReportGenerator:
         <div style="font-size: 11px; color: #64748b;">Deterministic Static Equilibrium & Buckling Audit</div>
       </div>
       <div class="doc-meta">
-        <div><strong>Doc ID:</strong> MDIE-CALC-{model.name.upper().replace(' ', '_')}</div>
+        <div><strong>Doc ID:</strong> MDIE-CALC-{model.name.upper().replace(" ", "_")}</div>
         <div><strong>Standard:</strong> ANSI/BIFMA X5.1 &bull; AISC 360 &bull; ISO 7173</div>
         <div><strong>Units:</strong> SI Metric (mm, N, N·m, MPa, GPa)</div>
       </div>
@@ -478,18 +534,18 @@ class FrameReportGenerator:
       </div>
       <div class="kpi-card">
         <div class="kpi-label">Min Buckling SF (Euler/John)</div>
-        <div class="kpi-val {'text-pass' if result.min_leg_buckling_sf >= 2.0 else 'text-fail'}">{result.min_leg_buckling_sf:.2f}</div>
+        <div class="kpi-val {"text-pass" if result.min_leg_buckling_sf >= 2.0 else "text-fail"}">{result.min_leg_buckling_sf:.2f}</div>
         <div class="kpi-sub">Design Target: n<sub>d</sub> &ge; 2.00</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">Min Column Yield SF</div>
-        <div class="kpi-val {'text-pass' if result.min_leg_yield_sf >= 2.0 else 'text-fail'}">{result.min_leg_yield_sf:.2f}</div>
+        <div class="kpi-val {"text-pass" if result.min_leg_yield_sf >= 2.0 else "text-fail"}">{result.min_leg_yield_sf:.2f}</div>
         <div class="kpi-sub">Combined P/A + M/Z</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">Anti-Tipping SF (Min)</div>
-        <div class="kpi-val {'text-pass' if min(result.tipping_safety_factor_fwd, result.tipping_safety_factor_rear, result.tipping_safety_factor_lat) >= 1.5 else 'text-fail'}">
-          {min(result.tipping_safety_factor_fwd, result.tipping_safety_factor_rear, result.tipping_safety_factor_lat):.2f}
+        <div class="kpi-val {"text-pass" if min_tip_sf >= 1.5 else "text-fail"}">
+          {min_tip_sf:.2f}
         </div>
         <div class="kpi-sub">Standard Req: &ge; 1.50</div>
       </div>
@@ -517,7 +573,7 @@ class FrameReportGenerator:
         <tr>
           <td style="font-weight: 600;">1</td>
           <td>Load-Bearing Columns (Legs)</td>
-          <td>{col_prof.profile_type.replace('_', ' ').title()} &Oslash;{col_prof.outer_dimension_mm:.1f} &times; {col_prof.wall_thickness_mm:.1f} mm</td>
+          <td>{col_prof.profile_type.replace("_", " ").title()} &Oslash;{col_prof.outer_dimension_mm:.1f} &times; {col_prof.wall_thickness_mm:.1f} mm</td>
           <td class="num">4</td>
           <td>{m.name}</td>
           <td>Cold Drawn Seamless / Welded Tube</td>
@@ -751,9 +807,9 @@ class FrameReportGenerator:
         <tr>
           <td>Lateral Splay Tipping Axis</td>
           <td class="num">1.50</td>
-          <td class="num text-pass" style="font-weight: 700;">{result.tipping_safety_factor_lat:.2f}</td>
+          <td class="num {lat_tip_cls}" style="font-weight: 700;">{lat_tip_val}</td>
           <td style="text-align: center;">ISO 7173 Class B</td>
-          <td style="text-align: center; font-weight: 700;" class="text-pass">PASS</td>
+          <td style="text-align: center; font-weight: 700;" class="{lat_tip_cls}">{lat_tip_verdict}</td>
         </tr>
       </tbody>
     </table>
@@ -781,12 +837,12 @@ class FrameReportGenerator:
         <tr>
           <td style="font-weight: 600;">Main Columns (x4) - Buckling</td>
           <td>P = {max(leg.axial_reaction_n for leg in result.floor_reactions):.1f} N (Axial)</td>
-          <td class="num">{(result.floor_reactions[0].critical_buckling_load_n/1000.0):.2f} kN</td>
+          <td class="num">{(result.floor_reactions[0].critical_buckling_load_n / 1000.0):.2f} kN</td>
           <td class="num">{m.yield_strength_mpa:.1f} MPa</td>
           <td class="num">2.00</td>
-          <td class="num {'text-pass' if result.min_leg_buckling_sf >= 2.0 else 'text-fail'}" style="font-weight: 700;">{result.min_leg_buckling_sf:.2f}</td>
-          <td style="text-align: center; font-weight: 700;" class="{'text-pass' if result.min_leg_buckling_sf >= 2.0 else 'text-fail'}">
-            {'PASS' if result.min_leg_buckling_sf >= 2.0 else 'FAIL'}
+          <td class="num {"text-pass" if result.min_leg_buckling_sf >= 2.0 else "text-fail"}" style="font-weight: 700;">{result.min_leg_buckling_sf:.2f}</td>
+          <td style="text-align: center; font-weight: 700;" class="{"text-pass" if result.min_leg_buckling_sf >= 2.0 else "text-fail"}">
+            {"PASS" if result.min_leg_buckling_sf >= 2.0 else "FAIL"}
           </td>
         </tr>
         <tr>
@@ -795,9 +851,9 @@ class FrameReportGenerator:
           <td class="num">{max(leg.combined_stress_mpa for leg in result.floor_reactions):.1f} MPa</td>
           <td class="num">{m.yield_strength_mpa:.1f} MPa</td>
           <td class="num">2.00</td>
-          <td class="num {'text-pass' if result.min_leg_yield_sf >= 2.0 else 'text-fail'}" style="font-weight: 700;">{result.min_leg_yield_sf:.2f}</td>
-          <td style="text-align: center; font-weight: 700;" class="{'text-pass' if result.min_leg_yield_sf >= 2.0 else 'text-fail'}">
-            {'PASS' if result.min_leg_yield_sf >= 2.0 else 'FAIL'}
+          <td class="num {"text-pass" if result.min_leg_yield_sf >= 2.0 else "text-fail"}" style="font-weight: 700;">{result.min_leg_yield_sf:.2f}</td>
+          <td style="text-align: center; font-weight: 700;" class="{"text-pass" if result.min_leg_yield_sf >= 2.0 else "text-fail"}">
+            {"PASS" if result.min_leg_yield_sf >= 2.0 else "FAIL"}
           </td>
         </tr>
         <tr>
@@ -815,9 +871,9 @@ class FrameReportGenerator:
           <td class="num">{arm_stress_str}</td>
           <td class="num">{m.yield_strength_mpa:.1f} MPa</td>
           <td class="num">2.00</td>
-          <td class="num {'text-pass' if result.min_arm_sf >= 2.0 else 'text-fail'}" style="font-weight: 700;">{result.min_arm_sf:.2f}</td>
-          <td style="text-align: center; font-weight: 700;" class="{'text-pass' if result.min_arm_sf >= 2.0 else 'text-fail'}">
-            {'PASS' if result.min_arm_sf >= 2.0 else 'FAIL'}
+          <td class="num {"text-pass" if result.min_arm_sf >= 2.0 else "text-fail"}" style="font-weight: 700;">{result.min_arm_sf:.2f}</td>
+          <td style="text-align: center; font-weight: 700;" class="{"text-pass" if result.min_arm_sf >= 2.0 else "text-fail"}">
+            {"PASS" if result.min_arm_sf >= 2.0 else "FAIL"}
           </td>
         </tr>
       </tbody>

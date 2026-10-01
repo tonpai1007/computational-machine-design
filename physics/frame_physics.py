@@ -6,33 +6,39 @@ Authority: Physics verifies.
 """
 
 import math
-from typing import Dict, List, Optional, Any
+
 from pydantic import BaseModel, Field
-from core.frame_model import FrameDesignModel, FrameLoads, FrameGeometry, StructuralMaterial
+
+from core.frame_model import (
+    ARM_PAD_THICKNESS_MM,
+    FrameDesignModel,
+    resolve_armrest,
+)
 from physics.buckling import ColumnBuckling
 
+
 class ColumnAnalysisResult(BaseModel):
-    leg_id: str                      # 'FL' (Front-Left), 'FR', 'RR', 'RL'
+    leg_id: str  # 'FL' (Front-Left), 'FR', 'RR', 'RL'
     leg_name: str
     floor_x_mm: float
     floor_y_mm: float
-    axial_reaction_n: float          # Vertical reaction force Rz
-    horizontal_shear_n: float        # Lateral shear force Rh
-    total_reaction_n: float          # Combined reaction vector
-    compressive_stress_mpa: float    # P / A
-    bending_moment_nm: float         # Bending from lateral loads + eccentricity
-    bending_stress_mpa: float        # M / Z
-    combined_stress_mpa: float       # P/A + M/Z
-    slenderness_ratio: float         # lambda = L_eff / r
+    axial_reaction_n: float  # Vertical reaction force Rz
+    horizontal_shear_n: float  # Lateral shear force Rh
+    total_reaction_n: float  # Combined reaction vector
+    compressive_stress_mpa: float  # P / A
+    bending_moment_nm: float  # Bending from lateral loads + eccentricity
+    bending_stress_mpa: float  # M / Z
+    combined_stress_mpa: float  # P/A + M/Z
+    slenderness_ratio: float  # lambda = L_eff / r
     critical_buckling_load_n: float  # P_cr (Euler or Johnson)
-    buckling_safety_factor: float    # P_cr / P
-    yield_safety_factor: float       # Sy / sigma_combined
+    buckling_safety_factor: float  # P_cr / P
+    yield_safety_factor: float  # Sy / sigma_combined
     buckling_passed: bool
     yield_passed: bool
 
 
 class UpperStrutAnalysisResult(BaseModel):
-    arm_id: str                      # 'left', 'right'
+    arm_id: str  # 'left', 'right'
     applied_vertical_n: float
     applied_lateral_n: float
     applied_foreaft_n: float
@@ -62,14 +68,17 @@ class FrameSolverResult(BaseModel):
     total_downward_load_n: float
 
     # Reactions & Stability
-    floor_reactions: List[ColumnAnalysisResult]
+    floor_reactions: list[ColumnAnalysisResult]
     tipping_safety_factor_fwd: float
     tipping_safety_factor_rear: float
-    tipping_safety_factor_lat: float
+    # None means "no lateral tipping case exists" (net roll moment ~ 0), NOT "infinitely safe".
+    # Never substitute a large sentinel number here: a placeholder presented as a computed
+    # safety factor violates the physics-determinism rule.
+    tipping_safety_factor_lat: float | None = None
     is_statically_stable: bool
 
     # Upper members / Struts
-    armrests: List[UpperStrutAnalysisResult]
+    armrests: list[UpperStrutAnalysisResult]
 
     # Frame rails
     seat_frame: FrameRailAnalysisResult
@@ -82,7 +91,7 @@ class FrameSolverResult(BaseModel):
     all_safety_criteria_passed: bool
 
     # Trace
-    calculation_log: List[str] = Field(default_factory=list)
+    calculation_log: list[str] = Field(default_factory=list)
 
 
 class FramePhysicsSolver:
@@ -93,15 +102,20 @@ class FramePhysicsSolver:
         geom = model.geometry
         loads = model.loads
         mat = model.material
-        calc_log: List[str] = []
+        calc_log: list[str] = []
 
         calc_log.append(f"Starting deterministic structural verification for '{model.name}'.")
-        calc_log.append(f"Material: {mat.name} (Sy = {mat.yield_strength_mpa:.1f} MPa, E = {mat.elastic_modulus_gpa:.1f} GPa).")
+        calc_log.append(
+            f"Material: {mat.name} (Sy = {mat.yield_strength_mpa:.1f} MPa, E = {mat.elastic_modulus_gpa:.1f} GPa)."
+        )
 
         n_legs = max(3, geom.num_legs)
 
         # 1. Structural Self-Weight Estimation
-        leg_len_m = math.sqrt((geom.seat_height_mm/1000.0)**2 + (geom.seat_height_mm/1000.0 * math.tan(math.radians(geom.leg_splay_angle_deg)))**2)
+        leg_len_m = math.sqrt(
+            (geom.seat_height_mm / 1000.0) ** 2
+            + (geom.seat_height_mm / 1000.0 * math.tan(math.radians(geom.leg_splay_angle_deg))) ** 2
+        )
         v_legs = float(n_legs) * geom.leg_profile.area_m2 * leg_len_m
 
         frame_len_m = 2.0 * (geom.seat_width_mm + geom.seat_depth_mm) / 1000.0
@@ -109,13 +123,28 @@ class FramePhysicsSolver:
 
         v_arms = 0.0
         if geom.has_arms:
-            v_arms = 2.0 * geom.arm_profile.area_m2 * (geom.armrest_height_above_seat_mm / 1000.0 + geom.armrest_length_mm / 1000.0)
+            v_arms = (
+                2.0
+                * geom.arm_profile.area_m2
+                * (geom.armrest_height_above_seat_mm / 1000.0 + geom.armrest_length_mm / 1000.0)
+            )
 
         v_stretchers = 0.0
         if geom.has_stretchers:
-            v_stretchers = 2.0 * (geom.seat_width_mm + geom.seat_depth_mm) / 1000.0 * geom.stretcher_profile.area_m2
+            v_stretchers = (
+                2.0
+                * (geom.seat_width_mm + geom.seat_depth_mm)
+                / 1000.0
+                * geom.stretcher_profile.area_m2
+            )
 
-        v_seat_pan = (geom.seat_width_mm/1000.0) * (geom.seat_depth_mm/1000.0) * (geom.seat_thickness_mm/1000.0) if geom.has_seat_plate else 0.0
+        v_seat_pan = (
+            (geom.seat_width_mm / 1000.0)
+            * (geom.seat_depth_mm / 1000.0)
+            * (geom.seat_thickness_mm / 1000.0)
+            if geom.has_seat_plate
+            else 0.0
+        )
         m_pan = v_seat_pan * 700.0
 
         total_metal_vol = v_legs + v_frame + v_arms + v_stretchers
@@ -123,7 +152,9 @@ class FramePhysicsSolver:
         total_chair_mass_kg = metal_mass + m_pan
         total_chair_weight_n = total_chair_mass_kg * 9.80665
 
-        calc_log.append(f"Calculated structural self-mass = {total_chair_mass_kg:.2f} kg ({total_chair_weight_n:.1f} N) with {n_legs} support columns.")
+        calc_log.append(
+            f"Calculated structural self-mass = {total_chair_mass_kg:.2f} kg ({total_chair_weight_n:.1f} N) with {n_legs} support columns."
+        )
 
         # 2. Footprint Geometry on Floor
         splay_rad = math.radians(geom.leg_splay_angle_deg)
@@ -140,7 +171,11 @@ class FramePhysicsSolver:
             r_floor_m = (min(w_seat_m, d_seat_m) / 2.0) + delta_splay
             angles = [math.pi / 2.0, 7.0 * math.pi / 6.0, 11.0 * math.pi / 6.0]
             leg_coords = {
-                f"Leg_{i+1}": (r_floor_m * math.cos(ang), r_floor_m * math.sin(ang), f"Column {i+1}")
+                f"Leg_{i + 1}": (
+                    r_floor_m * math.cos(ang),
+                    r_floor_m * math.sin(ang),
+                    f"Column {i + 1}",
+                )
                 for i, ang in enumerate(angles)
             }
         else:
@@ -165,12 +200,27 @@ class FramePhysicsSolver:
         f_arm_r_x = loads.right_arm_lateral_n if geom.has_arms else 0.0
         f_arm_r_y = loads.right_arm_foreaft_n if geom.has_arms else 0.0
 
-        x_arm_l = -(w_seat_m / 2.0 + 0.035)
-        y_arm_l = 0.0
-        z_arm = h_m + (geom.armrest_height_above_seat_mm / 1000.0)
+        ag_l = resolve_armrest(
+            geom,
+            side=-1.0,
+            arm_tube_r=geom.arm_profile.outer_dimension_mm / 2.0,
+            pad_thickness_mm=ARM_PAD_THICKNESS_MM,
+        )
+        ag_r = resolve_armrest(
+            geom,
+            side=1.0,
+            arm_tube_r=geom.arm_profile.outer_dimension_mm / 2.0,
+            pad_thickness_mm=ARM_PAD_THICKNESS_MM,
+        )
 
-        x_arm_r = +(w_seat_m / 2.0 + 0.035)
-        y_arm_r = 0.0
+        # Arm load acts at the pad underside at the resolved post axis, which is
+        # outboard of the seat edge by 25 mm -- not the 35 mm used previously.
+        x_arm_l = ag_l.post_x_mm / 1000.0
+        y_arm_l = loads.left_arm_load_y_mm / 1000.0
+        z_arm = ag_l.pad_underside_z_mm / 1000.0
+
+        x_arm_r = ag_r.post_x_mm / 1000.0
+        y_arm_r = loads.right_arm_load_y_mm / 1000.0
 
         total_applied_vert_n = f_seat_z + f_arm_l_z + f_arm_r_z
         total_vert_down_n = total_applied_vert_n + total_chair_weight_n
@@ -198,19 +248,23 @@ class FramePhysicsSolver:
         )
 
         # 4. Vertical Floor Contact Reaction per Column
-        sum_y2 = sum(c[1]**2 for c in leg_coords.values())
-        sum_x2 = sum(c[0]**2 for c in leg_coords.values())
+        sum_y2 = sum(c[1] ** 2 for c in leg_coords.values())
+        sum_x2 = sum(c[0] ** 2 for c in leg_coords.values())
 
         fx_net = f_arm_l_x + f_arm_r_x
         fy_net = f_arm_l_y + f_arm_r_y
         shear_per_leg = math.sqrt(fx_net**2 + fy_net**2) / float(n_legs)
 
-        leg_results: List[ColumnAnalysisResult] = []
+        leg_results: list[ColumnAnalysisResult] = []
         is_stable = True
         min_reaction = 1e9
 
         k_factor = 0.85 if geom.has_stretchers else 1.2
-        unbraced_len_m = ((geom.seat_height_mm - geom.stretcher_height_mm) / 1000.0) if geom.has_stretchers else h_m
+        unbraced_len_m = (
+            ((geom.seat_height_mm - geom.stretcher_height_mm) / 1000.0)
+            if geom.has_stretchers
+            else h_m
+        )
 
         prof = geom.leg_profile
         e_pa = mat.elastic_modulus_gpa * 1e9
@@ -224,14 +278,20 @@ class FramePhysicsSolver:
             moment_of_inertia_m4=prof.moment_of_inertia_m4,
             length_m=unbraced_len_m,
             applied_load_n=total_vert_down_n / float(n_legs),
-            k_factor=k_factor
+            k_factor=k_factor,
         )
         p_cr = buck_res.critical_buckling_load_n
 
-        calc_log.append(f"Column Slenderness λ = {buck_res.slenderness_ratio:.1f} (Threshold λc = {buck_res.transition_slenderness_cc:.1f}) -> {buck_res.formula_used} P_cr = {p_cr/1000.0:.2f} kN per column.")
+        calc_log.append(
+            f"Column Slenderness λ = {buck_res.slenderness_ratio:.1f} (Threshold λc = {buck_res.transition_slenderness_cc:.1f}) -> {buck_res.formula_used} P_cr = {p_cr / 1000.0:.2f} kN per column."
+        )
 
         for lid, (lx, ly, lname) in leg_coords.items():
-            rz_i = (total_vert_down_n / float(n_legs)) + (mx_total * ly / max(sum_y2, 1e-6)) - (my_total * lx / max(sum_x2, 1e-6))
+            rz_i = (
+                (total_vert_down_n / float(n_legs))
+                + (mx_total * ly / max(sum_y2, 1e-6))
+                - (my_total * lx / max(sum_x2, 1e-6))
+            )
             if rz_i < min_reaction:
                 min_reaction = rz_i
 
@@ -250,68 +310,102 @@ class FramePhysicsSolver:
             sf_buckling = p_cr / max(rz_i, 1.0)
             sf_yield = mat.yield_strength_mpa / max(sigma_combined_mpa, 0.01)
 
-            leg_results.append(ColumnAnalysisResult(
-                leg_id=lid,
-                leg_name=lname,
-                floor_x_mm=lx * 1000.0,
-                floor_y_mm=ly * 1000.0,
-                axial_reaction_n=rz_i,
-                horizontal_shear_n=shear_per_leg,
-                total_reaction_n=math.sqrt(rz_i**2 + shear_per_leg**2),
-                compressive_stress_mpa=sigma_comp_mpa,
-                bending_moment_nm=m_leg_nm,
-                bending_stress_mpa=sigma_bend_mpa,
-                combined_stress_mpa=sigma_combined_mpa,
-                slenderness_ratio=buck_res.slenderness_ratio,
-                critical_buckling_load_n=p_cr,
-                buckling_safety_factor=sf_buckling,
-                yield_safety_factor=sf_yield,
-                buckling_passed=(sf_buckling >= 2.0),
-                yield_passed=(sf_yield >= 1.5)
-            ))
+            leg_results.append(
+                ColumnAnalysisResult(
+                    leg_id=lid,
+                    leg_name=lname,
+                    floor_x_mm=lx * 1000.0,
+                    floor_y_mm=ly * 1000.0,
+                    axial_reaction_n=rz_i,
+                    horizontal_shear_n=shear_per_leg,
+                    total_reaction_n=math.sqrt(rz_i**2 + shear_per_leg**2),
+                    compressive_stress_mpa=sigma_comp_mpa,
+                    bending_moment_nm=m_leg_nm,
+                    bending_stress_mpa=sigma_bend_mpa,
+                    combined_stress_mpa=sigma_combined_mpa,
+                    slenderness_ratio=buck_res.slenderness_ratio,
+                    critical_buckling_load_n=p_cr,
+                    buckling_safety_factor=sf_buckling,
+                    yield_safety_factor=sf_yield,
+                    buckling_passed=(sf_buckling >= 2.0),
+                    yield_passed=(sf_yield >= 1.5),
+                )
+            )
 
         # 5. Upper Struts Analysis
-        arm_results: List[UpperStrutAnalysisResult] = []
+        arm_results: list[UpperStrutAnalysisResult] = []
         if geom.has_arms:
             arm_prof = geom.arm_profile
             arm_h_m = geom.armrest_height_above_seat_mm / 1000.0
-            arm_overhang_m = geom.armrest_overhang_front_mm / 1000.0
 
-            for arm_id, f_v, f_lat, f_fa in [
-                ("left", loads.left_arm_vertical_n, abs(loads.left_arm_lateral_n), abs(loads.left_arm_foreaft_n)),
-                ("right", loads.right_arm_vertical_n, abs(loads.right_arm_lateral_n), abs(loads.right_arm_foreaft_n))
+            # Geometry resolved by the same helper the CAD uses, so the
+            # cantilever and the post spacing here are the ones actually drawn.
+            # Post spacing is side-independent, so one resolution serves both.
+            ag = ag_l
+
+            for arm_id, f_v, f_lat, f_fa, load_y in [
+                (
+                    "left",
+                    loads.left_arm_vertical_n,
+                    abs(loads.left_arm_lateral_n),
+                    abs(loads.left_arm_foreaft_n),
+                    loads.left_arm_load_y_mm,
+                ),
+                (
+                    "right",
+                    loads.right_arm_vertical_n,
+                    abs(loads.right_arm_lateral_n),
+                    abs(loads.right_arm_foreaft_n),
+                    loads.right_arm_load_y_mm,
+                ),
             ]:
-                m_cantilever = f_v * arm_overhang_m
-                m_strut_base = math.sqrt((f_lat * arm_h_m)**2 + (f_fa * arm_h_m)**2 + m_cantilever**2)
+                # Lever rule across the two posts, not a blind 50/50.
+                w_front, w_rear = ag.post_reaction_fractions(load_y)
 
-                sigma_axial = (f_v / 2.0) / max(arm_prof.area_m2, 1e-9) / 1e6
+                # The dominant post governs: take the larger share of the arm
+                # load and pair it with the full cantilever couple.
+                governing_axial_n = f_v * max(w_front, w_rear)
+
+                # Cantilever measured from the geometry, not from a nominal field.
+                m_cantilever = f_v * ag.cantilever_front_mm / 1000.0
+                m_strut_base = math.sqrt(
+                    (f_lat * arm_h_m) ** 2 + (f_fa * arm_h_m) ** 2 + m_cantilever**2
+                )
+
+                sigma_axial = governing_axial_n / max(arm_prof.area_m2, 1e-9) / 1e6
                 sigma_bend = (m_strut_base / 2.0) / max(arm_prof.section_modulus_m3, 1e-9) / 1e6
+                # Combined axial+bending by superposition, matching the method
+                # the rest of the report's member checks use.
                 sigma_tot = sigma_axial + sigma_bend
 
                 sf_arm = mat.yield_strength_mpa / max(sigma_tot, 0.01)
-                arm_results.append(UpperStrutAnalysisResult(
-                    arm_id=arm_id,
-                    applied_vertical_n=f_v,
-                    applied_lateral_n=f_lat,
-                    applied_foreaft_n=f_fa,
-                    overhang_moment_nm=m_cantilever,
-                    strut_base_moment_nm=m_strut_base,
-                    strut_axial_stress_mpa=sigma_axial,
-                    strut_bending_stress_mpa=sigma_bend,
-                    strut_combined_stress_mpa=sigma_tot,
-                    arm_safety_factor=sf_arm,
-                    passed=(sf_arm >= 2.0)
-                ))
+                arm_results.append(
+                    UpperStrutAnalysisResult(
+                        arm_id=arm_id,
+                        applied_vertical_n=f_v,
+                        applied_lateral_n=f_lat,
+                        applied_foreaft_n=f_fa,
+                        overhang_moment_nm=m_cantilever,
+                        strut_base_moment_nm=m_strut_base,
+                        strut_axial_stress_mpa=sigma_axial,
+                        strut_bending_stress_mpa=sigma_bend,
+                        strut_combined_stress_mpa=sigma_tot,
+                        arm_safety_factor=sf_arm,
+                        passed=(sf_arm >= 2.0),
+                    )
+                )
 
         # 6. Main Frame Rails & Deck Deflection
         frame_prof = geom.frame_profile
         span_m = geom.seat_width_mm / 1000.0
-        p_rail = (loads.seat_vertical_load_n / 2.0)
+        p_rail = loads.seat_vertical_load_n / 2.0
         m_rail_max = (p_rail * span_m) / 4.0
         sigma_rail_bend = (m_rail_max / max(frame_prof.section_modulus_m3, 1e-9)) / 1e6
 
         # Deflection: delta = (P * L^3) / (48 * E * I)
-        delta_m = (p_rail * (span_m ** 3)) / (48.0 * (mat.elastic_modulus_gpa * 1e9) * max(frame_prof.moment_of_inertia_m4, 1e-12))
+        delta_m = (p_rail * (span_m**3)) / (
+            48.0 * (mat.elastic_modulus_gpa * 1e9) * max(frame_prof.moment_of_inertia_m4, 1e-12)
+        )
         delta_mm = delta_m * 1000.0
 
         sf_rail = mat.yield_strength_mpa / max(sigma_rail_bend, 0.01)
@@ -321,32 +415,46 @@ class FramePhysicsSolver:
             rail_bending_stress_mpa=sigma_rail_bend,
             rail_deflection_mm=delta_mm,
             rail_safety_factor=sf_rail,
-            passed=(sf_rail >= 2.0 and delta_mm < (geom.seat_width_mm / 250.0))
+            passed=(sf_rail >= 2.0 and delta_mm < (geom.seat_width_mm / 250.0)),
         )
 
         # 7. Tipping Safety Margins
-        lever_fwd = (d_floor_m / 2.0)
-        lever_rear = (d_floor_m / 2.0)
-        lever_lat = (w_floor_m / 2.0)
+        lever_fwd = d_floor_m / 2.0
+        lever_rear = d_floor_m / 2.0
+        lever_lat = w_floor_m / 2.0
 
         restoring_moment_pitch = total_vert_down_n * min(lever_fwd, lever_rear)
         restoring_moment_roll = total_vert_down_n * lever_lat
 
         sf_tip_fwd = restoring_moment_pitch / max(abs(mx_total), 1.0)
         sf_tip_rear = restoring_moment_pitch / max(abs(mx_total), 1.0)
-        # When my_total is ~0 (balanced lateral loads), there is no net overturning moment
-        sf_tip_lat = restoring_moment_roll / abs(my_total) if abs(my_total) > 1.0 else 1e6
+        # When my_total is ~0 the lateral loads cancel exactly, so no net overturning
+        # roll moment exists and there is no lateral tipping case to evaluate.
+        # Return None rather than a huge sentinel: a fabricated number presented as a
+        # computed safety factor violates the physics-determinism rule.
+        sf_tip_lat: float | None = (
+            restoring_moment_roll / abs(my_total) if abs(my_total) > 1.0 else None
+        )
 
         min_leg_buck = min(l.buckling_safety_factor for l in leg_results)
         min_leg_yld = min(l.yield_safety_factor for l in leg_results)
         min_arm_sf = min((a.arm_safety_factor for a in arm_results), default=99.0)
 
+        # A None lateral margin means "no lateral tipping case exists" and must not
+        # be folded into the pass/fail minimum.
+        tip_sf_values = [
+            v
+            for v in (sf_tip_fwd, sf_tip_rear, sf_tip_lat)
+            if v is not None
+        ]
+        min_tip_sf = min(tip_sf_values) if tip_sf_values else float("inf")
+
         all_passed = (
-            is_stable and
-            all(l.buckling_passed and l.yield_passed for l in leg_results) and
-            all(a.passed for a in arm_results) and
-            rail_result.passed and
-            min(sf_tip_fwd, sf_tip_rear, sf_tip_lat) >= 1.5
+            is_stable
+            and all(l.buckling_passed and l.yield_passed for l in leg_results)
+            and all(a.passed for a in arm_results)
+            and rail_result.passed
+            and min_tip_sf >= 1.5
         )
 
         return FrameSolverResult(
@@ -367,7 +475,7 @@ class FramePhysicsSolver:
             min_arm_sf=min_arm_sf,
             seat_deflection_mm=delta_mm,
             all_safety_criteria_passed=all_passed,
-            calculation_log=calc_log
+            calculation_log=calc_log,
         )
 
 

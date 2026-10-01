@@ -6,8 +6,8 @@ Two invariants:
    document is out of scope.
 2. Fidelity - every headline number must equal the deterministic solver result.
 """
+
 import math
-import re
 from pathlib import Path
 
 import pytest
@@ -33,11 +33,23 @@ def sol():
 # --------------------------------------------------------------------------
 # 1. Scope: no FEA
 # --------------------------------------------------------------------------
-@pytest.mark.parametrize("banned", [
-    "FEA", "finite element", "ANSYS", "Abaqus", "von Mises",
-    "stiffness matrix", "DOF", "mesh", "element analysis",
-    "tipping", "overturn", "n_tipping",
-])
+@pytest.mark.parametrize(
+    "banned",
+    [
+        "FEA",
+        "finite element",
+        "ANSYS",
+        "Abaqus",
+        "von Mises",
+        "stiffness matrix",
+        "DOF",
+        "mesh",
+        "element analysis",
+        "tipping",
+        "overturn",
+        "n_tipping",
+    ],
+)
 def test_report_contains_no_fea(doc, banned):
     assert banned.lower() not in doc.lower(), (
         f"report contains out-of-scope term {banned!r}; "
@@ -48,13 +60,13 @@ def test_report_contains_no_fea(doc, banned):
 
 def test_report_uses_reference_closed_form_markers(doc):
     for marker in [
-        "J.B. Johnson",          # intermediate column formula
-        "P_cr",                  # critical buckling load
-        "l/k",                   # slenderness ratio
-        "〈X-",                   # singularity-function notation
-        "S_e",                   # endurance limit
-        "σ_max",                 # maximum normal stress
-        "Safety Factor",         # factor of safety
+        "J.B. Johnson",  # intermediate column formula
+        "P_cr",  # critical buckling load
+        "l/k",  # slenderness ratio
+        "〈X-",  # singularity-function notation
+        "S_e",  # endurance limit
+        "σ_max",  # maximum normal stress
+        "Safety Factor",  # factor of safety
     ]:
         assert marker in doc, f"missing reference-style marker {marker!r}"
 
@@ -70,17 +82,21 @@ def _num(doc, value, dp=3):
 
 def test_material_properties_match_model(doc):
     m = FrameDesignModel().material
-    for v, dp in [(m.ultimate_strength_mpa, 0), (m.yield_strength_mpa, 0),
-                  (m.elastic_modulus_gpa, 0), (m.density_kg_m3, 0)]:
+    for v, dp in [
+        (m.ultimate_strength_mpa, 0),
+        (m.yield_strength_mpa, 0),
+        (m.elastic_modulus_gpa, 0),
+        (m.density_kg_m3, 0),
+    ]:
         _num(doc, v, dp)
 
 
 def test_section_properties_match_profiles(doc):
     g = FrameDesignModel().geometry
     for prof, vals in [
-        (g.leg_profile,      (13885.8, 163.36, 9.220, 991.8)),
-        (g.frame_profile,    (16345.3, 184.00, 9.425, 1307.6)),
-        (g.arm_profile,      (5872.5, 114.23, 7.170, 533.9)),
+        (g.leg_profile, (13885.8, 163.36, 9.220, 991.8)),
+        (g.frame_profile, (16345.3, 184.00, 9.425, 1307.6)),
+        (g.arm_profile, (5872.5, 114.23, 7.170, 533.9)),
         (g.stretcher_profile, (3180.1, 82.47, 6.210, 334.8)),
     ]:
         I = prof.moment_of_inertia_m4 * 1e12
@@ -88,7 +104,7 @@ def test_section_properties_match_profiles(doc):
         k = math.sqrt(I / A)
         Z = I / (prof.outer_dimension_mm / 2.0)
         for rep, act, dp in zip(vals, (I, A, k, Z), (1, 2, 3, 1)):
-            assert abs(rep - act) < 10 ** -dp, f"section property drift: {rep} vs {act}"
+            assert abs(rep - act) < 10**-dp, f"section property drift: {rep} vs {act}"
 
 
 def test_global_equilibrium_matches_solver(doc, sol):
@@ -131,34 +147,36 @@ def test_every_summary_row_clears_design_factor(sol):
 
     ap = g.arm_profile
     arm = sol.armrests[0]
-    # bracket: per-post share, CAD section 25 x 11 x 8.8
-    bL, bW, bH = 25.0, (ap.outer_dimension_mm / 2.0) * 0.8, ap.outer_dimension_mm / 2.0
+    # bracket: per-post share, CAD section 25 (length) x bracket_h x bracket_t.
+    # Read the plate size from the model rather than re-deriving it from the
+    # post radius; the coupling it replaced is what let the plate drift.
+    bL = 25.0
+    bW, bH = g.armrest_bracket_thickness_mm, g.armrest_bracket_height_mm
     bZ = bW * bH**2 / 6.0
     bA = bL * bW * bH
-    n_bracket = SY / (arm.applied_vertical_n / 2 / bA
-                      + (arm.strut_base_moment_nm / 2) * 1e3 / bZ)
+    n_bracket = SY / (arm.applied_vertical_n / 2 / bA + (arm.strut_base_moment_nm / 2) * 1e3 / bZ)
 
     # stretcher: CAD uses splay offset at stretcher height
     sp = g.stretcher_profile
     sI, sA = sp.moment_of_inertia_m4 * 1e12, sp.area_m2 * 1e6
     sk = math.sqrt(sI / sA)
     s_len = g.seat_width_mm + 2 * (g.seat_height_mm - g.stretcher_height_mm) * math.tan(
-        math.radians(g.leg_splay_angle_deg))
+        math.radians(g.leg_splay_angle_deg)
+    )
     slam = K * s_len / sk
-    sPcr = sA * (SY - (SY * slam / (2 * math.pi))**2 / E)
+    sPcr = sA * (SY - (SY * slam / (2 * math.pi)) ** 2 / E)
     n_stretcher = sPcr / (l.backrest_force_n / 2.0)
 
     # backrest post
     lp = g.leg_profile
     lA, lI = lp.area_m2 * 1e6, lp.moment_of_inertia_m4 * 1e12
     lZ = lI / (lp.outer_dimension_mm / 2.0)
-    dz = g.backrest_height_above_seat_mm * math.cos(
-        math.radians(g.backrest_angle_deg - 90.0))
+    dz = g.backrest_height_above_seat_mm * math.cos(math.radians(g.backrest_angle_deg - 90.0))
     Fb = l.backrest_force_n / 2.0
     n_backrest = SY / (Fb * dz / 1e3 / lZ + Fb / lA)
 
     # endurance limit
-    ka = 4.51 * mat.ultimate_strength_mpa ** -0.265
+    ka = 4.51 * mat.ultimate_strength_mpa**-0.265
     kb = (lp.outer_dimension_mm / 7.5) ** -0.107
     Se = ka * kb * 1.0 * 1.0 * 0.897 * 1.0 * (0.5 * mat.ultimate_strength_mpa)
     n_fatigue = Se / (Fb * dz / 1e3 / lZ + Fb / lA)
@@ -180,3 +198,79 @@ def test_every_summary_row_clears_design_factor(sol):
 def test_deflection_within_serviceability_limit(sol):
     g = FrameDesignModel().geometry
     assert sol.seat_frame.rail_deflection_mm < g.seat_width_mm / 250.0
+
+
+# --------------------------------------------------------------------------
+# 4. Honesty guards - the three bugs these tests were written for
+# --------------------------------------------------------------------------
+def test_lateral_tipping_is_none_not_a_sentinel(sol):
+    """Lateral arm loads are equal and opposite, so they cancel exactly.
+
+    There is no net roll moment and therefore no lateral tipping case. The
+    solver must say so with ``None`` instead of inventing a large number.
+    """
+    assert sol.tipping_safety_factor_lat is None, (
+        "balanced lateral loads give no net roll moment; a numeric margin here "
+        "would be a fabricated safety factor"
+    )
+
+
+_RENDER = {
+    "reporting.frame_report": lambda Gen, model, result: Gen.generate_html_report(model, result),
+    "reporting.academic_engine": lambda Gen, model, result: Gen.generate_assignment_report(model, result),
+}
+
+
+def _render(generator: str, model, result) -> str:
+    """Call the public render entry point of the named generator."""
+    import importlib
+
+    module_name = generator.rsplit(".", 1)[1]
+    if module_name == "frame_report":
+        gen_cls = importlib.import_module(generator).FrameReportGenerator
+    else:
+        gen_cls = importlib.import_module(generator).AcademicAssignmentEngine
+    return _RENDER[generator](gen_cls, model, result)
+
+
+@pytest.mark.parametrize(
+    "generator",
+    ["reporting.frame_report", "reporting.academic_engine"],
+)
+def test_fbd_reaction_arrows_satisfy_vertical_equilibrium(generator):
+    """The FBD draws one arrow per leg pair.
+
+    Those arrows must add up to the applied load - otherwise the figure
+    contradicts the equilibrium it is supposed to illustrate.
+    """
+    import re
+
+    model = FrameDesignModel()
+    result = FramePhysicsSolver.solve(model)
+    html = _render(generator, model, result)
+
+    shown = [
+        float(v.replace(",", ""))
+        for v in re.findall(r"R_(?:left|right) [^<]*?([\d,]+\.?\d*) N", html)
+    ]
+    assert shown, "no reaction labels found in the FBD"
+    total = sum(shown)
+    assert total == pytest.approx(result.total_downward_load_n, rel=1e-3), (
+        f"FBD reactions sum to {total:.1f} N but the applied load is "
+        f"{result.total_downward_load_n:.1f} N - equilibrium is broken in the figure"
+    )
+
+
+@pytest.mark.parametrize(
+    "generator",
+    ["reporting.frame_report", "reporting.academic_engine"],
+)
+def test_no_placeholder_safety_factor_in_reports(generator):
+    """A sentinel like 1e6 must never reach a rendered deliverable."""
+    model = FrameDesignModel()
+    html = _render(generator, model, FramePhysicsSolver.solve(model))
+
+    assert "1000000" not in html.replace(",", ""), (
+        "report presents the 1e6 sentinel as a computed safety factor"
+    )
+    assert "N/A" in html, "lateral tipping should be reported as N/A, not omitted"

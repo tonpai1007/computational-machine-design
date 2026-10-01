@@ -17,18 +17,34 @@ Produces a complete, submission-ready, printable academic project assignment dos
 - Appendix: 2D Engineering Blueprint, Solver Execution Trace, and Academic Sign-Off Block
 """
 
-import math
-import os
-import json
 import logging
+import math
 from pathlib import Path
-from typing import Dict, Any, List, Optional
-from core.frame_model import FrameDesignModel
-from physics.frame_physics import FrameSolverResult
-from ai.llm_router import LLMRouter
+from typing import Any
+
 from ai.narrative_synthesizer import synthesize_academic_narrative
+from core.frame_model import FrameDesignModel, resolve_armrest
+from physics.frame_physics import FrameSolverResult
 
 logger = logging.getLogger("reporting.academic_engine")
+
+
+def _lat_tip_display(result: FrameSolverResult) -> tuple[str, str, str]:
+    """Render the lateral tipping margin honestly.
+
+    Returns (cell_value, verdict, css_class). A ``None`` margin means the
+    lateral loads cancel exactly and no tipping case exists -> report "N/A",
+    never a fabricated large safety factor (physics-determinism rule).
+    """
+    if result.tipping_safety_factor_lat is None:
+        return (
+            '<span style="color:#64748b;font-style:italic;">N/A</span>',
+            "N/A (no case)",
+            "text-muted",
+        )
+    sf = result.tipping_safety_factor_lat
+    cls = "text-pass" if sf >= 1.5 else "text-fail"
+    return f"{sf:.2f}", ("PASS" if sf >= 1.5 else "FAIL"), cls
 
 
 class AcademicAssignmentEngine:
@@ -42,8 +58,8 @@ class AcademicAssignmentEngine:
         cls,
         model: FrameDesignModel,
         result: FrameSolverResult,
-        fea_result: Optional[Dict[str, Any]] = None,
-        preview_image: Optional[str] = "chair_preview.png",
+        fea_result: dict[str, Any] | None = None,
+        preview_image: str | None = "chair_preview.png",
         university_th: str = "สถาบันเทคโนโลยีพระจอมเกล้าเจ้าคุณทหารลาดกระบัง",
         faculty_th: str = "คณะวิศวกรรมศาสตร์ ภาควิชาวิศวกรรมเครื่องกล",
         course_code: str = "01016311",
@@ -53,12 +69,12 @@ class AcademicAssignmentEngine:
         student_name: str = "นักศึกษาวิศวกรรมเครื่องกล (Lead Student Designer)",
         student_id: str = "650xxxxxxx",
         instructor: str = "คณาจารย์ประจำวิชาการออกแบบเครื่องจักรกล",
-        blueprint_svg: Optional[str] = None,
+        blueprint_svg: str | None = None,
     ) -> str:
         g = model.geometry
         l = model.loads
         m = model.material
-        allowable_deflection_mm = getattr(m, 'allowable_deflection_mm', 5.0)
+        allowable_deflection_mm = getattr(m, "allowable_deflection_mm", 5.0)
 
         # Section Properties for Column
         col_prof = g.leg_profile
@@ -70,7 +86,13 @@ class AcademicAssignmentEngine:
 
         # Johnson transition slenderness ratio (C = 1.0 pinned-pinned baseline)
         c_end = 1.0
-        trans_slenderness = math.sqrt(2.0 * (math.pi ** 2) * c_end * (m.elastic_modulus_gpa * 1000.0) / max(m.yield_strength_mpa, 1.0))
+        trans_slenderness = math.sqrt(
+            2.0
+            * (math.pi**2)
+            * c_end
+            * (m.elastic_modulus_gpa * 1000.0)
+            / max(m.yield_strength_mpa, 1.0)
+        )
 
         # Overall Status Badge
         overall_badge = (
@@ -86,7 +108,9 @@ class AcademicAssignmentEngine:
             buckling_cls = "text-pass" if leg.buckling_passed else "text-fail"
             yield_cls = "text-pass" if leg.yield_passed else "text-fail"
             status_text = "PASS" if (leg.buckling_passed and leg.yield_passed) else "FAIL"
-            buckling_mode = "Euler (Long)" if leg.slenderness_ratio >= trans_slenderness else "Johnson (Int.)"
+            buckling_mode = (
+                "Euler (Long)" if leg.slenderness_ratio >= trans_slenderness else "Johnson (Int.)"
+            )
 
             leg_rows += f"""
             <tr>
@@ -95,7 +119,7 @@ class AcademicAssignmentEngine:
                 <td class="num">{leg.horizontal_shear_n:.1f} N</td>
                 <td class="num">{leg.slenderness_ratio:.1f}</td>
                 <td style="text-align: center; font-size: 11px; color: #475569;">{buckling_mode}</td>
-                <td class="num">{(leg.critical_buckling_load_n/1000.0):.2f} kN</td>
+                <td class="num">{(leg.critical_buckling_load_n / 1000.0):.2f} kN</td>
                 <td class="num {buckling_cls}" style="font-weight: 700;">{leg.buckling_safety_factor:.2f}</td>
                 <td class="num">{leg.combined_stress_mpa:.1f} MPa</td>
                 <td class="num {yield_cls}" style="font-weight: 700;">{leg.yield_safety_factor:.2f}</td>
@@ -105,7 +129,9 @@ class AcademicAssignmentEngine:
 
         # Armrest Rows
         arm_rows = ""
-        arm_stress_str = f"{result.armrests[0].strut_combined_stress_mpa:.1f} MPa" if result.armrests else "N/A"
+        arm_stress_str = (
+            f"{result.armrests[0].strut_combined_stress_mpa:.1f} MPa" if result.armrests else "N/A"
+        )
         if result.armrests:
             for arm in result.armrests:
                 arm_cls = "text-pass" if arm.passed else "text-fail"
@@ -130,9 +156,37 @@ class AcademicAssignmentEngine:
             </tr>
             """
 
-        # Support reaction values for FBD display
-        r_left_val = (result.floor_reactions[0].axial_reaction_n + result.floor_reactions[-1].axial_reaction_n)/2.0 if len(result.floor_reactions) >= 4 else result.floor_reactions[0].axial_reaction_n
-        r_right_val = (result.floor_reactions[1].axial_reaction_n + result.floor_reactions[2].axial_reaction_n)/2.0 if len(result.floor_reactions) >= 4 else (result.floor_reactions[1].axial_reaction_n if len(result.floor_reactions) > 1 else result.floor_reactions[0].axial_reaction_n)
+        # Support reaction values for FBD display.
+        # These are the SUM of the reactions in each leg pair: the FBD arrows
+        # represent the total load carried by that side of the chair. Averaging
+        # them here made sum(R) exactly half the applied load (equilibrium broken).
+        if len(result.floor_reactions) >= 4:
+            r_left_val = (
+                result.floor_reactions[0].axial_reaction_n
+                + result.floor_reactions[-1].axial_reaction_n
+            )
+            r_right_val = (
+                result.floor_reactions[1].axial_reaction_n
+                + result.floor_reactions[2].axial_reaction_n
+            )
+        elif len(result.floor_reactions) >= 2:
+            r_left_val = result.floor_reactions[0].axial_reaction_n
+            r_right_val = sum(
+                r.axial_reaction_n for r in result.floor_reactions[1:]
+            )
+        else:
+            r_left_val = r_right_val = result.floor_reactions[0].axial_reaction_n
+
+        # Lateral tipping margin may legitimately not exist (balanced side loads).
+        lat_tip_val, lat_tip_verdict, lat_tip_cls = _lat_tip_display(result)
+        tip_sf_values = [
+            v for v in (result.tipping_safety_factor_fwd,
+                        result.tipping_safety_factor_rear,
+                        result.tipping_safety_factor_lat)
+            if v is not None
+        ]
+        min_tip_sf = min(tip_sf_values) if tip_sf_values else float("inf")
+
 
         # SVG Free-Body Diagram (White paper / academic style)
         svg_fbd = f"""
@@ -230,29 +284,29 @@ class AcademicAssignmentEngine:
                 <p>
                     เพื่อตรวจสอบความถูกต้องของการคำนวณเชิงทฤษฎี โครงสร้าง 3 มิติได้รับการวิเคราะห์ด้วยระเบียบวิธีไฟไนต์เอลิเมนต์แบบ Direct Stiffness Method
                     โดยกำหนดระดับความเป็นอิสระ (DOF) จำนวน 6 ระดับต่อจุดต่อ (3 การเคลื่อนที่ในแนวแกน X, Y, Z และ 3 การหมุนรอบแกน)
-                    โครงสร้างประกอบด้วย <strong>{fea_result.get('num_members', 28)} ชิ้นส่วนคาน-เสาในปริภูมิ 3 มิติ</strong> และ
-                    <strong>{fea_result.get('num_nodes', 24)} จุดต่อ (Joints)</strong> ({fea_result.get('active_free_dof', 120)} ระดับความเป็นอิสระอิสระ).
+                    โครงสร้างประกอบด้วย <strong>{fea_result.get("num_members", 28)} ชิ้นส่วนคาน-เสาในปริภูมิ 3 มิติ</strong> และ
+                    <strong>{fea_result.get("num_nodes", 24)} จุดต่อ (Joints)</strong> ({fea_result.get("active_free_dof", 120)} ระดับความเป็นอิสระอิสระ).
                 </p>
                 <div class="kpi-grid">
                     <div class="kpi-card">
                         <div class="kpi-label">Peak Von Mises Stress</div>
-                        <div class="kpi-val">{fea_result.get('max_von_mises_mpa', 0.0):.1f} <span style="font-size: 11px; color: var(--text-muted);">MPa</span></div>
+                        <div class="kpi-val">{fea_result.get("max_von_mises_mpa", 0.0):.1f} <span style="font-size: 11px; color: var(--text-muted);">MPa</span></div>
                         <div class="kpi-sub">ขีดจำกัดคราก: {m.yield_strength_mpa:.1f} MPa</div>
                     </div>
                     <div class="kpi-card">
                         <div class="kpi-label">FEA Minimum SF</div>
-                        <div class="kpi-val {'text-pass' if fea_result.get('min_safety_factor', 2.0) >= 1.5 else 'text-fail'}">{fea_result.get('min_safety_factor', 2.0):.2f}</div>
+                        <div class="kpi-val {"text-pass" if fea_result.get("min_safety_factor", 2.0) >= 1.5 else "text-fail"}">{fea_result.get("min_safety_factor", 2.0):.2f}</div>
                         <div class="kpi-sub">เกณฑ์ความปลอดภัย: &ge; 1.50</div>
                     </div>
                     <div class="kpi-card">
                         <div class="kpi-label">Max Deflection (&delta;)</div>
-                        <div class="kpi-val">{fea_result.get('max_displacement_mm', 0.0):.2f} <span style="font-size: 11px; color: var(--text-muted);">mm</span></div>
+                        <div class="kpi-val">{fea_result.get("max_displacement_mm", 0.0):.2f} <span style="font-size: 11px; color: var(--text-muted);">mm</span></div>
                         <div class="kpi-sub">ระยะแอ่นตัวสูงสุดที่ยอมรับได้: &le; {allowable_deflection_mm:.1f} mm</div>
                     </div>
                     <div class="kpi-card">
                         <div class="kpi-label">Active DOFs Solved</div>
-                        <div class="kpi-val">{fea_result.get('active_free_dof', 120)}</div>
-                        <div class="kpi-sub">Total Model DOFs: {fea_result.get('total_dof', 144)}</div>
+                        <div class="kpi-val">{fea_result.get("active_free_dof", 120)}</div>
+                        <div class="kpi-sub">Total Model DOFs: {fea_result.get("total_dof", 144)}</div>
                     </div>
                 </div>
             </div>
@@ -823,18 +877,18 @@ class AcademicAssignmentEngine:
       </div>
       <div class="kpi-card">
         <div class="kpi-label">Min Buckling SF</div>
-        <div class="kpi-val {'text-pass' if result.min_leg_buckling_sf >= 2.0 else 'text-fail'}">{result.min_leg_buckling_sf:.2f}</div>
+        <div class="kpi-val {"text-pass" if result.min_leg_buckling_sf >= 2.0 else "text-fail"}">{result.min_leg_buckling_sf:.2f}</div>
         <div class="kpi-sub">Design Target: n<sub>d</sub> &ge; 2.00</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">Min Yield SF</div>
-        <div class="kpi-val {'text-pass' if result.min_leg_yield_sf >= 2.0 else 'text-fail'}">{result.min_leg_yield_sf:.2f}</div>
+        <div class="kpi-val {"text-pass" if result.min_leg_yield_sf >= 2.0 else "text-fail"}">{result.min_leg_yield_sf:.2f}</div>
         <div class="kpi-sub">Combined P/A + M/Z</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">Anti-Tipping SF</div>
-        <div class="kpi-val {'text-pass' if min(result.tipping_safety_factor_fwd, result.tipping_safety_factor_rear, result.tipping_safety_factor_lat) >= 1.5 else 'text-fail'}">
-          {min(result.tipping_safety_factor_fwd, result.tipping_safety_factor_rear, result.tipping_safety_factor_lat):.2f}
+        <div class="kpi-val {"text-pass" if min_tip_sf >= 1.5 else "text-fail"}">
+          {min_tip_sf:.2f}
         </div>
         <div class="kpi-sub">เกณฑ์มาตรฐาน: &ge; 1.50</div>
       </div>
@@ -875,7 +929,7 @@ class AcademicAssignmentEngine:
         <tr>
           <td style="font-weight: 600;">1</td>
           <td>เสาขาโครงสร้างหลัก (Leg Columns)</td>
-          <td>{col_prof.profile_type.replace('_', ' ').title()} &Oslash;{col_prof.outer_dimension_mm:.1f} &times; {col_prof.wall_thickness_mm:.1f} mm</td>
+          <td>{col_prof.profile_type.replace("_", " ").title()} &Oslash;{col_prof.outer_dimension_mm:.1f} &times; {col_prof.wall_thickness_mm:.1f} mm</td>
           <td class="num">4</td>
           <td>{m.name}</td>
           <td>ท่อดึงเย็นไร้ตะเข็บ (Cold Drawn Seamless Tube)</td>
@@ -1102,9 +1156,9 @@ class AcademicAssignmentEngine:
         <tr>
           <td>การล้มออกด้านข้าง (Lateral Splay Tipping)</td>
           <td class="num">1.50</td>
-          <td class="num text-pass" style="font-weight: 700;">{result.tipping_safety_factor_lat:.2f}</td>
+          <td class="num {lat_tip_cls}" style="font-weight: 700;">{lat_tip_val}</td>
           <td style="text-align: center;">ISO 7173 Class B</td>
-          <td style="text-align: center; font-weight: 700;" class="text-pass">PASS</td>
+          <td style="text-align: center; font-weight: 700;" class="{lat_tip_cls}">{lat_tip_verdict}</td>
         </tr>
       </tbody>
     </table>
@@ -1135,12 +1189,12 @@ class AcademicAssignmentEngine:
         <tr>
           <td style="font-weight: 600;">เสาขาหลัก (x4) - โก่งเดาะ (Buckling)</td>
           <td>P = {max(leg.axial_reaction_n for leg in result.floor_reactions):.1f} N (Axial)</td>
-          <td class="num">{(result.floor_reactions[0].critical_buckling_load_n/1000.0):.2f} kN</td>
+          <td class="num">{(result.floor_reactions[0].critical_buckling_load_n / 1000.0):.2f} kN</td>
           <td class="num">{m.yield_strength_mpa:.1f} MPa</td>
           <td class="num">2.00</td>
-          <td class="num {'text-pass' if result.min_leg_buckling_sf >= 2.0 else 'text-fail'}" style="font-weight: 700;">{result.min_leg_buckling_sf:.2f}</td>
-          <td style="text-align: center; font-weight: 700;" class="{'text-pass' if result.min_leg_buckling_sf >= 2.0 else 'text-fail'}">
-            {'PASS' if result.min_leg_buckling_sf >= 2.0 else 'FAIL'}
+          <td class="num {"text-pass" if result.min_leg_buckling_sf >= 2.0 else "text-fail"}" style="font-weight: 700;">{result.min_leg_buckling_sf:.2f}</td>
+          <td style="text-align: center; font-weight: 700;" class="{"text-pass" if result.min_leg_buckling_sf >= 2.0 else "text-fail"}">
+            {"PASS" if result.min_leg_buckling_sf >= 2.0 else "FAIL"}
           </td>
         </tr>
         <tr>
@@ -1149,9 +1203,9 @@ class AcademicAssignmentEngine:
           <td class="num">{max(leg.combined_stress_mpa for leg in result.floor_reactions):.1f} MPa</td>
           <td class="num">{m.yield_strength_mpa:.1f} MPa</td>
           <td class="num">2.00</td>
-          <td class="num {'text-pass' if result.min_leg_yield_sf >= 2.0 else 'text-fail'}" style="font-weight: 700;">{result.min_leg_yield_sf:.2f}</td>
-          <td style="text-align: center; font-weight: 700;" class="{'text-pass' if result.min_leg_yield_sf >= 2.0 else 'text-fail'}">
-            {'PASS' if result.min_leg_yield_sf >= 2.0 else 'FAIL'}
+          <td class="num {"text-pass" if result.min_leg_yield_sf >= 2.0 else "text-fail"}" style="font-weight: 700;">{result.min_leg_yield_sf:.2f}</td>
+          <td style="text-align: center; font-weight: 700;" class="{"text-pass" if result.min_leg_yield_sf >= 2.0 else "text-fail"}">
+            {"PASS" if result.min_leg_yield_sf >= 2.0 else "FAIL"}
           </td>
         </tr>
         <tr>
@@ -1169,9 +1223,9 @@ class AcademicAssignmentEngine:
           <td class="num">{arm_stress_str}</td>
           <td class="num">{m.yield_strength_mpa:.1f} MPa</td>
           <td class="num">2.00</td>
-          <td class="num {'text-pass' if result.min_arm_sf >= 2.0 else 'text-fail'}" style="font-weight: 700;">{result.min_arm_sf:.2f}</td>
-          <td style="text-align: center; font-weight: 700;" class="{'text-pass' if result.min_arm_sf >= 2.0 else 'text-fail'}">
-            {'PASS' if result.min_arm_sf >= 2.0 else 'FAIL'}
+          <td class="num {"text-pass" if result.min_arm_sf >= 2.0 else "text-fail"}" style="font-weight: 700;">{result.min_arm_sf:.2f}</td>
+          <td style="text-align: center; font-weight: 700;" class="{"text-pass" if result.min_arm_sf >= 2.0 else "text-fail"}">
+            {"PASS" if result.min_arm_sf >= 2.0 else "FAIL"}
           </td>
         </tr>
       </tbody>
@@ -1277,11 +1331,8 @@ class AcademicAssignmentEngine:
 
     @classmethod
     def _synthesize_academic_narrative(
-        cls,
-        model: FrameDesignModel,
-        component_names: List[str],
-        use_ai: bool = True
-    ) -> Dict[str, Any]:
+        cls, model: FrameDesignModel, component_names: list[str], use_ai: bool = True
+    ) -> dict[str, Any]:
         """
         Synthesize technical introduction (บทนำ) and component engineering descriptions
         using AI (delegated to ai.narrative_synthesizer).
@@ -1293,9 +1344,9 @@ class AcademicAssignmentEngine:
         cls,
         model: FrameDesignModel,
         result: FrameSolverResult,
-        preview_image: Optional[str] = "chair_preview.png",
-        students: Optional[List[Dict[str, str]]] = None,
-        use_ai: bool = True
+        preview_image: str | None = "chair_preview.png",
+        students: list[dict[str, str]] | None = None,
+        use_ai: bool = True,
     ) -> str:
         """
         Dynamic Version 2 Academic Assignment Report Engine.
@@ -1306,7 +1357,7 @@ class AcademicAssignmentEngine:
         - Full Shigley Step 1 to Step 7 calculations per component (Geometry, Buckling, Se', Marin factors ka..kf, S-N curve 10^4 cycles, Stresses, Safety Factor)
         - Dynamic SVG V-M diagram for flexural members
         - Dynamic Summary Table at the end
-        
+
         Explicitly excludes Out Of Scope (OOS) items not present in original:
         - NO Tipping stability
         - NO 3D FEA direct stiffness mesh simulation
@@ -1319,12 +1370,13 @@ class AcademicAssignmentEngine:
         m = model.material
 
         # Collect active components dynamically from model configuration
-        active_comp_names: List[str] = [f"เสาขาโครงสร้างหลัก ({g.num_legs} ขา)"]
+        active_comp_names: list[str] = [f"เสาขาโครงสร้างหลัก ({g.num_legs} ขา)"]
         active_comp_names.append("คานโครงสร้างรองรับเบาะนั่ง")
         if g.has_stretchers:
             active_comp_names.append("คานค้ำยันรอบล่าง")
         if g.has_arms and result.armrests:
             active_comp_names.append("ชุดโครงสร้างคานยื่นที่พักแขน")
+            active_comp_names.append("แผ่นยึดเสาพักแขน")
 
         # Synthesize technical narrative using AI
         narrative = cls._synthesize_academic_narrative(model, active_comp_names, use_ai=use_ai)
@@ -1333,7 +1385,12 @@ class AcademicAssignmentEngine:
 
         # Student block
         if students:
-            student_header_html = "\n".join([f"    <div>{s.get('name', '')} &nbsp;&nbsp; {s.get('id', '')}</div>" for s in students])
+            student_header_html = "\n".join(
+                [
+                    f"    <div>{s.get('name', '')} &nbsp;&nbsp; {s.get('id', '')}</div>"
+                    for s in students
+                ]
+            )
         else:
             student_header_html = f"""    <div>คณะวิศวกรรมศาสตร์ ภาควิชาวิศวกรรมเครื่องกล</div>
     <div>โครงงานการออกแบบเครื่องจักรกล: {model.name}</div>
@@ -1346,12 +1403,20 @@ class AcademicAssignmentEngine:
         E_pa = E_gpa * 1e9
         density_g_cm3 = m.density_kg_m3 / 1000.0
 
-        sigma_f_prime = Sut + 345.0
+        sigma_f_prime = 1.5 * Sut  # Shigley: sigma_f' = 1.5 Sut (Sut <= 1400 MPa)
         Se_prime = 0.5 * Sut
-        ka = 4.51 * (Sut ** -0.265)
+        ka = 4.51 * (Sut**-0.265)
         kd = 1.0
-        ke = 1.0 - 0.08 * 1.645 # 0.8684 (95% reliability)
+        ke = 0.897  # Shigley Table 6-6, 90% reliability
         kf = 1.0
+
+        # Marin load factor: bending 1.0, axial 0.85, torsion 0.59 (Shigley Table 6-2)
+        KC_BENDING = 1.0
+        KC_AXIAL = 0.85
+
+        def kb_size(d_mm: float) -> float:
+            """Shigley size factor for 2.79 <= d <= 51 mm."""
+            return 1.24 * (d_mm**-0.107)
 
         components_html = []
         summary_rows = []
@@ -1364,11 +1429,21 @@ class AcademicAssignmentEngine:
         leg_Do_m = col_prof.outer_dimension_mm / 1000.0
         leg_t_m = col_prof.wall_thickness_mm / 1000.0
         leg_Di_m = max(0.0, leg_Do_m - 2.0 * leg_t_m)
-        unbraced_len_mm = max(100.0, g.seat_height_mm - (g.stretcher_height_mm if g.has_stretchers else 0.0))
+        unbraced_len_mm = max(
+            100.0, g.seat_height_mm - (g.stretcher_height_mm if g.has_stretchers else 0.0)
+        )
         leg_len_m = unbraced_len_mm / 1000.0
 
-        leg_A_m2 = (math.pi / 4.0) * (leg_Do_m**2 - leg_Di_m**2) if leg_Di_m > 0 else (math.pi * leg_Do_m**2 / 4.0)
-        leg_I_m4 = (math.pi / 64.0) * (leg_Do_m**4 - leg_Di_m**4) if leg_Di_m > 0 else (math.pi * leg_Do_m**4 / 64.0)
+        leg_A_m2 = (
+            (math.pi / 4.0) * (leg_Do_m**2 - leg_Di_m**2)
+            if leg_Di_m > 0
+            else (math.pi * leg_Do_m**2 / 4.0)
+        )
+        leg_I_m4 = (
+            (math.pi / 64.0) * (leg_Do_m**4 - leg_Di_m**4)
+            if leg_Di_m > 0
+            else (math.pi * leg_Do_m**4 / 64.0)
+        )
         leg_k_m = math.sqrt(leg_I_m4 / leg_A_m2)
         leg_k_factor = 0.85 if g.has_stretchers else 1.2
         leg_slenderness = (leg_k_factor * leg_len_m) / leg_k_m
@@ -1377,18 +1452,21 @@ class AcademicAssignmentEngine:
 
         if leg_slenderness < crit_slenderness:
             buckling_formula_name = "J.B. Johnson (เสากลาง)"
-            leg_Pcr_N = leg_A_m2 * ((Sy * 1e6) - (((Sy * 1e6) / (2.0 * math.pi) * leg_slenderness)**2) * (1.0 / (c_end * E_pa)))
+            leg_Pcr_N = leg_A_m2 * (
+                (Sy * 1e6)
+                - (((Sy * 1e6) / (2.0 * math.pi) * leg_slenderness) ** 2) * (1.0 / (c_end * E_pa))
+            )
         else:
             buckling_formula_name = "Euler (เสายาว)"
-            leg_Pcr_N = (math.pi**2 * c_end * E_pa * leg_I_m4) / ((leg_k_factor * leg_len_m)**2)
+            leg_Pcr_N = (math.pi**2 * c_end * E_pa * leg_I_m4) / ((leg_k_factor * leg_len_m) ** 2)
 
-        leg_kb = 1.0
-        leg_kc = 0.59 # Axial
+        leg_kb = kb_size(g.leg_profile.outer_dimension_mm)
+        leg_kc = KC_AXIAL
         leg_Se = ka * leg_kb * leg_kc * kd * ke * kf * Se_prime
         f_factor = 0.90
-        leg_a = ((f_factor * Sut * 1e6)**2) / (leg_Se * 1e6) / 1e6
+        leg_a = ((f_factor * Sut * 1e6) ** 2) / (leg_Se * 1e6) / 1e6
         leg_b = -(1.0 / 3.0) * math.log10((f_factor * Sut) / leg_Se)
-        leg_Sf = leg_a * (10000.0 ** leg_b)
+        leg_Sf = leg_a * (10000.0**leg_b)
         leg_Sf_ratio = (leg_Sf / Sut) * 100.0
         leg_Sy_fatigue = (leg_Sf / Sut) * Sy
 
@@ -1396,9 +1474,13 @@ class AcademicAssignmentEngine:
         max_leg_stress_mpa = max(r.combined_stress_mpa for r in result.floor_reactions)
         leg_buckling_sf = leg_Pcr_N / max(1.0, max_leg_reaction_N)
         leg_yield_sf = Sy / max(0.1, max_leg_stress_mpa)
+        self_weight_N = result.total_chair_weight_n
+        total_down_N = result.total_downward_load_n
 
-        col_desc = comp_descs.get("columns", f"ทำหน้าที่ถ่ายทอดน้ำหนักบรรทุกแนวดิ่งทั้งหมดลงสู่พื้นผิวสัมผัส จัดวางจำนวน {g.num_legs} เสา")
-        
+        col_desc = comp_descs.get(
+            "columns", f"ทำหน้าที่ถ่ายทอดน้ำหนักบรรทุกแนวดิ่งทั้งหมดลงสู่พื้นผิวสัมผัส จัดวางจำนวน {g.num_legs} เสา"
+        )
+
         col_html = f"""
   <h2 class="part-title">{part_idx}. เสาขาโครงสร้างหลัก ({g.num_legs} ขา) (Leg Columns)</h2>
   <p>{col_desc}</p>
@@ -1412,6 +1494,9 @@ class AcademicAssignmentEngine:
     <tr><td>Tensile Strength, Ultimate ( Sut )</td><td class="text-right">{Sut:.0f} MPa</td></tr>
     <tr><td>Tensile Strength, Yield ( Sy )</td><td class="text-right">{Sy:.0f} MPa</td></tr>
     <tr><td>Modulus of Elasticity ( E )</td><td class="text-right">{E_gpa:.0f} GPa</td></tr>
+    <tr><td>Poisson's Ratio</td><td class="text-right">{m.poissons_ratio:.2f}</td></tr>
+    <tr><td>น้ำหนักตัวเองของโครงสร้าง</td><td class="text-right">{self_weight_N:.1f} N</td></tr>
+    <tr><td>แรงลงรวมทั้งหมด</td><td class="text-right">{total_down_N:.1f} N</td></tr>
   </table>
 
   <h3 class="step-title">Step 1 : หา Di และคุณสมบัติหน้าตัด</h3>
@@ -1422,25 +1507,25 @@ class AcademicAssignmentEngine:
     k = &radic;(I / A) = {leg_k_m:.5f} m<br>
     L<sub>eff</sub> = K &times; l = {leg_k_factor:.2f} &times; {leg_len_m:.3f} = {leg_k_factor * leg_len_m:.3f} m<br>
     (l / k)<sub>eff</sub> = L<sub>eff</sub> / k = {(leg_k_factor * leg_len_m):.3f} / {leg_k_m:.5f} = {leg_slenderness:.2f}<br>
-    (l / k)&sub1; = &radic;[ 2 &pi;&sup2; C E / Sy ] = {crit_slenderness:.2f} &nbsp;&nbsp;&nbsp;; C = {c_end:.1f}<br>
-    (l / k)<sub>eff</sub> {'&lt;' if leg_slenderness < crit_slenderness else '&ge;'} (l / k)&sub1; &nbsp;&nbsp; ใช้สูตร {buckling_formula_name}
+    (l / k)<sub>1</sub> = &radic;[ 2 &pi;&sup2; C E / Sy ] = {crit_slenderness:.2f} &nbsp;&nbsp;&nbsp;; C = {c_end:.1f}<br>
+    (l / k)<sub>eff</sub> {"&lt;" if leg_slenderness < crit_slenderness else "&ge;"} (l / k)<sub>1</sub> &nbsp;&nbsp; ใช้สูตร {buckling_formula_name}
   </div>
 
   <h3 class="step-title">Step 2 : หาการโก่งเดาะของเสาขาโครงสร้าง (Deflection & Buckling)</h3>
   <div class="math-block">
-    Pcr = {leg_Pcr_N:.2f} N = {(leg_Pcr_N/1000.0):.2f} kN
+    Pcr = {leg_Pcr_N:.2f} N = {(leg_Pcr_N / 1000.0):.2f} kN
   </div>
 
   <h3 class="step-title">Step 3 : หา Endurance limit พื้นฐาน ( Se' และ &sigma;f' )</h3>
   <div class="math-block">
-    &sigma;f' = Sut + 345 MPa = {sigma_f_prime:.1f} MPa<br>
+    &sigma;f' = 1.5 Sut = {sigma_f_prime:.1f} MPa<br>
     Se' = 0.5 Sut = {Se_prime:.1f} MPa
   </div>
 
   <h3 class="step-title">Step 4 : หา Actual endurance limit ( Se )</h3>
   <div class="math-block">
     ka = 4.51({Sut:.0f})⁻⁰·²⁶⁵ = {ka:.3f}<br>
-    kb = {leg_kb:.1f} (Axial) , kc = {leg_kc:.2f} (Axial) , kd = {kd:.1f} , ke = {ke:.3f} (95% Reliability) , kf = {kf:.1f}<br>
+    kb = 1.24&middot;d<sup>-0.107</sup> = {leg_kb:.3f} (d = {g.leg_profile.outer_dimension_mm:.0f} mm) , kc = {leg_kc:.2f} (Axial) , kd = {kd:.1f} , ke = {ke:.3f} (90% Reliability) , kf = {kf:.1f}<br>
     Se = ka kb kc kd ke kf Se' = {leg_Se:.2f} MPa
   </div>
 
@@ -1449,13 +1534,13 @@ class AcademicAssignmentEngine:
     a = (f Sut)&sup2; / Se = {leg_a:.2f} MPa<br>
     b = - (1/3) log₁₀( f Sut / Se ) = {leg_b:.4f}<br>
     Sf = a Nᵇ = {leg_Sf:.2f} MPa &rarr; ({leg_Sf:.2f} / {Sut:.0f}) &times; 100 = {leg_Sf_ratio:.2f} %<br>
-    Sy' = ({leg_Sf_ratio/100.0:.4f})({Sy:.0f}) = {leg_Sy_fatigue:.2f} MPa
+    Sy' = ({leg_Sf_ratio / 100.0:.4f})({Sy:.0f}) = {leg_Sy_fatigue:.2f} MPa
   </div>
 
   <h3 class="step-title">Step 6 : หาความเค้นในเสาขา (Column Stress)</h3>
   <div class="math-block">
     แรงกดสูงสุดต่อเสาขา P = {max_leg_reaction_N:.1f} N<br>
-    &sigma;axial = P / A = {(max_leg_reaction_N/leg_A_m2)/1e6:.2f} MPa<br>
+    &sigma;axial = P / A = {(max_leg_reaction_N / leg_A_m2) / 1e6:.2f} MPa<br>
     ความเค้นรวมสูงสุด &sigma;max = {max_leg_stress_mpa:.2f} MPa
   </div>
 
@@ -1466,14 +1551,31 @@ class AcademicAssignmentEngine:
   </div>
 """
         components_html.append(col_html)
-        summary_rows.append((f"{part_idx}. เสาขาโครงสร้างหลัก (Buckling Pcr)", 2.00, leg_buckling_sf, "PASS" if leg_buckling_sf >= 2.0 else "FAIL"))
-        summary_rows.append((f"   เสาขาโครงสร้างหลัก (Yield Stress)", 2.00, leg_yield_sf, "PASS" if leg_yield_sf >= 2.0 else "FAIL"))
+        summary_rows.append(
+            (
+                f"{part_idx}. เสาขาโครงสร้างหลัก (Buckling Pcr)",
+                2.00,
+                leg_buckling_sf,
+                "PASS" if leg_buckling_sf >= 2.0 else "FAIL",
+            )
+        )
+        summary_rows.append(
+            (
+                "   เสาขาโครงสร้างหลัก (Yield Stress)",
+                1.50,
+                leg_yield_sf,
+                "PASS" if leg_yield_sf >= 1.5 else "FAIL",
+            )
+        )
         part_idx += 1
 
         # -------------------------------------------------------------
         # Part 2: Platform / Seat Support Rails
+        # Span is the seat WIDTH: the rails run front-to-back on each
+        # side and carry half the seat load across the leg pair, so the
+        # analysed span must match the solver's `seat_width_mm`.
         # -------------------------------------------------------------
-        seat_w_m = g.seat_depth_mm / 1000.0
+        rail_span_m = g.seat_width_mm / 1000.0
         beam_w_m = g.frame_profile.outer_dimension_mm / 1000.0
         beam_t_m = g.frame_profile.wall_thickness_mm / 1000.0
         beam_wi_m = max(0.0, beam_w_m - 2.0 * beam_t_m)
@@ -1482,25 +1584,33 @@ class AcademicAssignmentEngine:
         beam_c_m = beam_w_m / 2.0
         beam_Z_m3 = beam_I_m4 / beam_c_m
 
+        # Central point load, simply supported: M_max = P L / 4. This is the
+        # same idealisation the frame solver uses, so the two cannot drift.
         seat_load_per_rail_N = (l.seat_vertical_load_n) / 2.0
-        beam_w_dist_N_m = seat_load_per_rail_N / seat_w_m
-        beam_R_N = seat_load_per_rail_N / 2.0
-        beam_M_max_Nm = (beam_w_dist_N_m * (seat_w_m**2)) / 8.0
+        beam_P_N = seat_load_per_rail_N
+        beam_R_N = beam_P_N / 2.0
+        beam_M_max_Nm = (beam_P_N * rail_span_m) / 4.0
         beam_sigma_max_mpa = (beam_M_max_Nm * beam_c_m / beam_I_m4) / 1e6
         beam_tau_max_mpa = (beam_R_N / max(1e-6, 2.0 * beam_w_m * beam_t_m)) / 1e6
-        beam_principle_mpa = (beam_sigma_max_mpa / 2.0) + math.sqrt((beam_sigma_max_mpa / 2.0)**2 + (beam_tau_max_mpa)**2)
+        beam_principle_mpa = (beam_sigma_max_mpa / 2.0) + math.sqrt(
+            (beam_sigma_max_mpa / 2.0) ** 2 + (beam_tau_max_mpa) ** 2
+        )
+        beam_delta_mm = (beam_P_N * (rail_span_m**3)) / (48.0 * E_pa * beam_I_m4) * 1000.0
+        beam_delta_limit_mm = g.seat_width_mm / 250.0
 
-        beam_kb = 1.24 * ((beam_w_m * 1000.0) ** -0.107)
-        beam_kc = 1.0 # Bending
+        beam_kb = kb_size(g.frame_profile.outer_dimension_mm)
+        beam_kc = KC_BENDING
         beam_Se = ka * beam_kb * beam_kc * kd * ke * kf * Se_prime
-        beam_a = ((f_factor * Sut * 1e6)**2) / (beam_Se * 1e6) / 1e6
+        beam_a = ((f_factor * Sut * 1e6) ** 2) / (beam_Se * 1e6) / 1e6
         beam_b = -(1.0 / 3.0) * math.log10((f_factor * Sut) / beam_Se)
-        beam_Sf = beam_a * (10000.0 ** beam_b)
+        beam_Sf = beam_a * (10000.0**beam_b)
         beam_Sf_ratio = (beam_Sf / Sut) * 100.0
         beam_Sy_fatigue = (beam_Sf / Sut) * Sy
-        beam_sf = Sy / max(0.1, beam_principle_mpa)
+        beam_sf = Sy / max(0.1, beam_sigma_max_mpa)
 
-        rail_desc = comp_descs.get("seat_rails", "ทำหน้าที่รองรับแรงกดกระจายตัวสม่ำเสมอด้านบนและส่งถ่ายแรงไปยังหัวเสารองรับ")
+        rail_desc = comp_descs.get(
+            "seat_rails", "ทำหน้าที่รองรับแรงกดกระจายตัวสม่ำเสมอด้านบนและส่งถ่ายแรงไปยังหัวเสารองรับ"
+        )
 
         beam_html = f"""
   <div class="page-break"></div>
@@ -1508,7 +1618,7 @@ class AcademicAssignmentEngine:
   <p>{rail_desc}</p>
   <p><strong>ขนาดของ คานโครงสร้างรองรับเบาะนั่ง</strong><br>
     ความหนา = {beam_t_m:.4f} m<br>
-    w = {beam_w_m:.3f} m , h = {beam_w_m:.3f} m , l = {seat_w_m:.3f} m
+    w = {beam_w_m:.3f} m , h = {beam_w_m:.3f} m , l = {rail_span_m:.3f} m (ช่วงใน = ความกว้างที่นั่ง)
   </p>
   <p><strong>Material : {m.name} (เหล็กกล่อง {g.frame_profile.outer_dimension_mm:.0f} &times; {g.frame_profile.outer_dimension_mm:.0f} &times; {g.frame_profile.wall_thickness_mm:.1f} mm)</strong></p>
 
@@ -1519,10 +1629,10 @@ class AcademicAssignmentEngine:
 
   <h3 class="step-title">Step 2 : หาแรงที่กระทำและ V-M diagram</h3>
   <div class="math-block">
-    ภาระต่อคาน W = {seat_load_per_rail_N:.1f} N &rarr; w = {beam_w_dist_N_m:.2f} N/m<br>
+    ภาระกดกลางคานต่อคาน P = {beam_P_N:.1f} N (ครึ่งหนึ่งของภาระที่นั่ง {l.seat_vertical_load_n:.0f} N)<br>
     R₁ = R₂ = {beam_R_N:.2f} N<br>
-    V(x) = R₁ - w x &rarr; Vmax = {beam_R_N:.2f} N<br>
-    M(x) = R₁ x - (w x&sup2;) / 2 &rarr; Mmax = {beam_M_max_Nm:.2f} N&middot;m
+    V(x) = R₁ &minus; P (x / l) &rarr; Vmax = {beam_R_N:.2f} N<br>
+    M(x) = R₁ x &minus; P x&sup2; / (2 l) &rarr; Mmax = P l / 4 = {beam_M_max_Nm:.2f} N&middot;m
   </div>
 
   <div style="margin: 12px 0; text-align: center;">
@@ -1531,6 +1641,8 @@ class AcademicAssignmentEngine:
       <polygon points="50,45 50,20 300,45 550,70 550,45" fill="rgba(2, 132, 199, 0.15)" stroke="#0284c7" stroke-width="1.5" />
       <text x="55" y="16" font-size="11" font-family="monospace">+{beam_R_N:.1f} N</text>
       <text x="500" y="85" font-size="11" font-family="monospace">-{beam_R_N:.1f} N</text>
+      <line x1="300" y1="45" x2="300" y2="24" stroke="#dc2626" stroke-width="2" />
+      <text x="272" y="16" font-size="11" font-family="monospace">P = {beam_P_N:.1f} N</text>
       <line x1="50" y1="120" x2="550" y2="120" stroke="#000000" stroke-width="1.5" />
       <path d="M 50 120 Q 300 65 550 120" fill="rgba(22, 163, 74, 0.15)" stroke="#16a34a" stroke-width="1.5" />
       <text x="300" y="75" font-size="11" text-anchor="middle" font-family="monospace">Mmax = {beam_M_max_Nm:.2f} N·m</text>
@@ -1552,19 +1664,33 @@ class AcademicAssignmentEngine:
     &sigma;principle = &sigma;max / 2 + &radic;[ (&sigma;max / 2)&sup2; + (&tau;max)&sup2; ] = {beam_principle_mpa:.2f} MPa
   </div>
 
-  <h3 class="step-title">Step 6 : หา Actual endurance limit ( Se ) และ Fatigue Strength ( Sf )</h3>
+  <h3 class="step-title">Step 6 : หาการเบี่ยงเบนตามเกณฑ์การใช้งาน (Serviceability)</h3>
   <div class="math-block">
-    kb = {beam_kb:.3f} , kc = {beam_kc:.1f} (Bending) &rarr; Se = {beam_Se:.2f} MPa<br>
+    &delta; = P l&sup3; / (48 E I) = {beam_delta_mm:.4f} mm<br>
+    เกณฑ์ l / 250 = {beam_delta_limit_mm:.4f} mm &rarr; &delta; {"&lt;" if beam_delta_mm < beam_delta_limit_mm else "&ge;"} เกณฑ์ {"ผ่าน" if beam_delta_mm < beam_delta_limit_mm else "ไม่ผ่าน"}
+  </div>
+
+  <h3 class="step-title">Step 7 : หา Actual endurance limit ( Se ) และ Fatigue Strength ( Sf )</h3>
+  <div class="math-block">
+    kb = {beam_kb:.3f} (d = {g.frame_profile.outer_dimension_mm:.0f} mm) , kc = {beam_kc:.1f} (Bending) &rarr; Se = {beam_Se:.2f} MPa<br>
     Sf = a Nᵇ = {beam_Sf:.2f} MPa ({beam_Sf_ratio:.2f} %) &rarr; Sy' = {beam_Sy_fatigue:.2f} MPa
   </div>
 
-  <h3 class="step-title">Step 7 : หา Safety Factor</h3>
+  <h3 class="step-title">Step 8 : หา Safety Factor</h3>
   <div class="math-block">
-    ns = Sy / &sigma;principle = {Sy:.0f} / {beam_principle_mpa:.2f} = {beam_sf:.2f}
+    ns = Sy / &sigma;max = {Sy:.0f} / {beam_sigma_max_mpa:.2f} = {beam_sf:.2f}<br>
+    (เมื่อรวมแรงเฉือน &sigma;principle = {beam_principle_mpa:.2f} MPa ค่า n ลดลงเล็กน้อย)
   </div>
 """
         components_html.append(beam_html)
-        summary_rows.append((f"{part_idx}. คานโครงสร้างรองรับเบาะนั่ง", 2.00, beam_sf, "PASS" if beam_sf >= 2.0 else "FAIL"))
+        summary_rows.append(
+            (
+                f"{part_idx}. คานโครงสร้างรองรับเบาะนั่ง",
+                2.00,
+                beam_sf,
+                "PASS" if beam_sf >= 2.0 else "FAIL",
+            )
+        )
         part_idx += 1
 
         # -------------------------------------------------------------
@@ -1575,30 +1701,49 @@ class AcademicAssignmentEngine:
             str_Do_m = str_prof.outer_dimension_mm / 1000.0
             str_t_m = str_prof.wall_thickness_mm / 1000.0
             str_Di_m = max(0.0, str_Do_m - 2.0 * str_t_m)
-            str_len_m = g.seat_depth_mm / 1000.0
-            str_A_m2 = (math.pi / 4.0) * (str_Do_m**2 - str_Di_m**2) if str_Di_m > 0 else (math.pi * str_Do_m**2 / 4.0)
-            str_I_m4 = (math.pi / 64.0) * (str_Do_m**4 - str_Di_m**4) if str_Di_m > 0 else (math.pi * str_Do_m**4 / 64.0)
+            # Clear span between the splayed leg axes, matching the data sheet.
+            str_len_m = (
+                g.seat_width_mm
+                + 2.0
+                * (g.seat_height_mm - g.stretcher_height_mm)
+                * math.tan(math.radians(g.leg_splay_angle_deg))
+            ) / 1000.0
+            str_A_m2 = (
+                (math.pi / 4.0) * (str_Do_m**2 - str_Di_m**2)
+                if str_Di_m > 0
+                else (math.pi * str_Do_m**2 / 4.0)
+            )
+            str_I_m4 = (
+                (math.pi / 64.0) * (str_Do_m**4 - str_Di_m**4)
+                if str_Di_m > 0
+                else (math.pi * str_Do_m**4 / 64.0)
+            )
             str_c_m = str_Do_m / 2.0
             str_Z_m3 = str_I_m4 / str_c_m
+            str_k_m = math.sqrt(str_I_m4 / str_A_m2)
+            str_kfac = 0.85 if g.has_stretchers else 1.2
+            str_slenderness = (str_kfac * str_len_m) / str_k_m
 
-            str_F_foot_N = 300.0
-            str_R_N = str_F_foot_N / 2.0
-            str_M_max_Nm = (str_F_foot_N * str_len_m) / 4.0
-            str_sigma_max_mpa = (str_M_max_Nm * str_c_m / str_I_m4) / 1e6
-            str_tau_max_mpa = (2.0 * str_R_N / str_A_m2) / 1e6
-            str_principle_mpa = (str_sigma_max_mpa / 2.0) + math.sqrt((str_sigma_max_mpa / 2.0)**2 + (str_tau_max_mpa)**2)
+            # The stretcher braces the legs, so it is governed by compression
+            # buckling, not by a transverse foot impact.
+            str_F_axial_N = l.backrest_force_n / 2.0
+            if str_slenderness < crit_slenderness:
+                str_Pcr_N = str_A_m2 * (
+                    (Sy * 1e6)
+                    - (((Sy * 1e6) / (2.0 * math.pi) * str_slenderness) ** 2)
+                    * (1.0 / (c_end * E_pa))
+                )
+            else:
+                str_Pcr_N = (math.pi**2 * c_end * E_pa * str_I_m4) / ((str_kfac * str_len_m) ** 2)
+            str_sigma_axial_mpa = (str_F_axial_N / str_A_m2) / 1e6
+            str_sf = Sy / max(0.1, str_sigma_axial_mpa)
+            str_sf_buckling = str_Pcr_N / max(1.0, str_F_axial_N)
+            str_sf_governing = min(str_sf, str_sf_buckling)
 
-            str_kb = 1.24 * ((str_Do_m * 1000.0) ** -0.107)
-            str_kc = 1.0 # Bending
-            str_Se = ka * str_kb * str_kc * kd * ke * kf * Se_prime
-            str_a = ((f_factor * Sut * 1e6)**2) / (str_Se * 1e6) / 1e6
-            str_b = -(1.0 / 3.0) * math.log10((f_factor * Sut) / str_Se)
-            str_Sf = str_a * (10000.0 ** str_b)
-            str_Sf_ratio = (str_Sf / Sut) * 100.0
-            str_Sy_fatigue = (str_Sf / Sut) * Sy
-            str_sf = Sy / max(0.1, str_principle_mpa)
-
-            str_desc = comp_descs.get("stretchers", "ทำหน้าที่ยึดตรึงระหว่างเสาโครงสร้างเพื่อลดความยาวประสิทธิผลของเสา")
+            str_desc = comp_descs.get(
+                "stretchers",
+                "ทำหน้าที่ยึดตรึงระหว่างเสาโครงสร้างเพื่อลดความยาวประสิทธิผลของเสา และรับแรงดันตามแกนจากพลังหลังนั่ง โดยการโก่งเดาะเป็นตัวกำหนดความแข็งแรง",
+            )
 
             str_html = f"""
   <div class="page-break"></div>
@@ -1612,75 +1757,93 @@ class AcademicAssignmentEngine:
 
   <h3 class="step-title">Step 1 : หาคุณสมบัติหน้าตัด</h3>
   <div class="math-block">
-    A = {str_A_m2:.3e} m&sup2; , I = {str_I_m4:.3e} m&sup4; , c = {str_c_m:.4f} m , Z = {str_Z_m3:.3e} m&sup3;
+    A = {str_A_m2:.3e} m&sup2; , I = {str_I_m4:.3e} m&sup4; , c = {str_c_m:.4f} m , Z = {str_Z_m3:.3e} m&sup3;<br>
+    k = &radic;(I / A) = {str_k_m:.5f} m<br>
+    L<sub>eff</sub> = K &times; l = {str_kfac:.2f} &times; {str_len_m:.3f} = {str_kfac * str_len_m:.3f} m<br>
+    (l / k)<sub>eff</sub> = {str_kfac * str_len_m:.3f} / {str_k_m:.5f} = {str_slenderness:.2f}<br>
+    (l / k)<sub>1</sub> = {crit_slenderness:.2f} &nbsp;&nbsp;&rarr; {"ใช้สูตร J.B. Johnson (เสากลาง)" if str_slenderness < crit_slenderness else "ใช้สูตร Euler (เสายาว)"}
   </div>
 
-  <h3 class="step-title">Step 2 : หาแรงที่กระทำและ V-M diagram</h3>
+  <h3 class="step-title">Step 2 : หาแรงอัดตามแกน</h3>
   <div class="math-block">
-    แรงเหยียบกระแทกเท้ากึ่งกลางคาน F = {str_F_foot_N:.0f} N &rarr; R₁ = R₂ = {str_R_N:.1f} N<br>
-    Mmax = (F l) / 4 = {str_M_max_Nm:.2f} N&middot;m
+    คานค้ำยันรับแรงดันจากพลังหลังนั่ง แบ่งสองข้าง F = {l.backrest_force_n:.0f} N / 2 = {str_F_axial_N:.1f} N
   </div>
 
-  <h3 class="step-title">Step 3 : หา Maximum normal stress</h3>
+  <h3 class="step-title">Step 3 : หาการโก่งเดาะ (Buckling)</h3>
   <div class="math-block">
-    &sigma;max = (Mmax c) / I = {str_sigma_max_mpa:.2f} MPa
+    P<sub>cr</sub> = {str_Pcr_N:.1f} N = {(str_Pcr_N / 1000.0):.2f} kN
   </div>
 
-  <h3 class="step-title">Step 4 : หา Maximum shear stress</h3>
+  <h3 class="step-title">Step 4 : หาความเค้นตามแกน</h3>
   <div class="math-block">
-    &tau;max = (2 V) / A = {str_tau_max_mpa:.2f} MPa
+    &sigma;axial = F / A = {str_sigma_axial_mpa:.2f} MPa
   </div>
 
-  <h3 class="step-title">Step 5 : หา &sigma;principle</h3>
+  <h3 class="step-title">Step 5 : หา Safety Factor</h3>
   <div class="math-block">
-    &sigma;principle = &sigma;max / 2 + &radic;[ (&sigma;max / 2)&sup2; + (&tau;max)&sup2; ] = {str_principle_mpa:.2f} MPa
-  </div>
-
-  <h3 class="step-title">Step 6 : หา Actual endurance limit ( Se ) และ Fatigue Strength ( Sf )</h3>
-  <div class="math-block">
-    kb = {str_kb:.3f} , kc = {str_kc:.1f} &rarr; Se = {str_Se:.2f} MPa<br>
-    Sf = {str_Sf:.2f} MPa ({str_Sf_ratio:.2f} %) &rarr; Sy' = {str_Sy_fatigue:.2f} MPa
-  </div>
-
-  <h3 class="step-title">Step 7 : หา Safety Factor</h3>
-  <div class="math-block">
-    ns = Sy / &sigma;principle = {Sy:.0f} / {str_principle_mpa:.2f} = {str_sf:.2f}
+    ns (Yield) = Sy / &sigma;axial = {Sy:.0f} / {str_sigma_axial_mpa:.2f} = {str_sf:.2f}<br>
+    ns (Buckling) = P<sub>cr</sub> / F = {str_Pcr_N:.1f} / {str_F_axial_N:.1f} = {str_sf_buckling:.2f}
   </div>
 """
             components_html.append(str_html)
-            summary_rows.append((f"{part_idx}. คานค้ำยันรอบล่าง (Stretcher)", 2.00, str_sf, "PASS" if str_sf >= 2.0 else "FAIL"))
+            summary_rows.append(
+                (
+                    f"{part_idx}. คานค้ำยันรอบล่าง (Stretcher)",
+                    2.00,
+                    str_sf_governing,
+                    "PASS" if str_sf_governing >= 2.0 else "FAIL",
+                )
+            )
             part_idx += 1
 
         # -------------------------------------------------------------
         # Part 4: Armrest Cantilever Struts (if present)
         # -------------------------------------------------------------
         if g.has_arms and result.armrests:
+            ares = result.armrests[0]
             arm_prof = g.arm_profile
             arm_Do_m = arm_prof.outer_dimension_mm / 1000.0
             arm_t_m = arm_prof.wall_thickness_mm / 1000.0
             arm_Di_m = max(0.0, arm_Do_m - 2.0 * arm_t_m)
             arm_overhang_m = g.armrest_overhang_front_mm / 1000.0
-            arm_A_m2 = (math.pi / 4.0) * (arm_Do_m**2 - arm_Di_m**2) if arm_Di_m > 0 else (math.pi * arm_Do_m**2 / 4.0)
-            arm_I_m4 = (math.pi / 64.0) * (arm_Do_m**4 - arm_Di_m**4) if arm_Di_m > 0 else (math.pi * arm_Do_m**4 / 64.0)
+            arm_A_m2 = (
+                (math.pi / 4.0) * (arm_Do_m**2 - arm_Di_m**2)
+                if arm_Di_m > 0
+                else (math.pi * arm_Do_m**2 / 4.0)
+            )
+            arm_I_m4 = (
+                (math.pi / 64.0) * (arm_Do_m**4 - arm_Di_m**4)
+                if arm_Di_m > 0
+                else (math.pi * arm_Do_m**4 / 64.0)
+            )
             arm_c_m = arm_Do_m / 2.0
             arm_Z_m3 = arm_I_m4 / arm_c_m
 
+            arm_ag = resolve_armrest(g)
+            front_frac, rear_frac = arm_ag.post_reaction_fractions(l.left_arm_load_y_mm)
             arm_v_load_N = l.left_arm_vertical_n
-            arm_M_max_Nm = arm_v_load_N * arm_overhang_m
-            arm_sigma_cantilever_mpa = (arm_M_max_Nm * arm_c_m / arm_I_m4) / 1e6
-            arm_strut_stress_mpa = result.armrests[0].strut_combined_stress_mpa if result.armrests else 40.83
-            arm_sf = result.armrests[0].arm_safety_factor if result.armrests else (Sy / arm_strut_stress_mpa)
+            arm_lat_load_N = abs(l.left_arm_lateral_n)
+            arm_post_h_m = g.armrest_height_above_seat_mm / 1000.0
+            arm_M_cant_Nm = ares.overhang_moment_nm
+            arm_M_base_Nm = ares.strut_base_moment_nm
+            arm_F_gov_N = arm_v_load_N * front_frac
+            arm_sigma_axial_mpa = ares.strut_axial_stress_mpa
+            arm_sigma_bend_mpa = ares.strut_bending_stress_mpa
+            arm_sigma_total_mpa = ares.strut_combined_stress_mpa
+            arm_sf = ares.arm_safety_factor
 
-            arm_kb = 1.24 * ((arm_Do_m * 1000.0) ** -0.107)
-            arm_kc = 1.0 # Bending
+            arm_kb = kb_size(g.arm_profile.outer_dimension_mm)
+            arm_kc = KC_BENDING
             arm_Se = ka * arm_kb * arm_kc * kd * ke * kf * Se_prime
-            arm_a = ((f_factor * Sut * 1e6)**2) / (arm_Se * 1e6) / 1e6
+            arm_a = ((f_factor * Sut * 1e6) ** 2) / (arm_Se * 1e6) / 1e6
             arm_b = -(1.0 / 3.0) * math.log10((f_factor * Sut) / arm_Se)
-            arm_Sf = arm_a * (10000.0 ** arm_b)
+            arm_Sf = arm_a * (10000.0**arm_b)
             arm_Sf_ratio = (arm_Sf / Sut) * 100.0
             arm_Sy_fatigue = (arm_Sf / Sut) * Sy
 
-            arm_desc = comp_descs.get("armrests", "ทำหน้าที่รองรับแรงกดแนวดิ่งและแรงผลักด้านข้างจากแขนผู้ใช้งาน")
+            arm_desc = comp_descs.get(
+                "armrests", "ทำหน้าที่รองรับแรงกดแนวดิ่งและแรงผลักด้านข้างจากแขนผู้ใช้งาน"
+            )
 
             arm_html = f"""
   <div class="page-break"></div>
@@ -1697,42 +1860,128 @@ class AcademicAssignmentEngine:
     A = {arm_A_m2:.3e} m&sup2; , I = {arm_I_m4:.3e} m&sup4; , c = {arm_c_m:.4f} m , Z = {arm_Z_m3:.3e} m&sup3;
   </div>
 
-  <h3 class="step-title">Step 2 : หาแรงและโมเมนต์ดัดคานยื่น</h3>
+  <h3 class="step-title">Step 2 : หาแรงกดที่กระจายลงเสาหน้าและเสาหลัง</h3>
   <div class="math-block">
-    Fv = {arm_v_load_N:.1f} N &rarr; M = Fv &times; loverhang = {arm_M_max_Nm:.2f} N&middot;m
+    เสาหน้า y = {arm_ag.front_post_y_mm:.1f} mm , เสาหลัง y = {arm_ag.rear_post_y_mm:.1f} mm , จุดกด y = {l.left_arm_load_y_mm:.1f} mm<br>
+    เสาหน้ารับสัดส่วน = {front_frac:.4f} &rarr; {arm_F_gov_N:.1f} N (เป็นเสาที่รับแรงมากที่สุด)<br>
+    เสาหลังรับสัดส่วน = {rear_frac:.4f} &rarr; {arm_v_load_N * rear_frac:.1f} N
   </div>
 
-  <h3 class="step-title">Step 3 : หา Maximum bending stress และ Spatial strut combined stress</h3>
+  <h3 class="step-title">Step 3 : หาโมเมนต์ที่ฐานเสา (Spatial strut)</h3>
   <div class="math-block">
-    &sigma;bending = (M c) / I = {arm_sigma_cantilever_mpa:.2f} MPa<br>
-    &sigma;combined = {arm_strut_stress_mpa:.2f} MPa
+    M<sub>cantilever</sub> = Fv &times; loverhang = {arm_v_load_N:.1f} &times; {arm_overhang_m:.3f} = {arm_M_cant_Nm:.2f} N&middot;m<br>
+    M<sub>base</sub> = &radic;[ (Flat &times; h)&sup2; + M<sub>cantilever</sub>&sup2; ] = &radic;[ ({arm_lat_load_N:.1f} &times; {arm_post_h_m:.3f})&sup2; + {arm_M_cant_Nm:.2f}&sup2; ] = {arm_M_base_Nm:.3f} N&middot;m
   </div>
 
-  <h3 class="step-title">Step 4 : หา Actual endurance limit ( Se ) และ Fatigue Strength ( Sf )</h3>
+  <h3 class="step-title">Step 4 : หาความเค้นรวมของเสาพัก (linear superposition)</h3>
   <div class="math-block">
-    kb = {arm_kb:.3f} , kc = {arm_kc:.1f} &rarr; Se = {arm_Se:.2f} MPa<br>
+    &sigma;axial = F<sub>gov</sub> / A = {arm_F_gov_N:.1f} / {arm_A_m2 * 1e6:.2f} mm&sup2; = {arm_sigma_axial_mpa:.3f} MPa<br>
+    &sigma;bending = (M<sub>base</sub> / 2) / Z = ({arm_M_base_Nm:.3f} / 2) &times; 1e3 / {arm_Z_m3 * 1e9:.2f} mm&sup3; = {arm_sigma_bend_mpa:.3f} MPa<br>
+    &sigma;combined = &sigma;axial + &sigma;bending = {arm_sigma_axial_mpa:.3f} + {arm_sigma_bend_mpa:.3f} = {arm_sigma_total_mpa:.3f} MPa
+  </div>
+
+  <h3 class="step-title">Step 5 : หา Actual endurance limit ( Se ) และ Fatigue Strength ( Sf )</h3>
+  <div class="math-block">
+    kb = {arm_kb:.3f} (d = {g.arm_profile.outer_dimension_mm:.0f} mm) , kc = {arm_kc:.1f} (Bending) &rarr; Se = {arm_Se:.2f} MPa<br>
     Sf = {arm_Sf:.2f} MPa ({arm_Sf_ratio:.2f} %) &rarr; Sy' = {arm_Sy_fatigue:.2f} MPa
   </div>
 
-  <h3 class="step-title">Step 5 : หา Safety Factor</h3>
+  <h3 class="step-title">Step 6 : หา Safety Factor</h3>
   <div class="math-block">
-    ns = Sy / &sigma;combined = {Sy:.0f} / {arm_strut_stress_mpa:.2f} = {arm_sf:.2f}
+    ns = Sy / &sigma;combined = {Sy:.0f} / {arm_sigma_total_mpa:.2f} = {arm_sf:.2f}
   </div>
 """
             components_html.append(arm_html)
-            summary_rows.append((f"{part_idx}. ชุดโครงสร้างคานยื่นที่พักแขน", 2.00, arm_sf, "PASS" if arm_sf >= 2.0 else "FAIL"))
+            summary_rows.append(
+                (
+                    f"{part_idx}. ชุดโครงสร้างคานยื่นที่พักแขน",
+                    2.00,
+                    arm_sf,
+                    "PASS" if arm_sf >= 2.0 else "FAIL",
+                )
+            )
+            part_idx += 1
+
+            # -------------------------------------------------------------
+            # Part 5: Arm Mounting Bracket — the governing arm member.
+            # Each arm post carries one bracket plate, so the plate bonded to
+            # the governing post carries that post's full axial share (lever
+            # rule) and the base moment that post actually resists (M_base/2).
+            # -------------------------------------------------------------
+            bW_mm = g.armrest_bracket_thickness_mm
+            bH_mm = g.armrest_bracket_height_mm
+            bL_mm = arm_ag.bracket_len_mm
+            brk_I_mm4 = bW_mm * bH_mm**3 / 12.0
+            brk_c_mm = bH_mm / 2.0
+            brk_Z_mm3 = brk_I_mm4 / brk_c_mm
+            brk_A_cross_mm2 = bW_mm * bH_mm
+            brk_A_gross_mm2 = bL_mm * bW_mm * bH_mm
+            brk_sigma_mpa = (arm_F_gov_N / brk_A_cross_mm2) + (
+                arm_M_base_Nm / 2.0
+            ) * 1e3 / brk_Z_mm3
+            brk_sf = Sy / max(0.1, brk_sigma_mpa)
+            brk_kb = kb_size(bL_mm)
+            brk_Se = ka * brk_kb * KC_BENDING * kd * ke * kf * Se_prime
+
+            brk_html = f"""
+  <div class="page-break"></div>
+  <h2 class="part-title">{part_idx}. แผ่นยึดเสาพักแขน (Arm Mounting Bracket Plate)</h2>
+  <p>ทำหน้าที่ถ่ายแรงและโมเมนต์จากเสาพักแขนลงเสาขาโครงสร้างหลัก โดย<strong>แต่ละเสาพักแขนมีแผ่นยึดของตัวเอง 1 แผ่น</strong> แผ่นยึดจึงรับแรงตั้งและโมเมนต์ของเสาที่ผูกอยู่เท่านั้น ไม่ได้แบ่งชันกับแผ่นยึดอีกแผ่น
+     ชิ้นส่วนนี้เป็น<strong>ชิ้นวิกฤตของชุดแขน</strong> เพราะรับทั้งแรงตั้งและโมเมนต์ฐานเสาพร้อมกัน</p>
+  <p><strong>ขนาดของ แผ่นยึดเสาพักแขน</strong><br>
+    b<sub>L</sub> = {bL_mm:.1f} mm , b<sub>W</sub> = {bW_mm:.1f} mm (ความหนา) , b<sub>H</sub> = {bH_mm:.1f} mm
+  </p>
+  <p><strong>Material : {m.name}</strong></p>
+
+  <h3 class="step-title">Step 1 : หาคุณสมบัติหน้าตัด</h3>
+  <div class="math-block">
+    I = b<sub>W</sub> b<sub>H</sub>&sup3; / 12 = {bW_mm:.1f} &times; {bH_mm:.1f}&sup3; / 12 = {brk_I_mm4:.1f} mm&sup4;<br>
+    c = b<sub>H</sub> / 2 = {brk_c_mm:.2f} mm<br>
+    Z = I / c = {brk_Z_mm3:.2f} mm&sup3;<br>
+    A (หน้าตัดดัด) = b<sub>W</sub> &times; b<sub>H</sub> = {brk_A_cross_mm2:.1f} mm&sup2;
+  </div>
+
+  <h3 class="step-title">Step 2 : หาความเค้นรวม (แผ่นยึดของเสาวิกฤต)</h3>
+  <div class="math-block">
+    แรงตั้งที่แผ่นยึดรับ = แรงตั้งของเสาวิกฤต (แบ่งตามหลักการคาน) = F<sub>v</sub> &times; {front_frac:.4f} = {arm_F_gov_N:.1f} N<br>
+    &sigma;axial = F<sub>gov</sub> / A = {arm_F_gov_N:.1f} / {brk_A_cross_mm2:.1f} = {(arm_F_gov_N / brk_A_cross_mm2):.3f} MPa<br>
+    &sigma;bending = (M<sub>base</sub> / 2) / Z = ({arm_M_base_Nm:.3f} / 2) &times; 1e3 / {brk_Z_mm3:.2f} = {((arm_M_base_Nm / 2.0) * 1e3 / brk_Z_mm3):.3f} MPa<br>
+    &sigma;total = {(arm_F_gov_N / brk_A_cross_mm2):.3f} + {((arm_M_base_Nm / 2.0) * 1e3 / brk_Z_mm3):.3f} = {brk_sigma_mpa:.3f} MPa
+  </div>
+
+  <h3 class="step-title">Step 3 : หา Actual endurance limit ( Se )</h3>
+  <div class="math-block">
+    ka = {ka:.4f} (machined) , kb = {brk_kb:.4f} (d = {bL_mm:.1f} mm) , kc = {KC_BENDING:.2f} (Bending) ,<br>
+    kd = {kd:.1f} , ke = {ke:.3f} (90% Reliability) , kf = {kf:.1f}<br>
+    Se = ka kb kc kd ke kf Se' = {brk_Se:.2f} MPa<br>
+    n (endurance) = Se / &sigma;total = {brk_Se:.2f} / {brk_sigma_mpa:.2f} = {brk_Se / brk_sigma_mpa:.2f}
+    > แรงที่กดแขนมาจากน้ำหนักผู้ใช้ จึงเป็นแรงสถิต ไม่ใช่แรงกลับทิศ
+    ค่า n จาก S_e จึงเป็นค่าประเมินเผื่อมาก ไม่ใช่เกณฑ์ตัดสินจริง
+  </div>
+
+  <h3 class="step-title">Step 4 : หา Safety Factor</h3>
+  <div class="math-block">
+    ns = Sy / &sigma;total = {Sy:.0f} / {brk_sigma_mpa:.2f} = {brk_sf:.2f}
+  </div>
+"""
+            components_html.append(brk_html)
+            summary_rows.append(
+                (f"{part_idx}. แผ่นยึดเสาพักแขน", 2.00, brk_sf, "PASS" if brk_sf >= 2.0 else "FAIL")
+            )
             part_idx += 1
 
         # Summary Table rows HTML
-        summary_rows_html = "\n".join([
-            f"""      <tr>
+        summary_rows_html = "\n".join(
+            [
+                f"""      <tr>
         <td>{name}</td>
         <td class="text-center">{nd:.2f}</td>
         <td class="text-center" style="font-weight: 700;">{ns:.2f}</td>
-        <td class="text-center" style="font-weight: 700; color: {'#16a34a' if verdict == 'PASS' else '#dc2626'};">{verdict}</td>
+        <td class="text-center" style="font-weight: 700; color: {"#16a34a" if verdict == "PASS" else "#dc2626"};">{verdict}</td>
       </tr>"""
-            for name, nd, ns, verdict in summary_rows
-        ])
+                for name, nd, ns, verdict in summary_rows
+            ]
+        )
 
         cad_img_tag = ""
         if preview_image and Path(preview_image).exists():
@@ -1840,11 +2089,11 @@ class AcademicAssignmentEngine:
   </div>
 
   <div style="font-size: 18px; font-weight: 700; margin-bottom: 8px;">บทนำ</div>
-  <p>{intro_text.replace(chr(10)+chr(10), '</p><p>')}</p>
+  <p>{intro_text.replace(chr(10) + chr(10), "</p><p>")}</p>
 
   {cad_img_tag}
 
-  {''.join(components_html)}
+  {"".join(components_html)}
 
   <!-- ================= สรุป ================= -->
   <div class="page-break"></div>
