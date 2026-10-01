@@ -1140,8 +1140,8 @@ def render_three_view_svg(part: PartDrawing, model: FrameDesignModel) -> str:
     svg.append(f'<rect width="{W}" height="{H}" fill="{PAPER}"/>')
     _rect(svg, 10, 10, W - 20, H - 20, INK, 0.8, fill="none")
 
-    wx = part.width_x_mm
-    dy = part.depth_y_mm
+    wx = part.width_x_mm if part.width_x_mm is not None else part.length_mm
+    dy = part.depth_y_mm if part.depth_y_mm is not None else part.length_mm
     thick = part.height_z_mm if part.height_z_mm is not None else part.length_mm
 
     # Scale so the plan block fits horizontally AND the stacked plan +
@@ -1215,6 +1215,9 @@ def render_three_view_svg(part: PartDrawing, model: FrameDesignModel) -> str:
     if part.primitives:
         # True silhouettes: the members are drawn, not a bounding box.
         col_right = left + col_w + dim_margin + view_w
+        plan_dims_h, plan_dims_v = dims.get("PLAN", ((), ()))
+        front_dims_h, front_dims_v = dims.get("FRONT", ((), ()))
+        side_dims_h, side_dims_v = dims.get("SIDE", ((), ()))
         _shape_view(
             svg,
             top_cx,
@@ -1224,7 +1227,8 @@ def render_three_view_svg(part: PartDrawing, model: FrameDesignModel) -> str:
             1,
             scale,
             "มุมมองด้านบน  TOP VIEW",
-            *dims.get("PLAN", ((), ())),
+            plan_dims_h,
+            plan_dims_v,
             right_edge=col_right,
         )
         _shape_view(
@@ -1236,7 +1240,8 @@ def render_three_view_svg(part: PartDrawing, model: FrameDesignModel) -> str:
             2,
             scale,
             "มุมมองด้านหน้า  FRONT VIEW",
-            *dims.get("FRONT", ((), ())),
+            front_dims_h,
+            front_dims_v,
             right_edge=col_right,
         )
         _shape_view(
@@ -1248,7 +1253,8 @@ def render_three_view_svg(part: PartDrawing, model: FrameDesignModel) -> str:
             2,
             scale,
             "มุมมองด้านข้าง  SIDE VIEW",
-            *dims.get("SIDE", ((), ())),
+            side_dims_h,
+            side_dims_v,
             right_edge=W - 10.0 - 108.0,
         )
     else:
