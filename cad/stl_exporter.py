@@ -5,14 +5,22 @@ directly from EngineeringModel geometry without requiring external CAD software.
 Fully compatible with 3D slicers (Cura, PrusaSlicer, Bambu Studio) and CAD tools (SolidWorks, Fusion360, FreeCAD).
 """
 
+from __future__ import annotations
+
 import math
 import struct
-from typing import List, Tuple
-from core.models import EngineeringModel, ShaftSegment
+from typing import Any
+
+from core.models import EngineeringModel
+
 
 class STLExporter:
     @staticmethod
-    def _normal(v1: Tuple[float, float, float], v2: Tuple[float, float, float], v3: Tuple[float, float, float]) -> Tuple[float, float, float]:
+    def _normal(
+        v1: tuple[float, float, float],
+        v2: tuple[float, float, float],
+        v3: tuple[float, float, float],
+    ) -> tuple[float, float, float]:
         """Compute outward face normal vector from 3 vertices."""
         ux, uy, uz = v2[0] - v1[0], v2[1] - v1[1], v2[2] - v1[2]
         vx, vy, vz = v3[0] - v1[0], v3[1] - v1[1], v3[2] - v1[2]
@@ -25,12 +33,18 @@ class STLExporter:
         return (0.0, 0.0, 1.0)
 
     @classmethod
-    def generate_triangles(cls, model: EngineeringModel, n_slices: int = 64) -> List[Tuple[Tuple[float, float, float], Tuple[float, float, float], Tuple[float, float, float]]]:
+    def generate_triangles(
+        cls, model: EngineeringModel, n_slices: int = 64
+    ) -> list[
+        tuple[tuple[float, float, float], tuple[float, float, float], tuple[float, float, float]]
+    ]:
         """
         Generate triangular face mesh of the shaft geometry (dimensions in mm).
         Includes stepped outer cylinders, shoulder transition annular faces, and end caps.
         """
-        triangles = []
+        triangles: list[
+            tuple[tuple[float, float, float], tuple[float, float, float], tuple[float, float, float]]
+        ] = []
         segments = sorted(model.segments, key=lambda s: s.start_pos)
         if not segments:
             return triangles
@@ -171,8 +185,8 @@ class STLExporter:
         n_tris = len(triangles)
 
         # 80-byte header
-        header = f"MDIE CAD Engine - Model: {model.name[:50]}".encode('ascii')
-        header = header.ljust(80, b'\x00')
+        header = f"MDIE CAD Engine - Model: {model.name[:50]}".encode("ascii")
+        header = header.ljust(80, b"\x00")
 
         parts = [header, struct.pack("<I", n_tris)]
 
@@ -181,11 +195,19 @@ class STLExporter:
             # Normal (3 floats), Vertices (9 floats), Attribute byte count (unsigned short)
             record = struct.pack(
                 "<3f9fH",
-                norm[0], norm[1], norm[2],
-                v1[0], v1[1], v1[2],
-                v2[0], v2[1], v2[2],
-                v3[0], v3[1], v3[2],
-                0
+                norm[0],
+                norm[1],
+                norm[2],
+                v1[0],
+                v1[1],
+                v1[2],
+                v2[0],
+                v2[1],
+                v2[2],
+                v3[0],
+                v3[1],
+                v3[2],
+                0,
             )
             parts.append(record)
 

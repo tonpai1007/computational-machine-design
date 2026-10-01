@@ -4,22 +4,19 @@ Supports Groq, OpenRouter, Google Gemini, and Local Ollama with automatic cascad
 and deterministic offline heuristic fallback.
 """
 
-import os
 import json
 import logging
+import os
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Any
 
 logger = logging.getLogger("ai.llm_router")
 
 
-def load_dotenv(env_path: Optional[Path] = None) -> None:
+def load_dotenv(env_path: Path | None = None) -> None:
     """Lightweight zero-dependency .env loader that populates os.environ."""
     if env_path is None:
-        candidates = [
-            Path(".env"),
-            Path(__file__).resolve().parent.parent.parent / ".env"
-        ]
+        candidates = [Path(".env"), Path(__file__).resolve().parent.parent.parent / ".env"]
         for c in candidates:
             if c.exists() and c.is_file():
                 env_path = c
@@ -29,7 +26,7 @@ def load_dotenv(env_path: Optional[Path] = None) -> None:
         return
 
     try:
-        with open(env_path, "r", encoding="utf-8") as f:
+        with open(env_path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line or line.startswith("#") or "=" not in line:
@@ -58,11 +55,11 @@ class LLMRouter:
         "groq": "llama-3.3-70b-versatile",
         "openrouter": "meta-llama/llama-3.3-70b-instruct",
         "gemini": "gemini-1.5-flash",
-        "ollama": "llama3.2"
+        "ollama": "llama3.2",
     }
 
     @classmethod
-    def get_configured_providers(cls) -> List[str]:
+    def get_configured_providers(cls) -> list[str]:
         """
         Detects which LLM providers have available API keys or active endpoints in priority order.
         User can override priority via MDIE_LLM_PROVIDER environment variable (e.g. 'groq,openrouter,gemini').
@@ -91,19 +88,21 @@ class LLMRouter:
         user_prompt: str,
         response_format_json: bool = True,
         max_tokens: int = 1500,
-        temperature: float = 0.1
-    ) -> Tuple[Optional[str], Optional[str], List[str]]:
+        temperature: float = 0.1,
+    ) -> tuple[str | None, str | None, list[str]]:
         """
         Executes a prompt across the cascading provider chain.
         Returns:
             (response_text, winning_provider, execution_logs)
         If all remote providers fail or no keys are configured, returns (None, None, logs).
         """
-        logs: List[str] = []
+        logs: list[str] = []
         providers = cls.get_configured_providers()
 
         if not providers:
-            logs.append("No LLM API keys found (GROQ_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY). Using offline deterministic engine.")
+            logs.append(
+                "No LLM API keys found (GROQ_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY). Using offline deterministic engine."
+            )
             return None, None, logs
 
         for provider in providers:
@@ -112,22 +111,34 @@ class LLMRouter:
                 response_text = None
 
                 if provider == "groq":
-                    response_text = cls._call_groq(system_prompt, user_prompt, response_format_json, max_tokens, temperature)
+                    response_text = cls._call_groq(
+                        system_prompt, user_prompt, response_format_json, max_tokens, temperature
+                    )
                 elif provider == "openrouter":
-                    response_text = cls._call_openrouter(system_prompt, user_prompt, response_format_json, max_tokens, temperature)
+                    response_text = cls._call_openrouter(
+                        system_prompt, user_prompt, response_format_json, max_tokens, temperature
+                    )
                 elif provider == "gemini":
-                    response_text = cls._call_gemini(system_prompt, user_prompt, response_format_json, max_tokens, temperature)
+                    response_text = cls._call_gemini(
+                        system_prompt, user_prompt, response_format_json, max_tokens, temperature
+                    )
                 elif provider == "ollama":
-                    response_text = cls._call_ollama(system_prompt, user_prompt, response_format_json, max_tokens, temperature)
+                    response_text = cls._call_ollama(
+                        system_prompt, user_prompt, response_format_json, max_tokens, temperature
+                    )
 
                 if response_text:
                     logs.append(f"Successfully received response from '{provider.upper()}'.")
                     return response_text, provider, logs
 
             except Exception as e:
-                logs.append(f"Provider '{provider.upper()}' failed: {str(e)}. Cascading to next fallback...")
+                logs.append(
+                    f"Provider '{provider.upper()}' failed: {str(e)}. Cascading to next fallback..."
+                )
 
-        logs.append("All configured LLM providers failed. Dropping back to deterministic offline parser.")
+        logs.append(
+            "All configured LLM providers failed. Dropping back to deterministic offline parser."
+        )
         return None, None, logs
 
     # =========================================================================
@@ -141,7 +152,7 @@ class LLMRouter:
         user_prompt: str,
         response_format_json: bool,
         max_tokens: int,
-        temperature: float
+        temperature: float,
     ) -> str:
         """Call Groq API (Ultra-low latency inference, ~500 tok/s)."""
         api_key = os.environ.get("GROQ_API_KEY", "").strip()
@@ -151,19 +162,16 @@ class LLMRouter:
         model = os.environ.get("GROQ_MODEL", cls.DEFAULT_MODELS["groq"])
         url = "https://api.groq.com/openai/v1/chat/completions"
 
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "model": model,
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
+                {"role": "user", "content": user_prompt},
             ],
             "temperature": temperature,
-            "max_tokens": max_tokens
+            "max_tokens": max_tokens,
         }
         if response_format_json:
             payload["response_format"] = {"type": "json_object"}
@@ -177,7 +185,7 @@ class LLMRouter:
         user_prompt: str,
         response_format_json: bool,
         max_tokens: int,
-        temperature: float
+        temperature: float,
     ) -> str:
         """Call OpenRouter API (Universal gateway to 200+ models)."""
         api_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
@@ -191,17 +199,17 @@ class LLMRouter:
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
             "HTTP-Referer": "https://github.com/mdie-engine",
-            "X-Title": "MDIE Machine Design Engine"
+            "X-Title": "MDIE Machine Design Engine",
         }
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "model": model,
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
+                {"role": "user", "content": user_prompt},
             ],
             "temperature": temperature,
-            "max_tokens": max_tokens
+            "max_tokens": max_tokens,
         }
         if response_format_json:
             payload["response_format"] = {"type": "json_object"}
@@ -215,7 +223,7 @@ class LLMRouter:
         user_prompt: str,
         response_format_json: bool,
         max_tokens: int,
-        temperature: float
+        temperature: float,
     ) -> str:
         """Call Google Gemini API via official REST endpoint."""
         api_key = os.environ.get("GEMINI_API_KEY", "").strip()
@@ -226,21 +234,23 @@ class LLMRouter:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
 
         headers = {"Content-Type": "application/json"}
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "contents": [
                 {
-                    "parts": [{"text": f"System Instructions:\n{system_prompt}\n\nUser Request:\n{user_prompt}"}]
+                    "parts": [
+                        {
+                            "text": f"System Instructions:\n{system_prompt}\n\nUser Request:\n{user_prompt}"
+                        }
+                    ]
                 }
             ],
-            "generationConfig": {
-                "temperature": temperature,
-                "maxOutputTokens": max_tokens
-            }
+            "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens},
         }
         if response_format_json:
             payload["generationConfig"]["responseMimeType"] = "application/json"
 
         import urllib.request
+
         data_bytes = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(url, data=data_bytes, headers=headers, method="POST")
 
@@ -259,7 +269,7 @@ class LLMRouter:
         user_prompt: str,
         response_format_json: bool,
         max_tokens: int,
-        temperature: float
+        temperature: float,
     ) -> str:
         """Call Local Ollama API."""
         host = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
@@ -267,19 +277,20 @@ class LLMRouter:
         url = f"{host}/api/chat"
 
         headers = {"Content-Type": "application/json"}
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "model": model,
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
+                {"role": "user", "content": user_prompt},
             ],
             "stream": False,
-            "options": {"temperature": temperature}
+            "options": {"temperature": temperature},
         }
         if response_format_json:
             payload["format"] = "json"
 
         import urllib.request
+
         data_bytes = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(url, data=data_bytes, headers=headers, method="POST")
 
@@ -292,10 +303,11 @@ class LLMRouter:
     # =========================================================================
 
     @staticmethod
-    def _post_http(url: str, headers: Dict[str, str], payload: Dict[str, Any]) -> str:
+    def _post_http(url: str, headers: dict[str, str], payload: dict[str, Any]) -> str:
         """Standardized JSON POST request handler with robust error diagnostics."""
         try:
             import httpx
+
             with httpx.Client(timeout=15.0) as client:
                 res = client.post(url, headers=headers, json=payload)
                 if res.status_code != 200:
@@ -308,6 +320,7 @@ class LLMRouter:
         except ImportError:
             # Fallback to standard library urllib
             import urllib.request
+
             data_bytes = json.dumps(payload).encode("utf-8")
             req = urllib.request.Request(url, data=data_bytes, headers=headers, method="POST")
             with urllib.request.urlopen(req, timeout=15) as resp:

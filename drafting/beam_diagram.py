@@ -20,11 +20,10 @@ Usage::
 from __future__ import annotations
 
 import argparse
-import math
 import re
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import List, Sequence, Tuple
 
 # Allow `python -m drafting.beam_diagram` from the repo root.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -53,7 +52,7 @@ def _mac(x: float, a: float, power: int) -> float:
     right-hand reaction closes the diagram back to 0.
     """
     d = x - a
-    return (d ** power) if d >= 0.0 else 0.0
+    return (d**power) if d >= 0.0 else 0.0
 
 
 class SimplySupportedRail:
@@ -67,32 +66,34 @@ class SimplySupportedRail:
         self.a_mm = self.span_mm / 2.0
 
     def shear(self, x_mm: float) -> float:
-        return (self.r1_n * _mac(x_mm, 0.0, 0)
-                - self.p_n * _mac(x_mm, self.a_mm, 0)
-                + self.r2_n * _mac(x_mm, self.span_mm, 0))
+        return (
+            self.r1_n * _mac(x_mm, 0.0, 0)
+            - self.p_n * _mac(x_mm, self.a_mm, 0)
+            + self.r2_n * _mac(x_mm, self.span_mm, 0)
+        )
 
     def moment(self, x_mm: float) -> float:
-        return (self.r1_n * _mac(x_mm, 0.0, 1)
-                - self.p_n * _mac(x_mm, self.a_mm, 1)
-                + self.r2_n * _mac(x_mm, self.span_mm, 1))
+        return (
+            self.r1_n * _mac(x_mm, 0.0, 1)
+            - self.p_n * _mac(x_mm, self.a_mm, 1)
+            + self.r2_n * _mac(x_mm, self.span_mm, 1)
+        )
 
     def moment_max(self) -> float:
         """Peak midspan moment ``P*L/4`` (N.mm)."""
         return self.p_n * self.span_mm / 4.0
 
-    def stations(self, divisions: int = 8) -> List[float]:
+    def stations(self, divisions: int = 8) -> list[float]:
         if divisions < 2:
             raise ValueError("divisions must be >= 2")
         return [self.span_mm * i / divisions for i in range(divisions + 1)]
 
-    def verify_equilibrium(self, tol: float = 1e-9) -> Tuple[float, float]:
+    def verify_equilibrium(self, tol: float = 1e-9) -> tuple[float, float]:
         """Return ``(sum_Fy, sum_M_at_0)``; both must vanish."""
         sum_fy = self.r1_n - self.p_n + self.r2_n
         sum_m = -self.p_n * self.a_mm + self.r2_n * self.span_mm
         if abs(sum_fy) > tol or abs(sum_m) > tol:
-            raise AssertionError(
-                f"equilibrium violated: sum_Fy={sum_fy}, sum_M={sum_m}"
-            )
+            raise AssertionError(f"equilibrium violated: sum_Fy={sum_fy}, sum_M={sum_m}")
         return sum_fy, sum_m
 
 
@@ -100,8 +101,9 @@ def _fmt(values: Sequence[float]) -> str:
     return ", ".join(f"{v:g}" for v in values)
 
 
-def _mermaid(title: str, x: Sequence[float], y: Sequence[float],
-             y_label: str, y_min: float, y_max: float) -> str:
+def _mermaid(
+    title: str, x: Sequence[float], y: Sequence[float], y_label: str, y_min: float, y_max: float
+) -> str:
     return (
         "```mermaid\n"
         "xychart-beta\n"
@@ -113,7 +115,7 @@ def _mermaid(title: str, x: Sequence[float], y: Sequence[float],
     )
 
 
-def _fbd_image_ref(rail: "SimplySupportedRail") -> str:
+def _fbd_image_ref(rail: SimplySupportedRail) -> str:
     """
     Markdown image reference for the free-body diagram.
 
@@ -139,7 +141,7 @@ FBD_IMAGE_RE = re.compile(
 )
 
 
-def build_blocks(divisions: int = 8) -> Tuple[str, str, str, SimplySupportedRail]:
+def build_blocks(divisions: int = 8) -> tuple[str, str, str, SimplySupportedRail]:
     """Build both Mermaid blocks and assert they match the deterministic solver."""
     model = FrameDesignModel()
     result = FramePhysicsSolver.solve(model)
@@ -153,8 +155,7 @@ def build_blocks(divisions: int = 8) -> Tuple[str, str, str, SimplySupportedRail
     solver_m_nm = result.seat_frame.rail_bending_moment_nm
     closed_m_nm = rail.moment_max() / 1e3  # N.mm -> N.m
     assert abs(closed_m_nm - solver_m_nm) < 1e-6, (
-        f"M_max mismatch: closed form {closed_m_nm:.6f} N.m "
-        f"vs solver {solver_m_nm:.6f} N.m"
+        f"M_max mismatch: closed form {closed_m_nm:.6f} N.m vs solver {solver_m_nm:.6f} N.m"
     )
 
     z_mm3 = model.geometry.frame_profile.section_modulus_m3 * 1e9
@@ -174,13 +175,19 @@ def build_blocks(divisions: int = 8) -> Tuple[str, str, str, SimplySupportedRail
 
     v_block = _mermaid(
         "แผนภาพแรงเฉือน V (คานโครงเบาะ, ช่วง 480 mm)",
-        x, v, "แรงเฉือน V (N)",
-        -(v_span + v_pad), v_span + v_pad,
+        x,
+        v,
+        "แรงเฉือน V (N)",
+        -(v_span + v_pad),
+        v_span + v_pad,
     )
     m_block = _mermaid(
         "แผนภาพโมเมนต์ดัด M (คานโครงเบาะ, ช่วง 480 mm)",
-        x, m, "โมเมนต์ M (N·mm)",
-        0.0, m_span,
+        x,
+        m,
+        "โมเมนต์ M (N·mm)",
+        0.0,
+        m_span,
     )
     fbd_block = _fbd_image_ref(rail)
     return v_block, m_block, fbd_block, rail
@@ -217,8 +224,7 @@ def inject_fbd(block: str, path: Path = REPORT_MD) -> bool:
         anchor = "```mermaid\nxychart-beta"
         if anchor not in text:
             raise SystemExit(
-                f"no insertion point found in {path}; "
-                "run without --inject and paste manually"
+                f"no insertion point found in {path}; run without --inject and paste manually"
             )
         new = text.replace(anchor, f"{block}\n\n{anchor}", 1)
     path.write_text(new, encoding="utf-8")
@@ -228,10 +234,13 @@ def inject_fbd(block: str, path: Path = REPORT_MD) -> bool:
 def main(argv: Sequence[str] | None = None) -> int:
     _force_utf8_stdout()
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--inject", action="store_true",
-                    help=f"splice the blocks into {REPORT_MD}")
-    ap.add_argument("--divisions", type=int, default=8,
-                    help="number of span divisions (default 8 -> 60 mm steps)")
+    ap.add_argument("--inject", action="store_true", help=f"splice the blocks into {REPORT_MD}")
+    ap.add_argument(
+        "--divisions",
+        type=int,
+        default=8,
+        help="number of span divisions (default 8 -> 60 mm steps)",
+    )
     args = ap.parse_args(argv)
 
     v_block, m_block, fbd_block, rail = build_blocks(args.divisions)
@@ -239,6 +248,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.inject:
         from drafting.fbd_plot import plot_fbd
+
         outdir = REPORT_MD.parent / "diagrams"
         for f in ("png", "svg"):
             img = plot_fbd(rail, outdir=outdir, fmt=f)

@@ -6,21 +6,18 @@ and verification loops where the physics solver is the sole ground truth.
 
 import copy
 import math
-import os
-from typing import Dict, Any, List, Optional, Tuple
-from core.models import EngineeringModel, SolverResult
-from physics.solver import PhysicsSolver
+from typing import Any
+
 from ai.critic import DesignCritic
-from materials.database import MaterialDatabase
 from ai.llm_router import LLMRouter
+from core.models import EngineeringModel, SolverResult
+from materials.database import MaterialDatabase
+from physics.solver import PhysicsSolver
+
 
 class EngineeringCopilot:
     @staticmethod
-    def answer_query(
-        query: str,
-        model: EngineeringModel,
-        result: SolverResult
-    ) -> Dict[str, Any]:
+    def answer_query(query: str, model: EngineeringModel, result: SolverResult) -> dict[str, Any]:
         """
         Answer engineering questions regarding the current model and solver result.
         Strictly grounds all answers in the deterministic physics solver data.
@@ -28,8 +25,8 @@ class EngineeringCopilot:
         q = query.lower()
         critic_review = DesignCritic.review_design(model, result)
         response_text = ""
-        modified_model: Optional[EngineeringModel] = None
-        new_result: Optional[SolverResult] = None
+        modified_model: EngineeringModel | None = None
+        new_result: SolverResult | None = None
 
         # 1. "Why is it failing?" or "Why did it pass?"
         if "why" in q and ("fail" in q or "pass" in q or "stress" in q):
@@ -56,7 +53,8 @@ class EngineeringCopilot:
         elif "lighter" in q or "reduce mass" in q or "reduce weight" in q:
             # Extract percentage or default to 20%
             import re
-            pct_match = re.search(r'(\d+)\s*%', q)
+
+            pct_match = re.search(r"(\d+)\s*%", q)
             pct = float(pct_match.group(1)) if pct_match else 20.0
             target_mass = result.total_mass_kg * (1.0 - pct / 100.0)
 
@@ -67,7 +65,7 @@ class EngineeringCopilot:
             d_out = mod_model.segments[0].outer_diameter
             mat = MaterialDatabase.get(mod_model.material_id)
             L = mod_model.total_length
-            
+
             # Target area = target_mass / (rho * L)
             target_area = target_mass / (mat.density_kg_m3 * L)
             # target_area = pi/4 * (do^2 - di^2) => di = sqrt(do^2 - 4*target_area/pi)
@@ -76,7 +74,7 @@ class EngineeringCopilot:
                 d_in = math.sqrt(term)
                 for seg in mod_model.segments:
                     seg.inner_diameter = d_in
-                
+
                 # Re-verify through Physics Solver
                 test_res = PhysicsSolver.solve(mod_model)
                 modified_model = mod_model
@@ -101,7 +99,11 @@ class EngineeringCopilot:
         # 3. Material switch query (e.g. "What if I switch to 7075 aluminum?")
         elif "switch" in q or "material" in q or "aluminum" in q or "titanium" in q:
             # Detect target material
-            target_mat_id = "AL_7075_T6" if "7075" in q or "aluminum" in q else ("TI_6AL_4V" if "titanium" in q else "AISI_4140_QT")
+            target_mat_id = (
+                "AL_7075_T6"
+                if "7075" in q or "aluminum" in q
+                else ("TI_6AL_4V" if "titanium" in q else "AISI_4140_QT")
+            )
             mod_model = copy.deepcopy(model)
             mod_model.material_id = target_mat_id
             test_res = PhysicsSolver.solve(mod_model)
@@ -110,7 +112,7 @@ class EngineeringCopilot:
 
             response_text = (
                 f"### Material Tradeoff Analysis: {test_res.material_name}\n\n"
-                f"* **Mass:** {result.total_mass_kg:.3f} kg -> {test_res.total_mass_kg:.3f} kg ({((test_res.total_mass_kg - result.total_mass_kg)/result.total_mass_kg)*100:+.1f}%)\n"
+                f"* **Mass:** {result.total_mass_kg:.3f} kg -> {test_res.total_mass_kg:.3f} kg ({((test_res.total_mass_kg - result.total_mass_kg) / result.total_mass_kg) * 100:+.1f}%)\n"
                 f"* **Yield Safety Factor:** {result.min_yield_safety_factor:.2f} -> {test_res.min_yield_safety_factor:.2f}\n"
                 f"* **Fatigue Safety Factor:** {result.min_fatigue_safety_factor:.2f} -> {test_res.min_fatigue_safety_factor:.2f}\n"
                 f"* **Max Deflection:** {result.max_deflection_mm:.3f} mm -> {test_res.max_deflection_mm:.3f} mm\n"
@@ -137,7 +139,7 @@ class EngineeringCopilot:
                         user_prompt=query,
                         response_format_json=False,
                         max_tokens=1000,
-                        temperature=0.2
+                        temperature=0.2,
                     )
                     if raw_res:
                         response_text = raw_res

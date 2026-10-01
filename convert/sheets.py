@@ -6,8 +6,8 @@ external renderer (no headless Chrome, no ImageMagick).
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 
 def svg_to_pdf(src: Path, dst: Path) -> Path:
@@ -31,8 +31,7 @@ def svg_to_png(src: Path, dst: Path, dpi: int = 200) -> Path:
     return dst
 
 
-def sheets_to_pdf(srcs: Iterable[Path], dst: Path,
-                  sort: bool = True) -> Path:
+def sheets_to_pdf(srcs: Iterable[Path], dst: Path, sort: bool = True) -> Path:
     """Merge many SVG sheets into a single multi-page PDF.
 
     Each sheet becomes one page at its own native size, so A3 and A4 sheets

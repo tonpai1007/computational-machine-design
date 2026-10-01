@@ -4,59 +4,69 @@ Orchestrates static equilibrium, stress concentration analysis, Euler-Bernoulli 
 and Marin/Goodman fatigue life verification. Generates verified results with full audit traces.
 """
 
+from __future__ import annotations
+
 from datetime import datetime
-import math
-from typing import Dict, Any, List, Optional
+from typing import Any
+
+from cad.openscad import OpenSCADGenerator
 from core.models import (
     EngineeringModel,
-    SolverResult,
     SectionStress,
     ShaftSegment,
-    Support,
+    SolverResult,
 )
-from materials.database import MaterialDatabase, Material
-from physics.equilibrium import EquilibriumSolver
-from physics.stress import StressSolver
+from materials.database import MaterialDatabase
 from physics.deflection import DeflectionSolver
+from physics.equilibrium import EquilibriumSolver
 from physics.fatigue import FatigueSolver
-from cad.openscad import OpenSCADGenerator
+from physics.stress import StressSolver
+
 
 class PhysicsSolver:
     @staticmethod
-    def validate_model(model: EngineeringModel) -> List[str]:
+    def validate_model(model: EngineeringModel) -> list[str]:
         """Verify model sanity and raise or report physical impossibilities."""
-        errors = []
+        errors: list[str] = []
         if model.total_length <= 0:
             errors.append(f"Invalid total length: {model.total_length} m <= 0")
 
         # If no segments, create a default uniform segment
         if not model.segments:
-            model.segments.append(ShaftSegment(
-                start_pos=0.0,
-                end_pos=model.total_length,
-                outer_diameter=0.030,
-                inner_diameter=0.0,
-                feature_type="smooth"
-            ))
+            model.segments.append(
+                ShaftSegment(
+                    start_pos=0.0,
+                    end_pos=model.total_length,
+                    outer_diameter=0.030,
+                    inner_diameter=0.0,
+                    feature_type="smooth",
+                )
+            )
 
         for idx, seg in enumerate(model.segments):
             if seg.outer_diameter <= 0:
-                errors.append(f"Segment {idx+1}: Outer diameter {seg.outer_diameter} m <= 0")
+                errors.append(f"Segment {idx + 1}: Outer diameter {seg.outer_diameter} m <= 0")
             if seg.inner_diameter >= seg.outer_diameter:
                 errors.append(
-                    f"Segment {idx+1}: Inner diameter ({seg.inner_diameter*1000:.1f} mm) >= "
-                    f"outer diameter ({seg.outer_diameter*1000:.1f} mm). Geometry is physically invalid."
+                    f"Segment {idx + 1}: Inner diameter ({seg.inner_diameter * 1000:.1f} mm) >= "
+                    f"outer diameter ({seg.outer_diameter * 1000:.1f} mm). Geometry is physically invalid."
                 )
             if seg.start_pos < 0 or seg.end_pos > model.total_length * 1.001:
-                errors.append(f"Segment {idx+1} bounds [{seg.start_pos}, {seg.end_pos}] outside total length {model.total_length}")
+                errors.append(
+                    f"Segment {idx + 1} bounds [{seg.start_pos}, {seg.end_pos}] outside total length {model.total_length}"
+                )
 
         for idx, sup in enumerate(model.supports):
             if sup.position < 0 or sup.position > model.total_length * 1.001:
-                errors.append(f"Support {idx+1} at x={sup.position}m outside shaft span [0, {model.total_length}]m")
+                errors.append(
+                    f"Support {idx + 1} at x={sup.position}m outside shaft span [0, {model.total_length}]m"
+                )
 
         for idx, p in enumerate(model.point_loads):
             if p.position < 0 or p.position > model.total_length * 1.001:
-                errors.append(f"Point load {idx+1} at x={p.position}m outside shaft span [0, {model.total_length}]m")
+                errors.append(
+                    f"Point load {idx + 1} at x={p.position}m outside shaft span [0, {model.total_length}]m"
+                )
 
         return errors
 
@@ -67,7 +77,7 @@ class PhysicsSolver:
         Guaranteed deterministic execution: no LLM or heuristics in this path.
         """
         timestamp_str = datetime.now().isoformat()
-        calc_steps: List[str] = []
+        calc_steps: list[str] = []
         calc_steps.append(f"MDIE Physics Solver initiated for '{model.name}'.")
 
         # 1. Geometry & boundary validation
@@ -80,20 +90,22 @@ class PhysicsSolver:
                 timestamp=timestamp_str,
                 success=False,
                 error_message=err_msg,
-                calculation_steps=calc_steps
+                calculation_steps=calc_steps,
             )
 
         # 2. Material lookup
         try:
             material = MaterialDatabase.get(model.material_id)
-            calc_steps.append(f"Material loaded: {material.name} (Sy={material.yield_strength_mpa} MPa, Sut={material.ultimate_strength_mpa} MPa)")
+            calc_steps.append(
+                f"Material loaded: {material.name} (Sy={material.yield_strength_mpa} MPa, Sut={material.ultimate_strength_mpa} MPa)"
+            )
         except Exception as e:
             return SolverResult(
                 model_name=model.name,
                 timestamp=timestamp_str,
                 success=False,
                 error_message=f"Material Error: {str(e)}",
-                calculation_steps=calc_steps
+                calculation_steps=calc_steps,
             )
 
         # 3. Static Equilibrium & Internal Distributions
@@ -107,7 +119,7 @@ class PhysicsSolver:
                 timestamp=timestamp_str,
                 success=False,
                 error_message=f"Equilibrium Solver Error: {str(e)}",
-                calculation_steps=calc_steps
+                calculation_steps=calc_steps,
             )
 
         # 4. Stress and Stress Concentrations
@@ -124,7 +136,7 @@ class PhysicsSolver:
                 timestamp=timestamp_str,
                 success=False,
                 error_message=f"Stress Solver Error: {str(e)}",
-                calculation_steps=calc_steps
+                calculation_steps=calc_steps,
             )
 
         # 5. Deflection & Slope Integration
@@ -139,7 +151,7 @@ class PhysicsSolver:
                 timestamp=timestamp_str,
                 success=False,
                 error_message=f"Deflection Solver Error: {str(e)}",
-                calculation_steps=calc_steps
+                calculation_steps=calc_steps,
             )
 
         # 6. Fatigue Life & Endurance Evaluation
@@ -157,7 +169,7 @@ class PhysicsSolver:
                 timestamp=timestamp_str,
                 success=False,
                 error_message=f"Fatigue Solver Error: {str(e)}",
-                calculation_steps=calc_steps
+                calculation_steps=calc_steps,
             )
 
         # 7. Mass Calculation
@@ -182,31 +194,31 @@ class PhysicsSolver:
         )
 
         # 9. Standard Machine Components: Bearings & Keyways
-        bearings_selected = []
+        bearings_selected: list[dict[str, Any]] = []
         try:
             from components.bearings import BearingCatalog
+
             rpm = model.speed_rpm if (model.speed_rpm and model.speed_rpm > 0) else 1500.0
             for r in reactions:
                 d_at_sup, _, _ = StressSolver.get_diameter_and_segment_at(model, r.position)
                 b_res = BearingCatalog.select_bearing(d_at_sup, r.reaction_force_n, rpm)
                 bearings_selected.append(b_res.model_dump())
                 calc_steps.append(
-                    f"Selected {b_res.bearing.designation} (C={b_res.bearing.dynamic_load_c_kn} kN) at x={r.position*1000:.0f} mm: "
+                    f"Selected {b_res.bearing.designation} (C={b_res.bearing.dynamic_load_c_kn} kN) at x={r.position * 1000:.0f} mm: "
                     f"L10h = {b_res.l10h_hours:,.0f} hours ({b_res.status})"
                 )
         except Exception as e:
             calc_steps.append(f"Bearing catalog notice: {str(e)}")
 
-        keyway_analysis = None
+        keyway_analysis: dict[str, Any] | None = None
         try:
             from components.keys import KeyEngine
+
             nominal_torque = model.calculate_nominal_torque()
             kw_seg = next((s for s in model.segments if s.keyway), None)
             if kw_seg and kw_seg.keyway and nominal_torque > 0:
                 k_res = KeyEngine.verify_key(
-                    kw_seg.outer_diameter,
-                    nominal_torque,
-                    key_length_m=kw_seg.keyway.length
+                    kw_seg.outer_diameter, nominal_torque, key_length_m=kw_seg.keyway.length
                 )
                 keyway_analysis = k_res.model_dump()
                 calc_steps.append(
@@ -214,7 +226,7 @@ class PhysicsSolver:
                     f"Crushing SF = {k_res.crushing_safety_factor:.2f} ({'PASS' if k_res.passed else 'FAIL'})"
                 )
             elif nominal_torque > 0 and model.segments:
-                mid_seg = model.segments[len(model.segments)//2]
+                mid_seg = model.segments[len(model.segments) // 2]
                 k_res = KeyEngine.verify_key(mid_seg.outer_diameter, nominal_torque)
                 keyway_analysis = k_res.model_dump()
         except Exception as e:

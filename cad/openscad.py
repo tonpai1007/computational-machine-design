@@ -4,16 +4,15 @@ Generates parametric OpenSCAD (.scad) code and 3D geometry models
 for shafts, keyways, shoulders, bearing seats, and structural machine members.
 """
 
-from typing import Dict, Any, List, Optional
-import math
-from core.models import EngineeringModel, ShaftSegment
+from typing import Any
+
+from core.models import EngineeringModel
+
 
 class OpenSCADGenerator:
     @staticmethod
     def generate_scad(
-        model: EngineeringModel,
-        critical_x: Optional[float] = None,
-        highlight_stress: bool = True
+        model: EngineeringModel, critical_x: float | None = None, highlight_stress: bool = True
     ) -> str:
         """
         Generate clean, parametric, well-commented OpenSCAD source code.
@@ -49,7 +48,7 @@ class OpenSCADGenerator:
             start_mm = seg.start_pos * 1000.0
             len_mm = (seg.end_pos - seg.start_pos) * 1000.0
             rad_mm = (seg.outer_diameter / 2.0) * 1000.0
-            
+
             # Select color based on feature
             if seg.feature_type == "bearing_seat":
                 c_var = "c_bearing_seat"
@@ -58,10 +57,12 @@ class OpenSCADGenerator:
             else:
                 c_var = "c_steel"
 
-            lines.append(f"            // Segment {idx+1}: {seg.feature_type} (x={start_mm:.1f} to {start_mm+len_mm:.1f}mm, d={seg.outer_diameter*1000.0:.1f}mm)")
+            lines.append(
+                f"            // Segment {idx + 1}: {seg.feature_type} (x={start_mm:.1f} to {start_mm + len_mm:.1f}mm, d={seg.outer_diameter * 1000.0:.1f}mm)"
+            )
             lines.append(f"            color({c_var})")
             lines.append(f"            translate([{start_mm:.3f}, 0, 0])")
-            lines.append(f"            rotate([0, 90, 0])")
+            lines.append("            rotate([0, 90, 0])")
             lines.append(f"            cylinder(h={len_mm:.3f}, r={rad_mm:.3f}, center=false);")
             lines.append("")
 
@@ -75,10 +76,12 @@ class OpenSCADGenerator:
                 start_mm = seg.start_pos * 1000.0
                 len_mm = (seg.end_pos - seg.start_pos) * 1000.0
                 bore_rad_mm = (seg.inner_diameter / 2.0) * 1000.0
-                lines.append(f"        // Inner bore segment {idx+1}")
+                lines.append(f"        // Inner bore segment {idx + 1}")
                 lines.append(f"        translate([{start_mm - 0.1:.3f}, 0, 0])")
-                lines.append(f"        rotate([0, 90, 0])")
-                lines.append(f"        cylinder(h={len_mm + 0.2:.3f}, r={bore_rad_mm:.3f}, center=false);")
+                lines.append("        rotate([0, 90, 0])")
+                lines.append(
+                    f"        cylinder(h={len_mm + 0.2:.3f}, r={bore_rad_mm:.3f}, center=false);"
+                )
 
         # Keyway slots
         for idx, seg in enumerate(model.segments):
@@ -91,8 +94,10 @@ class OpenSCADGenerator:
                 shaft_rad_mm = (seg.outer_diameter / 2.0) * 1000.0
                 y_offset = shaft_rad_mm - d_mm
 
-                lines.append(f"        // Keyway slot on segment {idx+1} ({kw.standard})")
-                lines.append(f"        translate([{pos_mm:.3f}, -{w_mm/2.0:.3f}, {y_offset:.3f}])")
+                lines.append(f"        // Keyway slot on segment {idx + 1} ({kw.standard})")
+                lines.append(
+                    f"        translate([{pos_mm:.3f}, -{w_mm / 2.0:.3f}, {y_offset:.3f}])"
+                )
                 lines.append(f"        cube([{len_mm:.3f}, {w_mm:.3f}, {d_mm * 2.0:.3f}]);")
 
         lines.append("    }")
@@ -118,7 +123,9 @@ class OpenSCADGenerator:
         lines.append("module bearing_supports() {")
         for idx, sup in enumerate(model.supports):
             pos_mm = sup.position * 1000.0
-            lines.append(f"    // Bearing support {idx+1} @ x={pos_mm:.1f}mm ({sup.support_type})")
+            lines.append(
+                f"    // Bearing support {idx + 1} @ x={pos_mm:.1f}mm ({sup.support_type})"
+            )
             lines.append("    color(c_support)")
             lines.append(f"    translate([{pos_mm:.3f}, 0, -25])")
             lines.append("    cube([12, 40, 20], center=true);")
@@ -135,48 +142,52 @@ class OpenSCADGenerator:
         return "\n".join(lines)
 
     @staticmethod
-    def generate_3d_preview_mesh(model: EngineeringModel) -> Dict[str, Any]:
+    def generate_3d_preview_mesh(model: EngineeringModel) -> dict[str, Any]:
         """
         Generate lightweight vertex/face/color data for real-time 3D WebGL rendering in browser.
         Returns JSON format directly ingestible by Three.js BufferGeometry.
         """
         cylinders = []
         for seg in model.segments:
-            cylinders.append({
-                "startX": seg.start_pos * 1000.0,
-                "endX": seg.end_pos * 1000.0,
-                "length": (seg.end_pos - seg.start_pos) * 1000.0,
-                "radius": (seg.outer_diameter / 2.0) * 1000.0,
-                "innerRadius": (seg.inner_diameter / 2.0) * 1000.0,
-                "feature": seg.feature_type,
-                "keyway": {
-                    "position": seg.keyway.position * 1000.0,
-                    "length": seg.keyway.length * 1000.0,
-                    "width": seg.keyway.width * 1000.0,
-                    "depth": seg.keyway.depth * 1000.0
-                } if seg.keyway else None
-            })
+            cylinders.append(
+                {
+                    "startX": seg.start_pos * 1000.0,
+                    "endX": seg.end_pos * 1000.0,
+                    "length": (seg.end_pos - seg.start_pos) * 1000.0,
+                    "radius": (seg.outer_diameter / 2.0) * 1000.0,
+                    "innerRadius": (seg.inner_diameter / 2.0) * 1000.0,
+                    "feature": seg.feature_type,
+                    "keyway": {
+                        "position": seg.keyway.position * 1000.0,
+                        "length": seg.keyway.length * 1000.0,
+                        "width": seg.keyway.width * 1000.0,
+                        "depth": seg.keyway.depth * 1000.0,
+                    }
+                    if seg.keyway
+                    else None,
+                }
+            )
 
         supports = []
         for s in model.supports:
-            supports.append({
-                "positionX": s.position * 1000.0,
-                "name": s.name,
-                "type": s.support_type
-            })
+            supports.append(
+                {"positionX": s.position * 1000.0, "name": s.name, "type": s.support_type}
+            )
 
         loads = []
         for p in model.point_loads:
-            loads.append({
-                "positionX": p.position * 1000.0,
-                "magnitude": p.magnitude,
-                "direction": p.direction_deg
-            })
+            loads.append(
+                {
+                    "positionX": p.position * 1000.0,
+                    "magnitude": p.magnitude,
+                    "direction": p.direction_deg,
+                }
+            )
 
         return {
             "name": model.name,
             "totalLengthMm": model.total_length * 1000.0,
             "cylinders": cylinders,
             "supports": supports,
-            "loads": loads
+            "loads": loads,
         }

@@ -16,14 +16,16 @@ import json
 import logging
 import os
 import sys
-import urllib.request
 import urllib.error
+import urllib.request
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Union
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
-LEARNING_TOOLS_DIR = Path(os.environ.get("LEARNING_TOOLS_DIR", r"c:\codework\learning-tools")).resolve()
+LEARNING_TOOLS_DIR = Path(
+    os.environ.get("LEARNING_TOOLS_DIR", r"c:\codework\learning-tools")
+).resolve()
 DEFAULT_LT_URL = os.environ.get("LEARNING_TOOLS_URL", "http://127.0.0.1:5000")
 
 
@@ -38,7 +40,7 @@ class LearningToolsBridge:
     Bridge allowing MDIE to leverage tools from the learning-tools repository and API.
     """
 
-    def __init__(self, base_url: str = DEFAULT_LT_URL, lt_dir: Optional[Path] = None):
+    def __init__(self, base_url: str = DEFAULT_LT_URL, lt_dir: Path | None = None):
         self.base_url = base_url.rstrip("/")
         self.lt_dir = lt_dir or LEARNING_TOOLS_DIR
         ensure_lt_imported()
@@ -50,8 +52,7 @@ class LearningToolsBridge:
         """Check if the learning-tools Flask web service is running."""
         try:
             req = urllib.request.Request(
-                f"{self.base_url}/api/stats",
-                headers={"User-Agent": "MDIE-Bridge/1.0"}
+                f"{self.base_url}/api/stats", headers={"User-Agent": "MDIE-Bridge/1.0"}
             )
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 return resp.status == 200
@@ -63,10 +64,10 @@ class LearningToolsBridge:
     # -------------------------------------------------------------------------
     def convert_docx(
         self,
-        html_path: Union[str, Path],
-        output_docx_path: Optional[Union[str, Path]] = None,
+        html_path: str | Path,
+        output_docx_path: str | Path | None = None,
         enable_ai: bool = False,
-        custom_ai_instructions: Optional[str] = None
+        custom_ai_instructions: str | None = None,
     ) -> Path:
         """
         Convert an HTML engineering report to Word (.docx).
@@ -88,14 +89,14 @@ class LearningToolsBridge:
                     "html_path": str(html_path.resolve()),
                     "output_docx_path": str(output_docx_path.resolve()),
                     "enable_ai": enable_ai,
-                    "custom_ai_instructions": custom_ai_instructions
+                    "custom_ai_instructions": custom_ai_instructions,
                 }
                 data = json.dumps(payload).encode("utf-8")
                 req = urllib.request.Request(
                     f"{self.base_url}/api/convert/docx",
                     data=data,
                     headers={"Content-Type": "application/json", "User-Agent": "MDIE-Bridge/1.0"},
-                    method="POST"
+                    method="POST",
                 )
                 with urllib.request.urlopen(req, timeout=30.0) as resp:
                     resp_data = json.loads(resp.read().decode("utf-8"))
@@ -103,15 +104,33 @@ class LearningToolsBridge:
                         logger.info(f"Converted DOCX via learning-tools API: {output_docx_path}")
                         return output_docx_path
             except Exception as e:
-                logger.warning(f"API call to learning-tools failed ({e}); falling back to direct library.")
+                logger.warning(
+                    f"API call to learning-tools failed ({e}); falling back to direct library."
+                )
 
         # 2. Direct library execution via learning-tools
-        from lt.docx_converter import HTMLToDocxConverter
+        from convert.registry import has_dependency
+        from convert.solids import ConversionError
+
+        if not has_dependency("bs4"):
+            raise ConversionError(
+                "learning-tools HTML->DOCX conversion needs the optional 'bs4' "
+                "(beautifulsoup4) package, which is not installed. Install it with "
+                "'pip install beautifulsoup4' or start the learning-tools REST API "
+                "on port 5000 to use the API path instead."
+            )
+        try:
+            from lt.docx_converter import HTMLToDocxConverter
+        except ImportError as exc:
+            raise ConversionError(
+                f"learning-tools DOCX conversion unavailable: {exc}. Install "
+                "beautifulsoup4, or start the learning-tools REST API on port 5000."
+            ) from exc
         return HTMLToDocxConverter.convert(
             html_path=html_path,
             output_docx_path=output_docx_path,
             enable_ai=enable_ai,
-            custom_ai_instructions=custom_ai_instructions
+            custom_ai_instructions=custom_ai_instructions,
         )
 
     # -------------------------------------------------------------------------
@@ -119,13 +138,13 @@ class LearningToolsBridge:
     # -------------------------------------------------------------------------
     def consolidate_report(
         self,
-        report_path: Union[str, Path],
-        output_dir: Optional[Union[str, Path]] = None,
+        report_path: str | Path,
+        output_dir: str | Path | None = None,
         convert_docx: bool = True,
         generate_summaries: bool = True,
         generate_notebooklm: bool = True,
-        enable_ai: bool = False
-    ) -> Dict[str, Any]:
+        enable_ai: bool = False,
+    ) -> dict[str, Any]:
         """
         Consolidate an MDIE engineering report (HTML or Markdown) into structured study materials
         using chunking, summarization, and export tools from learning-tools.
@@ -149,14 +168,14 @@ class LearningToolsBridge:
                     "convert_docx": convert_docx,
                     "generate_summaries": generate_summaries,
                     "generate_notebooklm": generate_notebooklm,
-                    "enable_ai": enable_ai
+                    "enable_ai": enable_ai,
                 }
                 data = json.dumps(payload).encode("utf-8")
                 req = urllib.request.Request(
                     f"{self.base_url}/api/consolidate",
                     data=data,
                     headers={"Content-Type": "application/json", "User-Agent": "MDIE-Bridge/1.0"},
-                    method="POST"
+                    method="POST",
                 )
                 with urllib.request.urlopen(req, timeout=60.0) as resp:
                     resp_data = json.loads(resp.read().decode("utf-8"))
@@ -164,14 +183,33 @@ class LearningToolsBridge:
                         logger.info(f"Consolidated report via learning-tools API: {resp_data}")
                         return resp_data
             except Exception as e:
-                logger.warning(f"API call to learning-tools /api/consolidate failed ({e}); falling back to direct library.")
+                logger.warning(
+                    f"API call to learning-tools /api/consolidate failed ({e}); falling back to direct library."
+                )
 
         # 2. Direct library execution via learning-tools
-        from lt.ingest import Source
-        from lt.chunker import chunk_sources
-        from lt import generate
-        from lt import export
-        from lt.docx_converter import HTMLToDocxConverter
+        from convert.registry import has_dependency
+        from convert.solids import ConversionError
+
+        for pkg, tool in (("bs4", "HTML->DOCX"), ("yaml", "report consolidation")):
+            if not has_dependency(pkg):
+                raise ConversionError(
+                    f"learning-tools {tool} needs the optional '{pkg}' package, "
+                    f"which is not installed. Install it with 'pip install {pkg}' "
+                    "or start the learning-tools REST API on port 5000 to use the "
+                    "API path instead."
+                )
+        try:
+            from lt import export, generate
+            from lt.chunker import chunk_sources
+            from lt.docx_converter import HTMLToDocxConverter
+            from lt.ingest import Source
+        except ImportError as exc:
+            raise ConversionError(
+                f"learning-tools consolidation unavailable: {exc}. Install its "
+                "optional dependencies, or start the learning-tools REST API on "
+                "port 5000."
+            ) from exc
 
         source = Source(report_path)
         chunks = chunk_sources([source])
@@ -182,9 +220,7 @@ class LearningToolsBridge:
         if convert_docx and report_path.suffix.lower() in (".html", ".htm"):
             docx_path = output_dir / f"{report_path.stem}.docx"
             HTMLToDocxConverter.convert(
-                html_path=report_path,
-                output_docx_path=docx_path,
-                enable_ai=enable_ai
+                html_path=report_path, output_docx_path=docx_path, enable_ai=enable_ai
             )
             generated_files["docx"] = str(docx_path)
 
@@ -204,7 +240,7 @@ class LearningToolsBridge:
             "source": report_path.name,
             "chunks_count": len(chunks),
             "output_dir": str(output_dir),
-            "generated_files": generated_files
+            "generated_files": generated_files,
         }
 
 

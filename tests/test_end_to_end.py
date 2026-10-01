@@ -3,14 +3,12 @@ End-to-End Pipeline Tests:
 Natural Language -> Structured Engineering Model -> Assumptions Audit -> Physics Verification -> CAD -> Report
 """
 
-import pytest
-from ai.parser import NLParser
-from ai.assumptions import AssumptionManager
 from ai.critic import DesignCritic
-from physics.solver import PhysicsSolver
-from cad.openscad import OpenSCADGenerator
+from ai.parser import NLParser
 from optimizer.design_search import DesignOptimizer
+from physics.solver import PhysicsSolver
 from reporting.generator import ReportGenerator
+
 
 def test_full_pipeline_prompt():
     prompt = (

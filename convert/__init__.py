@@ -66,10 +66,14 @@ _DOC_RENDERERS = {
 }
 
 
-def convert_file(source: str | Path, target_format: str | None = None,
-                 output_path: str | Path | None = None,
-                 use_ai: bool = False, dpi: int = 200,
-                 timeout: int = 300) -> Path:
+def convert_file(
+    source: str | Path,
+    target_format: str | None = None,
+    output_path: str | Path | None = None,
+    use_ai: bool = False,
+    dpi: int = 200,
+    timeout: int = 300,
+) -> Path:
     """Convert ``source`` into ``target_format`` and return the written path.
 
     ``target_format`` may be omitted when ``output_path`` carries the
@@ -87,7 +91,8 @@ def convert_file(source: str | Path, target_format: str | None = None,
     if src_format is None:
         raise ConversionError(
             f"unrecognised input format for {src.name}; "
-            f"known extensions: {', '.join(sorted(EXTENSION_TO_FORMAT))}")
+            f"known extensions: {', '.join(sorted(EXTENSION_TO_FORMAT))}"
+        )
 
     fmt = target_format
     if fmt is None:
@@ -119,8 +124,7 @@ def convert_file(source: str | Path, target_format: str | None = None,
     raise ConversionError(f"no conversion path from '{src_format}' to '{fmt}'")
 
 
-def _convert_document(src: Path, src_format: str, fmt: str,
-                      dst: Path, use_ai: bool) -> Path:
+def _convert_document(src: Path, src_format: str, fmt: str, dst: Path, use_ai: bool) -> Path:
     # The learning-tools bridge adds an AI peer-review pass, but it is an
     # optional external install. Fall back to the in-repo renderer rather than
     # failing - but only for its absence, so real bridge errors still surface.
@@ -129,12 +133,15 @@ def _convert_document(src: Path, src_format: str, fmt: str,
 
         if docx_bridge.is_available():
             result = docx_bridge.HTMLToDocxConverter.convert(
-                str(src), output_docx_path=str(dst), enable_ai=True)
+                str(src), output_docx_path=str(dst), enable_ai=True
+            )
             return Path(result)
         warnings.warn(
             "AI peer-review pass skipped: the learning-tools DOCX converter is "
             "not installed. Set LEARNING_TOOLS_PATH to enable it.",
-            RuntimeWarning, stacklevel=2)
+            RuntimeWarning,
+            stacklevel=2,
+        )
 
     blocks = blocks_from_source(src, src_format)
 
@@ -150,8 +157,7 @@ def _convert_document(src: Path, src_format: str, fmt: str,
     return dst
 
 
-def _convert_solid(src: Path, src_format: str, dst: Path, fmt: str,
-                   timeout: int = 300) -> Path:
+def _convert_solid(src: Path, src_format: str, dst: Path, fmt: str, timeout: int = 300) -> Path:
     from convert.solids import KERNEL_FORMATS, MESH_FORMATS
 
     if src_format in MESH_FORMATS and fmt in MESH_FORMATS:
@@ -161,8 +167,9 @@ def _convert_solid(src: Path, src_format: str, dst: Path, fmt: str,
     raise ConversionError(f"no solid conversion path from '{src_format}' to '{fmt}'")
 
 
-def _convert_sheets(folder: Path, target_format: str | None,
-                    output_path: str | Path | None, dpi: int) -> Path:
+def _convert_sheets(
+    folder: Path, target_format: str | None, output_path: str | Path | None, dpi: int
+) -> Path:
     sheets = sorted([*folder.glob("*.svg"), *folder.glob("*.html")])
     if not sheets:
         raise ConversionError(f"no drawing sheets found in {folder}")
@@ -172,8 +179,11 @@ def _convert_sheets(folder: Path, target_format: str | None,
 
     if fmt == "pdf":
         if len(sheets) == 1:
-            return svg_to_pdf(sheets[0], dst) if sheets[0].suffix == ".svg" \
+            return (
+                svg_to_pdf(sheets[0], dst)
+                if sheets[0].suffix == ".svg"
                 else blocks_to_pdf(blocks_from_source(sheets[0], "html"), dst, title=folder.name)
+            )
         return sheets_to_pdf([s for s in sheets if s.suffix == ".svg"], dst)
 
     if fmt == "png":

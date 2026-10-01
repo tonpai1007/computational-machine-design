@@ -25,9 +25,11 @@ def _dim_segments(svg: str):
     """
     segs = []
     for m in re.finditer(
-            r'<line x1="([\d.\-]+)" y1="([\d.\-]+)" '
-            r'x2="([\d.\-]+)" y2="([\d.\-]+)" stroke="([^"]+)" '
-            r'stroke-width="([\d.]+)"', svg):
+        r'<line x1="([\d.\-]+)" y1="([\d.\-]+)" '
+        r'x2="([\d.\-]+)" y2="([\d.\-]+)" stroke="([^"]+)" '
+        r'stroke-width="([\d.]+)"',
+        svg,
+    ):
         if m.group(5) == DIMC and float(m.group(6)) >= 0.3:
             segs.append(tuple(float(m.group(i)) for i in range(1, 5)))
     return segs
@@ -72,8 +74,9 @@ def test_every_step_part_has_a_drawing(parts):
 def test_leg_length_is_slanted_hypotenuse(model):
     """Column length includes the horizontal splay offset."""
     g = model.geometry
-    expect = math.hypot(g.seat_height_mm,
-                        g.seat_height_mm * math.tan(math.radians(g.leg_splay_angle_deg)))
+    expect = math.hypot(
+        g.seat_height_mm, g.seat_height_mm * math.tan(math.radians(g.leg_splay_angle_deg))
+    )
     assert _leg_len(g) == pytest.approx(expect, abs=1e-9)
     assert _leg_len(g) > g.seat_height_mm
 
@@ -85,6 +88,7 @@ def test_each_part_sheet_is_valid_svg(parts, model):
         assert s.rstrip().endswith("</svg>"), p.key
         # XML must be balanced enough to parse.
         from xml.etree import ElementTree as ET
+
         ET.fromstring(s), p.key
 
 
@@ -96,12 +100,11 @@ def test_dimension_lines_are_axis_parallel(parts, model):
     """
     checked = 0
     for p in parts:
-        for (x1, y1, x2, y2) in _dim_segments(render_part_svg(p, model)):
+        for x1, y1, x2, y2 in _dim_segments(render_part_svg(p, model)):
             horizontal = abs(y1 - y2) < 1e-6
             vertical = abs(x1 - x2) < 1e-6
             assert horizontal or vertical, (
-                f"{p.key}: diagonal dimension line "
-                f"({x1},{y1})->({x2},{y2})"
+                f"{p.key}: diagonal dimension line ({x1},{y1})->({x2},{y2})"
             )
             checked += 1
     assert checked > 0, "no dimension lines rendered"
@@ -116,7 +119,7 @@ def test_arrowheads_sit_on_dimension_line_ends(parts, model):
         assert len(tips) == 2 * len(segs), (
             f"{p.key}: {len(tips)} arrowheads for {len(segs)} dimension lines"
         )
-        for (tx, ty) in tips:
+        for tx, ty in tips:
             on_end = any(
                 abs(tx - ex) < 0.06 and abs(ty - ey) < 0.06
                 for (x1, y1, x2, y2) in segs
@@ -130,10 +133,10 @@ def test_every_dimension_has_a_label(parts, model):
     for p in parts:
         svg = render_part_svg(p, model)
         dim_labels = re.findall(
-            r'<text x="([\d.\-]+)" y="([\d.\-]+)"[^>]*fill="'
-            + DIMC + r'"[^>]*>([^<]*)</text>', svg)
+            r'<text x="([\d.\-]+)" y="([\d.\-]+)"[^>]*fill="' + DIMC + r'"[^>]*>([^<]*)</text>', svg
+        )
         assert dim_labels, p.key
-        for (x, y, text) in dim_labels:
+        for x, y, text in dim_labels:
             assert text.strip(), f"{p.key}: empty dimension label"
 
 
@@ -143,8 +146,7 @@ def test_no_text_is_tiny(parts, model):
 
     floor = TXT_SMALL - 0.05
     for p in parts:
-        sizes = [float(m) for m in
-                 re.findall(r'font-size="([\d.]+)"', render_part_svg(p, model))]
+        sizes = [float(m) for m in re.findall(r'font-size="([\d.]+)"', render_part_svg(p, model))]
         assert sizes, p.key
         smallest = min(sizes)
         assert smallest >= floor, f"{p.key}: {smallest}mm text below {floor}mm"
@@ -157,8 +159,10 @@ def test_dimension_text_is_larger_than_notes(parts, model):
     assert TXT_DIM > TXT_NOTE, "dimension text should exceed note text"
     for p in parts:
         svg = render_part_svg(p, model)
-        dim_sizes = [float(m.group(1)) for m in re.finditer(
-            r'font-size="([\d.]+)"[^>]*fill="' + DIMC + r'"', svg)]
+        dim_sizes = [
+            float(m.group(1))
+            for m in re.finditer(r'font-size="([\d.]+)"[^>]*fill="' + DIMC + r'"', svg)
+        ]
         assert dim_sizes, p.key
         assert min(dim_sizes) >= TXT_DIM - 0.05, p.key
 
@@ -202,17 +206,23 @@ def _text_box(x, y, size, anchor, body, rotate=None):
 def _parse_text_nodes(svg: str):
     """Yield (body, x, y, size, anchor, rotate) for every non-blank text."""
     for m in re.finditer(
-            r'<text x="([\d.\-]+)" y="([\d.\-]+)" font-size="([\d.]+)" '
-            r'([^>]*)>([^<]*)</text>', svg):
-        x, y, fs, attrs, body = (m.group(1), m.group(2), m.group(3),
-                                 m.group(4), m.group(5))
+        r'<text x="([\d.\-]+)" y="([\d.\-]+)" font-size="([\d.]+)" '
+        r"([^>]*)>([^<]*)</text>",
+        svg,
+    ):
+        x, y, fs, attrs, body = (m.group(1), m.group(2), m.group(3), m.group(4), m.group(5))
         if not body.strip():
             continue
         a = re.search(r'text-anchor="(\w+)"', attrs)
-        rot = re.search(r'rotate\((-?[\d.]+)', attrs)
-        yield (body, float(x), float(y), float(fs),
-               a.group(1) if a else "middle",
-               rot.group(1) if rot else None)
+        rot = re.search(r"rotate\((-?[\d.]+)", attrs)
+        yield (
+            body,
+            float(x),
+            float(y),
+            float(fs),
+            a.group(1) if a else "middle",
+            rot.group(1) if rot else None,
+        )
 
 
 def _approx_text_extents(svg: str):
@@ -238,16 +248,18 @@ def _solid_boxes(svg: str):
     from drafting.part_drawings import FILL
 
     boxes = []
-    for m in re.finditer(r'<polygon points="([^"]+)"[^>]*?fill="([^"]*)"',
-                         svg):
+    for m in re.finditer(r'<polygon points="([^"]+)"[^>]*?fill="([^"]*)"', svg):
         if m.group(2) != FILL:
             continue
         pts = [tuple(float(v) for v in p.split(",")) for p in m.group(1).split()]
         xs = [p[0] for p in pts]
         ys = [p[1] for p in pts]
         boxes.append((min(xs), min(ys), max(xs), max(ys)))
-    for m in re.finditer(r'<circle cx="([\d.\-]+)" cy="([\d.\-]+)" '
-                         r'r="([\d.\-]+)"[^>]*?fill="([^"]*)"', svg):
+    for m in re.finditer(
+        r'<circle cx="([\d.\-]+)" cy="([\d.\-]+)" '
+        r'r="([\d.\-]+)"[^>]*?fill="([^"]*)"',
+        svg,
+    ):
         if m.group(4) != FILL:
             continue
         cx, cy, r = (float(g) for g in m.groups()[:3])
@@ -263,14 +275,20 @@ def _all_shape_boxes(svg: str):
         xs = [p[0] for p in pts]
         ys = [p[1] for p in pts]
         boxes.append((min(xs), min(ys), max(xs), max(ys)))
-    for m in re.finditer(r'<circle cx="([\d.\-]+)" cy="([\d.\-]+)" '
-                         r'r="([\d.\-]+)"', svg):
+    for m in re.finditer(
+        r'<circle cx="([\d.\-]+)" cy="([\d.\-]+)" '
+        r'r="([\d.\-]+)"',
+        svg,
+    ):
         cx, cy, r = (float(g) for g in m.groups())
         boxes.append((cx - r, cy - r, cx + r, cy + r))
-    for m in re.finditer(r'<rect x="([\d.\-]+)" y="([\d.\-]+)" '
-                         r'width="([\d.\-]+)" height="([\d.\-]+)"', svg):
+    for m in re.finditer(
+        r'<rect x="([\d.\-]+)" y="([\d.\-]+)" '
+        r'width="([\d.\-]+)" height="([\d.\-]+)"',
+        svg,
+    ):
         x, y, w, h = (float(g) for g in m.groups())
-        if w > 250 and h > 180:      # the page background
+        if w > 250 and h > 180:  # the page background
             continue
         boxes.append((x, y, x + w, y + h))
     return boxes
@@ -304,7 +322,8 @@ def test_text_never_sits_on_top_of_the_geometry(parts, model):
                 worst.append((round(area, 2), key, body, tb))
     assert not worst, "\n".join(
         f"{a}mm2 {k} {b[:34]!r} at {tuple(round(v, 1) for v in box)}"
-        for a, k, b, box in sorted(worst, reverse=True)[:12])
+        for a, k, b, box in sorted(worst, reverse=True)[:12]
+    )
 
 
 def test_text_never_overlaps_other_text(parts, model):
@@ -321,11 +340,10 @@ def test_text_never_overlaps_other_text(parts, model):
                 a, b = boxes[i][1], boxes[j][1]
                 ov = _overlap_area(a, b)
                 if ov > 1.2:
-                    bad.append((round(ov, 2), key, boxes[i][0][:26],
-                                boxes[j][0][:26]))
+                    bad.append((round(ov, 2), key, boxes[i][0][:26], boxes[j][0][:26]))
     assert not bad, "\n".join(
-        f"{o}mm2 {k}: {a!r} <-> {b!r}" for o, k, a, b in
-        sorted(bad, reverse=True)[:12])
+        f"{o}mm2 {k}: {a!r} <-> {b!r}" for o, k, a, b in sorted(bad, reverse=True)[:12]
+    )
 
 
 def test_no_text_lands_on_any_drawn_shape(parts, model):
@@ -346,16 +364,16 @@ def test_no_text_lands_on_any_drawn_shape(parts, model):
         shapes = _all_shape_boxes(svg)
         for body, tb in _all_text_boxes(svg):
             for sb in shapes:
-                if (sb[0] <= tb[0] and sb[1] <= tb[1]
-                        and sb[2] >= tb[2] and sb[3] >= tb[3]):
-                    continue          # legitimately inside a panel
+                if sb[0] <= tb[0] and sb[1] <= tb[1] and sb[2] >= tb[2] and sb[3] >= tb[3]:
+                    continue  # legitimately inside a panel
                 ov = _overlap_area(tb, sb)
                 if ov > 0.5:
                     bad.append((round(ov, 2), key, body[:30], tb, sb))
     assert not bad, "\n".join(
-        f"{a}mm2 {k} {b!r} text{tuple(round(v,1) for v in t)} "
-        f"vs shape{tuple(round(v,1) for v in s)}"
-        for a, k, b, t, s in sorted(bad, key=lambda r: -r[0])[:12])
+        f"{a}mm2 {k} {b!r} text{tuple(round(v, 1) for v in t)} "
+        f"vs shape{tuple(round(v, 1) for v in s)}"
+        for a, k, b, t, s in sorted(bad, key=lambda r: -r[0])[:12]
+    )
 
 
 def test_feature_dimensions_land_on_the_feature_they_measure(parts, model):
@@ -375,10 +393,10 @@ def test_feature_dimensions_land_on_the_feature_they_measure(parts, model):
         seen = []
         orig = pd._shape_view
 
-        def spy(svg, cx, cy, prims, u, v, scale, label, dims_h=(), dims_v=(),
-                right_edge=None, _o=orig):
-            box = _o(svg, cx, cy, prims, u, v, scale, label, dims_h, dims_v,
-                     right_edge)
+        def spy(
+            svg, cx, cy, prims, u, v, scale, label, dims_h=(), dims_v=(), right_edge=None, _o=orig
+        ):
+            box = _o(svg, cx, cy, prims, u, v, scale, label, dims_h, dims_v, right_edge)
             seen.append((label, box, list(dims_h)))
             return box
 
@@ -392,8 +410,9 @@ def test_feature_dimensions_land_on_the_feature_they_measure(parts, model):
             for u0, u1, _side, text in dims_h:
                 assert x0 - 0.01 <= min(u0, u1) and max(u0, u1) <= x1 + 0.01, (
                     f"{p.key} {label}: {text} spans model "
-                    f"{min(u0,u1):.1f}..{max(u0,u1):.1f} but the view is "
-                    f"{x0:.1f}..{x1:.1f} -- the dimension is off its feature")
+                    f"{min(u0, u1):.1f}..{max(u0, u1):.1f} but the view is "
+                    f"{x0:.1f}..{x1:.1f} -- the dimension is off its feature"
+                )
                 checked += 1
     assert checked >= 3, f"only {checked} feature dimensions checked"
 
@@ -408,13 +427,15 @@ def test_three_view_sheets_carry_extension_lines(parts, model):
         if not p.primitives:
             continue
         svg = render_part_svg(p, model)
-        n_dims = len([1 for m in re.finditer(
-            r'<text[^>]*fill="' + DIMC + r'"[^>]*>[^<]+</text>', svg)])
-        n_ext = len([1 for m in re.finditer(
-            r'<line[^>]*stroke="#64748b"[^>]*stroke-width="0.2"', svg)])
+        n_dims = len(
+            [1 for m in re.finditer(r'<text[^>]*fill="' + DIMC + r'"[^>]*>[^<]+</text>', svg)]
+        )
+        n_ext = len(
+            [1 for m in re.finditer(r'<line[^>]*stroke="#64748b"[^>]*stroke-width="0.2"', svg)]
+        )
         assert n_ext >= 2 * n_dims, (
-            f"{p.key}: {n_dims} dimension values but only {n_ext} "
-            f"extension lines")
+            f"{p.key}: {n_dims} dimension values but only {n_ext} extension lines"
+        )
 
 
 def test_no_text_runs_off_the_sheet(parts, model):
@@ -422,7 +443,7 @@ def test_no_text_runs_off_the_sheet(parts, model):
     W, H, BORDER = 297.0, 210.0, 10.0
     for p in parts:
         svg = render_part_svg(p, model)
-        for (body, x0, x1) in _approx_text_extents(svg):
+        for body, x0, x1 in _approx_text_extents(svg):
             assert x0 >= BORDER - 0.5, f"{p.key}: {body[:30]!r} left {x0:.1f}"
             assert x1 <= W - BORDER + 0.5, f"{p.key}: {body[:30]!r} right {x1:.1f}"
 
@@ -434,25 +455,26 @@ def test_title_block_values_fit_inside_the_block(parts, model):
         rect = re.search(
             r'<rect x="([\d.\-]+)" y="([\d.\-]+)" width="([\d.\-]+)" '
             r'height="([\d.\-]+)" fill="#ffffff" stroke="#0f172a" '
-            r'stroke-width="0.8"/>', svg)
+            r'stroke-width="0.8"/>',
+            svg,
+        )
         assert rect, p.key
         bx = float(rect.group(1))
         bw = float(rect.group(3))
         inside = [
-            (body, x0, x1) for (body, x0, x1) in _approx_text_extents(svg)
+            (body, x0, x1)
+            for (body, x0, x1) in _approx_text_extents(svg)
             if x0 >= bx - 0.5 and x1 > bx
         ]
-        for (body, x0, x1) in inside:
+        for body, x0, x1 in inside:
             assert x1 <= bx + bw + 0.5, (
-                f"{p.key}: title-block text {body[:30]!r} exceeds block "
-                f"({x1:.1f} > {bx + bw:.1f})"
+                f"{p.key}: title-block text {body[:30]!r} exceeds block ({x1:.1f} > {bx + bw:.1f})"
             )
 
 
 def test_seat_and_stretcher_sheets_have_three_views(parts, model):
     """Flat rectangular parts need a full top/front/side set."""
-    three_view = {"Seat_Frame_Rails", "Seat_Pan_Deck", "Lower_Stretchers",
-                  "Armrest_Assembly"}
+    three_view = {"Seat_Frame_Rails", "Seat_Pan_Deck", "Lower_Stretchers", "Armrest_Assembly"}
     for p in parts:
         s = render_part_svg(p, model)
         if p.key in three_view:
@@ -483,7 +505,8 @@ def test_stretcher_uses_splayed_footprint_at_stretcher_height(parts, model):
     p = next(x for x in parts if x.key == "Lower_Stretchers")
     radius = g.stretcher_profile.outer_dimension_mm / 2.0
     delta = (g.seat_height_mm - g.stretcher_height_mm) * math.tan(
-        math.radians(g.leg_splay_angle_deg))
+        math.radians(g.leg_splay_angle_deg)
+    )
     assert p.width_x_mm == pytest.approx(g.seat_width_mm + 2 * (delta + radius))
     assert p.depth_y_mm == pytest.approx(g.seat_depth_mm + 2 * (delta + radius))
     s = render_part_svg(p, model)
@@ -544,12 +567,15 @@ def test_armrest_sheet_draws_members_not_a_bounding_box(parts, model):
     """The armrest views must show the posts, beams and pad as real members.
 
     A plain rectangle for the whole envelope is what this replaces: the
-    cross beams and the two posts are the parts a fabricator must see.
+    cross beams, the two posts, the top spreader and the diagonal brace are
+    the parts a fabricator must see.
     """
     p = next(x for x in parts if x.key == "Armrest_Assembly")
     kinds = [q["kind"] for q in p.primitives]
     assert kinds.count("box") == 3, "2 cross beams + 1 pad"
-    assert kinds.count("tube") == 2, "2 vertical posts"
+    # 2 vertical posts + 1 top spreader + 1 diagonal brace. The brace closes
+    # the racking parallelogram the posts would otherwise form.
+    assert kinds.count("tube") == 4, "2 posts + spreader + diagonal brace"
     s = render_part_svg(p, model)
     # Two posts and two beams must appear as distinct drawn members, so the
     # sheet carries far more outlines than the 3-view bounding boxes need.
@@ -560,6 +586,67 @@ def test_armrest_sheet_draws_members_not_a_bounding_box(parts, model):
     assert f"{g.armrest_length_mm:g}" in s, "pad length"
 
 
+def test_armrest_drawing_and_solver_share_one_geometry(parts, model):
+    """The drawn cantilever must be the cantilever the solver checks.
+
+    These drifted apart once: the solver used a nominal 60 mm overhang field
+    while the pad was drawn 130 mm forward of the front post, understating
+    the arm bending stress by ~40%. Both sides must now read the single
+    resolved ArmrestGeometry.
+
+    The overhang was later cut from 130 mm to 60 mm by moving the front post
+    forward rather than shortening the pad, so the armrest keeps its 320 mm
+    ergonomic length. The regression here is that the drawn cantilever still
+    equals the analysed one.
+    """
+    from core.frame_model import ARM_PAD_THICKNESS_MM, resolve_armrest
+    from physics.frame_physics import FramePhysicsSolver
+
+    g = model.geometry
+    ag = resolve_armrest(
+        g,
+        side=-1.0,
+        arm_tube_r=g.arm_profile.outer_dimension_mm / 2.0,
+        pad_thickness_mm=ARM_PAD_THICKNESS_MM,
+    )
+
+    # The pad really is drawn where the field says it is.
+    assert ag.pad_front_y_mm - ag.front_post_y_mm == g.armrest_overhang_front_mm
+    assert ag.cantilever_front_mm == pytest.approx(g.armrest_overhang_front_mm)
+
+    # And the solver's cantilever moment comes from that same number.
+    sol = FramePhysicsSolver.solve(model)
+    arm = sol.armrests[0]
+    expected = arm.applied_vertical_n * ag.cantilever_front_mm / 1000.0
+    assert arm.overhang_moment_nm == pytest.approx(expected)
+    assert arm.overhang_moment_nm == pytest.approx(27.000, abs=1e-3)
+
+
+def test_armrest_pad_length_is_ergonomic_and_cantilever_is_short(parts, model):
+    """Moving the front post forward must not have shortened the pad.
+
+    Cutting the overhang by moving the post keeps the armrest at its designed
+    320 mm, so a reviewer checking the drawing sees a full-length pad carried
+    at both ends instead of a long cantilever.
+    """
+    from core.frame_model import ARM_PAD_THICKNESS_MM, resolve_armrest
+
+    g = model.geometry
+    ag = resolve_armrest(
+        g,
+        side=-1.0,
+        arm_tube_r=g.arm_profile.outer_dimension_mm / 2.0,
+        pad_thickness_mm=ARM_PAD_THICKNESS_MM,
+    )
+
+    assert g.armrest_length_mm == pytest.approx(320.0)
+    assert ag.pad_front_y_mm - ag.pad_rear_y_mm == pytest.approx(320.0)
+    # Short enough that the post base moment stays modest.
+    assert ag.cantilever_front_mm == pytest.approx(60.0)
+    # Rear overhang was always ~3 mm and must stay negligible.
+    assert abs(ag.cantilever_rear_mm) < 10.0
+
+
 def test_assembly_primitives_match_exported_solids(model):
     """The general arrangement must describe the chair that is exported.
 
@@ -567,13 +654,11 @@ def test_assembly_primitives_match_exported_solids(model):
     ``generate_assembly_parts`` feeds the STEP files. If the two describe
     different chairs the drawing is fiction, so compare every group.
     """
-    from cad.assembly import (FrameCADEngine, assembly_primitives,
-                                   primitives_to_triangles)
+    from cad.assembly import FrameCADEngine, assembly_primitives, primitives_to_triangles
 
     groups = dict(assembly_primitives(model))
     solids = {s.name: s for s in FrameCADEngine.generate_assembly_parts(model)}
-    assert set(groups) == set(solids), (
-        f"group/solid mismatch: {sorted(set(groups) ^ set(solids))}")
+    assert set(groups) == set(solids), f"group/solid mismatch: {sorted(set(groups) ^ set(solids))}"
 
     def bbox(tris):
         xs = [v[0] for t in tris for v in t]
@@ -587,7 +672,8 @@ def test_assembly_primitives_match_exported_solids(model):
         for axis, (a, b) in enumerate(zip(mine, theirs)):
             for end, (x, y) in enumerate(zip(a, b)):
                 assert x == pytest.approx(y, abs=1e-6), (
-                    f"{name} bbox axis {axis} end {end}: {x} != {y}")
+                    f"{name} bbox axis {axis} end {end}: {x} != {y}"
+                )
 
 
 def test_assembly_sheet_shows_every_item(model):
@@ -622,14 +708,12 @@ def test_assembly_sheet_dimensions_come_from_the_model(model):
         vals = []
         for p in prims:
             if p["kind"] == "box":
-                vals += [p["c"][u] - p["s"][u] / 2.0,
-                         p["c"][u] + p["s"][u] / 2.0]
+                vals += [p["c"][u] - p["s"][u] / 2.0, p["c"][u] + p["s"][u] / 2.0]
             else:
                 d = [p["b"][i] - p["a"][i] for i in range(3)]
                 ln = math.sqrt(sum(x * x for x in d)) or 1.0
                 reach = p["r"] * math.sqrt(max(0.0, 1.0 - (d[u] / ln) ** 2))
-                vals += [min(p["a"][u], p["b"][u]) - reach,
-                         max(p["a"][u], p["b"][u]) + reach]
+                vals += [min(p["a"][u], p["b"][u]) - reach, max(p["a"][u], p["b"][u]) + reach]
         return min(vals), max(vals)
 
     s = render_assembly_svg(model)
@@ -673,16 +757,17 @@ def test_assembly_overall_height_is_the_backrest_not_a_formula(model):
     total_h = z_hi - z_lo
     # The backrest is the tallest thing on the chair; if it were not, the
     # stated height would be measuring the wrong member.
-    back = [p for n, pl in assembly_primitives(model)
-            if n == "Backrest_Assembly" for p in pl]
+    back = [p for n, pl in assembly_primitives(model) if n == "Backrest_Assembly" for p in pl]
     assert max(ends(p, 2)[1] for p in back) == pytest.approx(z_hi, abs=1e-6)
 
     s = render_assembly_svg(model)
     stated = re.findall(r'<text[^>]*font-size="4\.2"[^>]*>([\d.]+)</text>', s)
     assert f"{total_h:.1f}" in stated, (
-        f"stated heights {stated} do not include the real {total_h:.1f}")
+        f"stated heights {stated} do not include the real {total_h:.1f}"
+    )
     assert not any(float(v) > 1000.0 for v in stated), (
-        f"an overall dimension is far too large: {stated}")
+        f"an overall dimension is far too large: {stated}"
+    )
 
 
 def test_assembly_sheet_stays_inside_the_border(model):
@@ -697,8 +782,11 @@ def test_assembly_sheet_stays_inside_the_border(model):
     for m in re.finditer(r'<text x="([\d.\-]+)" y="([\d.\-]+)"', s):
         xs.append(float(m.group(1)))
         ys.append(float(m.group(2)))
-    for m in re.finditer(r'<circle cx="([\d.\-]+)" cy="([\d.\-]+)" '
-                         r'r="([\d.\-]+)"', s):
+    for m in re.finditer(
+        r'<circle cx="([\d.\-]+)" cy="([\d.\-]+)" '
+        r'r="([\d.\-]+)"',
+        s,
+    ):
         cx, cy, r = (float(g) for g in m.groups())
         xs += [cx - r, cx + r]
         ys += [cy - r, cy + r]
@@ -721,13 +809,14 @@ def test_no_view_falls_outside_the_sheet_border(parts, model):
             xs.append(float(m.group(1)))
             ys.append(float(m.group(2)))
         for m in re.finditer(
-                r'<rect x="([\d.\-]+)" y="([\d.\-]+)" '
-                r'width="([\d.\-]+)" height="([\d.\-]+)"', s):
+            r'<rect x="([\d.\-]+)" y="([\d.\-]+)" '
+            r'width="([\d.\-]+)" height="([\d.\-]+)"',
+            s,
+        ):
             x, y, w, h = (float(g) for g in m.groups())
             xs += [x, x + w]
             ys += [y, y + h]
-        for m in re.finditer(
-                r'<circle cx="([\d.\-]+)" cy="([\d.\-]+)" r="([\d.\-]+)"', s):
+        for m in re.finditer(r'<circle cx="([\d.\-]+)" cy="([\d.\-]+)" r="([\d.\-]+)"', s):
             cx, cy, r = (float(g) for g in m.groups())
             xs += [cx - r, cx + r]
             ys += [cy - r, cy + r]
@@ -764,7 +853,7 @@ def test_annulus_hatch_stays_within_the_wall():
     r_in, r_out = 12.0, 14.0
     segs = _clip_annulus(0.0, -r_out, 2 * r_out, r_out, cx, cy, r_in, r_out)
     assert segs
-    for (ax, ay, bx, by) in segs:
+    for ax, ay, bx, by in segs:
         for t in (0.0, 0.25, 0.5, 0.75, 1.0):
             x = ax + (bx - ax) * t
             y = ay + (by - ay) * t

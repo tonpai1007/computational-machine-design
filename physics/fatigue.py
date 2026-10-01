@@ -5,9 +5,11 @@ fatigue failure safety factors (Goodman, Gerber, ASME-Elliptic, Soderberg), and 
 """
 
 import math
-from typing import Dict, Any, Tuple
+from typing import Any
+
 from core.models import EngineeringModel, SectionStress
 from materials.database import Material
+
 
 class MarinFactors:
     @staticmethod
@@ -25,7 +27,7 @@ class MarinFactors:
         }
         surf = surface_type.lower().replace(" ", "_")
         a, b = params.get(surf, (4.51, -0.265))
-        ka = a * (s_ut_mpa ** b)
+        ka = a * (s_ut_mpa**b)
         return float(max(0.2, min(1.0, ka)))
 
     @staticmethod
@@ -39,9 +41,9 @@ class MarinFactors:
         if d_mm <= 2.79:
             return 1.0
         elif d_mm <= 51.0:
-            kb = 1.24 * (d_mm ** -0.107)
+            kb = 1.24 * (d_mm**-0.107)
         elif d_mm <= 254.0:
-            kb = 1.51 * (d_mm ** -0.157)
+            kb = 1.51 * (d_mm**-0.157)
         else:
             kb = 0.6
         return float(max(0.5, min(1.0, kb)))
@@ -80,8 +82,8 @@ class FatigueSolver:
         critical_sec: SectionStress,
         material: Material,
         model: EngineeringModel,
-        reliability: float = 0.99
-    ) -> Dict[str, Any]:
+        reliability: float = 0.99,
+    ) -> dict[str, Any]:
         """
         Calculates endurance limit Se, fatigue safety factors (Goodman, Gerber, ASME-Elliptic),
         and predicts cycles to failure Nf.
@@ -129,7 +131,7 @@ class FatigueSolver:
             nf_gerber = s_e / sigma_a_prime if sigma_a_prime > 1e-9 else 999.0
 
         # 3. ASME-Elliptic criterion: (sigma_a'/Se)^2 + (sigma_m'/Sy)^2 = 1 / nf^2
-        denom_asme = (sigma_a_prime / s_e)**2 + (sigma_m_prime / s_y)**2
+        denom_asme = (sigma_a_prime / s_e) ** 2 + (sigma_m_prime / s_y) ** 2
         nf_asme = 1.0 / math.sqrt(denom_asme) if denom_asme > 1e-9 else 999.0
 
         # 4. Soderberg criterion: sigma_a'/Se + sigma_m'/Sy = 1 / nf
@@ -155,12 +157,12 @@ class FatigueSolver:
             # a = (S_1000)^2 / S_e
             if s_1000 > s_e:
                 b_exp = -(1.0 / 3.0) * math.log10(s_1000 / s_e)
-                a_coeff = (s_1000 ** 2) / s_e
+                a_coeff = (s_1000**2) / s_e
                 if sigma_rev < s_1000:
                     predicted_cycles = float((sigma_rev / a_coeff) ** (1.0 / b_exp))
                 else:
                     # Low-cycle fatigue (<1000 cycles)
-                    predicted_cycles = float(max(100.0, 1000.0 * (s_1000 / sigma_rev)**3))
+                    predicted_cycles = float(max(100.0, 1000.0 * (s_1000 / sigma_rev) ** 3))
             else:
                 predicted_cycles = 1e4
             life_description = f"Finite Life (~{predicted_cycles:,.0f} cycles)"

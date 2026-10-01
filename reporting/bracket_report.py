@@ -9,7 +9,6 @@ Produces formal, audit-ready engineering dossiers adhering to university Machine
 - Comprehensive component summary audit table and formal engineering sign-off block
 """
 
-from typing import Dict, Any
 from core.bracket_model import BracketModel
 from physics.bracket_physics import BracketSolverResult
 
@@ -386,7 +385,7 @@ class BracketReportGenerator:
         <div style="font-size: 11px; color: #64748b;">Motor Mounting Bracket Structural & Fastener Dossier</div>
       </div>
       <div class="doc-meta">
-        <div><strong>Doc ID:</strong> MDIE-BRACKET-{model.name.upper().replace(' ', '_')}</div>
+        <div><strong>Doc ID:</strong> MDIE-BRACKET-{model.name.upper().replace(" ", "_")}</div>
         <div><strong>Standard:</strong> ASME B1.1 &bull; ISO 898-1 &bull; AISC 360</div>
         <div><strong>Units:</strong> SI Metric (mm, N, N·m, MPa, GPa)</div>
       </div>
@@ -424,7 +423,7 @@ class BracketReportGenerator:
       </div>
       <div class="kpi-card">
         <div class="kpi-label">Plate Yield Safety Factor</div>
-        <div class="kpi-val {'text-pass' if result.plate_yield_safety_factor >= 1.5 else 'text-fail'}">{result.plate_yield_safety_factor:.2f}</div>
+        <div class="kpi-val {"text-pass" if result.plate_yield_safety_factor >= 1.5 else "text-fail"}">{result.plate_yield_safety_factor:.2f}</div>
         <div class="kpi-sub">Design Target: n<sub>d</sub> &ge; 1.50</div>
       </div>
       <div class="kpi-card">
@@ -434,7 +433,7 @@ class BracketReportGenerator:
       </div>
       <div class="kpi-card">
         <div class="kpi-label">Fastener Safety Factor</div>
-        <div class="kpi-val {'text-pass' if result.bolt_safety_factor >= 2.0 else 'text-fail'}">{result.bolt_safety_factor:.2f}</div>
+        <div class="kpi-val {"text-pass" if result.bolt_safety_factor >= 2.0 else "text-fail"}">{result.bolt_safety_factor:.2f}</div>
         <div class="kpi-sub">Design Target: n<sub>d</sub> &ge; 2.00</div>
       </div>
     </div>
@@ -477,7 +476,7 @@ class BracketReportGenerator:
         <tr>
           <td style="font-weight: 600;">3</td>
           <td>Reinforcement Gusset Ribs</td>
-          <td>{f'Dual Triangular Ribs (t = {g.thickness_mm:.1f} mm)' if g.has_gussets else 'None'}</td>
+          <td>{f"Dual Triangular Ribs (t = {g.thickness_mm:.1f} mm)" if g.has_gussets else "None"}</td>
           <td class="num">{2 if g.has_gussets else 0}</td>
           <td>{m.name}</td>
           <td>Fillet Welded Structural Ribs</td>
@@ -591,7 +590,7 @@ class BracketReportGenerator:
           <td>M<sub>root</sub> = {result.overturning_moment_nm:.1f} N&middot;m</td>
           <td class="num">{result.root_bending_stress_mpa:.1f} MPa</td>
           <td class="num">{m.yield_strength_mpa:.1f} MPa</td>
-          <td class="num {'text-pass' if result.plate_yield_safety_factor >= 1.5 else 'text-fail'}" style="font-weight: 700;">{result.plate_yield_safety_factor:.2f}</td>
+          <td class="num {"text-pass" if result.plate_yield_safety_factor >= 1.5 else "text-fail"}" style="font-weight: 700;">{result.plate_yield_safety_factor:.2f}</td>
           <td style="text-align: center;">{plate_badge}</td>
         </tr>
         <tr>
@@ -607,7 +606,7 @@ class BracketReportGenerator:
           <td>{pat.num_holes}x Bolts (BCD {pat.bolt_circle_diameter_mm:.0f} mm)</td>
           <td class="num">{result.motor_bolt_shear_stress_mpa:.1f} MPa</td>
           <td class="num">300.0 MPa (Grade 8.8)</td>
-          <td class="num {'text-pass' if result.bolt_safety_factor >= 2.0 else 'text-fail'}" style="font-weight: 700;">{result.bolt_safety_factor:.2f}</td>
+          <td class="num {"text-pass" if result.bolt_safety_factor >= 2.0 else "text-fail"}" style="font-weight: 700;">{result.bolt_safety_factor:.2f}</td>
           <td style="text-align: center;">{bolt_badge}</td>
         </tr>
         <tr>
@@ -647,9 +646,9 @@ class BracketReportGenerator:
           <td class="num">&sigma;<sub>vm</sub> = {result.max_von_mises_mpa:.1f} MPa</td>
           <td class="num">{m.yield_strength_mpa:.1f} MPa</td>
           <td class="num">1.50</td>
-          <td class="num {'text-pass' if result.plate_yield_safety_factor >= 1.5 else 'text-fail'}" style="font-weight: 700;">{result.plate_yield_safety_factor:.2f}</td>
-          <td style="text-align: center; font-weight: 700;" class="{'text-pass' if result.plate_yield_safety_factor >= 1.5 else 'text-fail'}">
-            {'PASS' if result.plate_yield_safety_factor >= 1.5 else 'FAIL'}
+          <td class="num {"text-pass" if result.plate_yield_safety_factor >= 1.5 else "text-fail"}" style="font-weight: 700;">{result.plate_yield_safety_factor:.2f}</td>
+          <td style="text-align: center; font-weight: 700;" class="{"text-pass" if result.plate_yield_safety_factor >= 1.5 else "text-fail"}">
+            {"PASS" if result.plate_yield_safety_factor >= 1.5 else "FAIL"}
           </td>
         </tr>
         <tr>
@@ -658,9 +657,9 @@ class BracketReportGenerator:
           <td class="num">&tau;<sub>bolt</sub> = {result.motor_bolt_shear_stress_mpa:.1f} MPa</td>
           <td class="num">300.0 MPa</td>
           <td class="num">2.00</td>
-          <td class="num {'text-pass' if result.bolt_safety_factor >= 2.0 else 'text-fail'}" style="font-weight: 700;">{result.bolt_safety_factor:.2f}</td>
-          <td style="text-align: center; font-weight: 700;" class="{'text-pass' if result.bolt_safety_factor >= 2.0 else 'text-fail'}">
-            {'PASS' if result.bolt_safety_factor >= 2.0 else 'FAIL'}
+          <td class="num {"text-pass" if result.bolt_safety_factor >= 2.0 else "text-fail"}" style="font-weight: 700;">{result.bolt_safety_factor:.2f}</td>
+          <td style="text-align: center; font-weight: 700;" class="{"text-pass" if result.bolt_safety_factor >= 2.0 else "text-fail"}">
+            {"PASS" if result.bolt_safety_factor >= 2.0 else "FAIL"}
           </td>
         </tr>
       </tbody>

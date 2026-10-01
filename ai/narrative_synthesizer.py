@@ -10,18 +10,17 @@ Strictly adheres to MDIE Directives:
 
 import json
 import logging
-from typing import Dict, Any, List, Optional
-from core.frame_model import FrameDesignModel
+from typing import Any
+
 from ai.llm_router import LLMRouter
+from core.frame_model import FrameDesignModel
 
 logger = logging.getLogger("ai.narrative_synthesizer")
 
 
 def synthesize_academic_narrative(
-    model: FrameDesignModel,
-    component_names: List[str],
-    use_ai: bool = True
-) -> Dict[str, Any]:
+    model: FrameDesignModel, component_names: list[str], use_ai: bool = True
+) -> dict[str, Any]:
     """
     Synthesize introduction (บทนำ) and component mechanical role descriptions
     using LLMRouter (AI) with a deterministic domain-aware fallback.
@@ -53,7 +52,7 @@ def synthesize_academic_narrative(
                 user_prompt=user_prompt,
                 response_format_json=True,
                 max_tokens=1000,
-                temperature=0.2
+                temperature=0.2,
             )
             if resp:
                 data = json.loads(resp)
@@ -67,7 +66,7 @@ def synthesize_academic_narrative(
         "chair": "เก้าอี้พักผ่อนโครงสร้างตามหลักสรีรศาสตร์ (Ergonomic Chair)",
         "stool": "เก้าอี้สตูลโครงสร้างรับน้ำหนัก (Structural Stool)",
         "table": "โต๊ะโครงสร้างรับภาระบรรทุก (Structural Table)",
-        "bench": "ม้านั่งยาวโครงสร้างรับภาระบรรทุก (Structural Bench)"
+        "bench": "ม้านั่งยาวโครงสร้างรับภาระบรรทุก (Structural Bench)",
     }.get(g.topology_type, f"โครงสร้างเครื่องจักรกล ({model.name})")
 
     intro = (
@@ -83,8 +82,8 @@ def synthesize_academic_narrative(
 
     comps = {
         "columns": f"ทำหน้าที่ถ่ายทอดน้ำหนักบรรทุกแนวดิ่งทั้งหมดลงสู่พื้นผิวสัมผัส จัดวางจำนวน {g.num_legs} เสาเพื่อกระจายแรงอย่างสมดุล และป้องกันความล้มเหลวจากการโก่งเดาะ (Buckling) ภายใต้ภาระกดอัดตามแนวแกน",
-        "seat_rails": f"ทำหน้าที่รองรับแรงกดกระจายตัวสม่ำเสมอด้านบนและส่งถ่ายแรงไปยังหัวเสารองรับ โดยทำงานในลักษณะคานช่วงเดียวรับโมเมนต์ดัดและแรงเฉือน",
-        "stretchers": f"ทำหน้าที่ยึดตรึงระหว่างเสาโครงสร้างเพื่อลดความยาวประสิทธิผลของเสา เพิ่มเสถียรภาพการรับแรง และรองรับแรงกระแทกบริเวณฐานล่าง",
-        "armrests": f"ทำหน้าที่รองรับแรงกดแนวดิ่งและแรงผลักด้านข้างจากแขนผู้ใช้งาน พฤติกรรมโครงสร้างเป็นคานยื่นรับโมเมนต์ดัดร่วมกับแรงเฉือน"
+        "seat_rails": "ทำหน้าที่รองรับแรงกดกระจายตัวสม่ำเสมอด้านบนและส่งถ่ายแรงไปยังหัวเสารองรับ โดยทำงานในลักษณะคานช่วงเดียวรับโมเมนต์ดัดและแรงเฉือน",
+        "stretchers": "ทำหน้าที่ยึดตรึงระหว่างเสาโครงสร้างเพื่อลดความยาวประสิทธิผลของเสา เพิ่มเสถียรภาพการรับแรง และรองรับแรงกระแทกบริเวณฐานล่าง",
+        "armrests": "ทำหน้าที่รองรับแรงกดแนวดิ่งและแรงผลักด้านข้างจากแขนผู้ใช้งาน พฤติกรรมโครงสร้างเป็นคานยื่นรับโมเมนต์ดัดร่วมกับแรงเฉือน",
     }
     return {"introduction": intro, "components": comps}

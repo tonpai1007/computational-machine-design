@@ -5,12 +5,12 @@ Lewis bending stress, AGMA contact pitting stress, and safety factors.
 """
 
 import math
-from typing import Dict, Any, List, Optional
+
 from components.gears import (
-    GearPairSpecification,
     GearGeometry,
-    GearStressResult,
     GearPairResult,
+    GearPairSpecification,
+    GearStressResult,
 )
 from materials.database import MaterialDatabase
 
@@ -37,7 +37,11 @@ class GearSolver:
         beta_rad = math.radians(spec.helix_angle_deg)
         alpha_n_rad = math.radians(spec.pressure_angle_deg)
         # Transverse pressure angle alpha_t
-        alpha_t_rad = math.atan(math.tan(alpha_n_rad) / math.cos(beta_rad)) if math.cos(beta_rad) > 1e-6 else alpha_n_rad
+        alpha_t_rad = (
+            math.atan(math.tan(alpha_n_rad) / math.cos(beta_rad))
+            if math.cos(beta_rad) > 1e-6
+            else alpha_n_rad
+        )
 
         # Modules
         mn = spec.normal_module_mm
@@ -146,7 +150,9 @@ class GearSolver:
         cos_beta = math.cos(beta_rad)
         sin_alpha_t = math.sin(alpha_t_rad)
         cos_alpha_t = math.cos(alpha_t_rad)
-        geom_i = (sin_alpha_t * cos_alpha_t / 2.0) * (gear_ratio / (gear_ratio + 1.0)) * (1.0 / cos_beta)
+        geom_i = (
+            (sin_alpha_t * cos_alpha_t / 2.0) * (gear_ratio / (gear_ratio + 1.0)) * (1.0 / cos_beta)
+        )
         geom_i = max(0.08, geom_i)
 
         # Contact stress sigma_c = Ze * sqrt((Wt * Ko * Kv * Km) / (d1 * face_w * I))
@@ -158,11 +164,17 @@ class GearSolver:
 
         recs = []
         if sf_bend1 < 1.5:
-            recs.append(f"Pinion bending safety factor ({sf_bend1:.2f}) is below 1.5. Increase normal module (mn > {mn} mm) or face width.")
+            recs.append(
+                f"Pinion bending safety factor ({sf_bend1:.2f}) is below 1.5. Increase normal module (mn > {mn} mm) or face width."
+            )
         if sf_contact < 1.2:
-            recs.append(f"Surface pitting safety factor ({sf_contact:.2f}) is below 1.2. Increase center distance, face width, or use case-hardened alloy.")
+            recs.append(
+                f"Surface pitting safety factor ({sf_contact:.2f}) is below 1.2. Increase center distance, face width, or use case-hardened alloy."
+            )
         if not recs:
-            recs.append("All AGMA bending and contact surface fatigue constraints verified with high safety margin.")
+            recs.append(
+                "All AGMA bending and contact surface fatigue constraints verified with high safety margin."
+            )
 
         stress_res = GearStressResult(
             transmitted_torque_pinion_nm=round(t1_nm, 2),

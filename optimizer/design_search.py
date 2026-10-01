@@ -5,18 +5,49 @@ and evaluates candidate feasibility through the deterministic physics solver.
 """
 
 import copy
-import math
-from typing import List, Dict, Any, Optional, Tuple
-from scipy.optimize import minimize_scalar
-from core.models import EngineeringModel, ShaftSegment, SolverResult, EngineeringConstraints
-from materials.database import MaterialDatabase, Material
+from typing import Any
+
+from core.models import EngineeringModel, SolverResult
+from materials.database import Material, MaterialDatabase
 from physics.solver import PhysicsSolver
 
 # Standard metric shaft diameters in millimeters (ISO 286 / DIN standard transmission shafting)
 STANDARD_SHAFT_DIAMETERS_MM = [
-    12, 14, 15, 16, 17, 18, 19, 20, 22, 24, 25, 28, 30, 32, 35, 38, 40, 42, 45, 48, 50,
-    55, 60, 65, 70, 75, 80, 85, 90, 95, 100, 110, 120
+    12,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    22,
+    24,
+    25,
+    28,
+    30,
+    32,
+    35,
+    38,
+    40,
+    42,
+    45,
+    48,
+    50,
+    55,
+    60,
+    65,
+    70,
+    75,
+    80,
+    85,
+    90,
+    95,
+    100,
+    110,
+    120,
 ]
+
 
 class DesignCandidate:
     def __init__(
@@ -27,7 +58,7 @@ class DesignCandidate:
         material: Material,
         mass_kg: float,
         cost_metric: float,
-        description: str = ""
+        description: str = "",
     ):
         self.name = name
         self.model = model
@@ -37,7 +68,7 @@ class DesignCandidate:
         self.cost_metric = cost_metric
         self.description = description
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "material_name": self.material.name,
@@ -54,13 +85,14 @@ class DesignCandidate:
             "description": self.description,
         }
 
+
 class DesignOptimizer:
     @staticmethod
     def explore_candidates(
         base_model: EngineeringModel,
-        candidate_materials: Optional[List[str]] = None,
-        scale_factors: Optional[List[float]] = None
-    ) -> List[DesignCandidate]:
+        candidate_materials: list[str] | None = None,
+        scale_factors: list[float] | None = None,
+    ) -> list[DesignCandidate]:
         """
         Generate multiple engineering candidate designs by varying materials and diameters.
         Evaluates each candidate through the deterministic physics solver.
@@ -70,7 +102,7 @@ class DesignOptimizer:
         if scale_factors is None:
             scale_factors = [0.85, 1.0, 1.15, 1.30]
 
-        candidates: List[DesignCandidate] = []
+        candidates: list[DesignCandidate] = []
         c_count = 1
 
         for mat_id in candidate_materials:
@@ -83,7 +115,7 @@ class DesignOptimizer:
                 m_cand = copy.deepcopy(base_model)
                 m_cand.name = f"Candidate {chr(64 + c_count)}"
                 m_cand.material_id = mat_id
-                
+
                 # Scale segment diameters
                 for seg in m_cand.segments:
                     # Round to nearest integer mm for realistic manufacturing
@@ -97,19 +129,21 @@ class DesignOptimizer:
                 res = PhysicsSolver.solve(m_cand)
                 cost = res.total_mass_kg * mat.cost_index_per_kg
                 desc = (
-                    f"Material: {mat.name}, Diameter scaled {scale*100:.0f}%. "
+                    f"Material: {mat.name}, Diameter scaled {scale * 100:.0f}%. "
                     f"Status: {'FEASIBLE' if res.all_constraints_passed else 'NON-COMPLIANT'}"
                 )
 
-                candidates.append(DesignCandidate(
-                    name=m_cand.name,
-                    model=m_cand,
-                    result=res,
-                    material=mat,
-                    mass_kg=res.total_mass_kg,
-                    cost_metric=cost,
-                    description=desc
-                ))
+                candidates.append(
+                    DesignCandidate(
+                        name=m_cand.name,
+                        model=m_cand,
+                        result=res,
+                        material=mat,
+                        mass_kg=res.total_mass_kg,
+                        cost_metric=cost,
+                        description=desc,
+                    )
+                )
                 c_count += 1
 
         # Sort candidates: feasible first, then by mass ascending
@@ -121,16 +155,16 @@ class DesignOptimizer:
         base_model: EngineeringModel,
         target_sf_yield: float = 2.0,
         target_sf_fatigue: float = 1.5,
-        max_defl_mm: float = 1.0
-    ) -> Tuple[Optional[DesignCandidate], List[str]]:
+        max_defl_mm: float = 1.0,
+    ) -> tuple[DesignCandidate | None, list[str]]:
         """
         Finds the minimum standardized diameter that satisfies all yield, fatigue, and deflection constraints.
         """
         logs = []
         logs.append(f"Starting minimum mass diameter optimization for '{base_model.name}'.")
-        
+
         mat = MaterialDatabase.get(base_model.material_id)
-        best_candidate: Optional[DesignCandidate] = None
+        best_candidate: DesignCandidate | None = None
 
         # Search across standard diameters
         for d_mm in STANDARD_SHAFT_DIAMETERS_MM:
@@ -138,7 +172,7 @@ class DesignOptimizer:
             test_model = copy.deepcopy(base_model)
             for seg in test_model.segments:
                 seg.outer_diameter = d_m
-            
+
             test_model.constraints.min_yield_safety_factor = target_sf_yield
             test_model.constraints.min_fatigue_safety_factor = target_sf_fatigue
             test_model.constraints.max_deflection_mm = max_defl_mm
@@ -153,7 +187,7 @@ class DesignOptimizer:
                     material=mat,
                     mass_kg=res.total_mass_kg,
                     cost_metric=cost,
-                    description=f"Optimal standardized diameter: {d_mm} mm. Minimum mass: {res.total_mass_kg:.3f} kg."
+                    description=f"Optimal standardized diameter: {d_mm} mm. Minimum mass: {res.total_mass_kg:.3f} kg.",
                 )
                 logs.append(
                     f"Optimal solution found: d={d_mm} mm (Mass={res.total_mass_kg:.3f} kg, "
@@ -163,6 +197,8 @@ class DesignOptimizer:
                 break
 
         if not best_candidate:
-            logs.append("No standard diameter up to 120 mm satisfied all constraints. Review loads or material selection.")
+            logs.append(
+                "No standard diameter up to 120 mm satisfied all constraints. Review loads or material selection."
+            )
 
         return best_candidate, logs

@@ -4,13 +4,15 @@ Generates formal design reviews, diagnoses structural failures using exact deter
 recommends verified redesigns, and enforces safety boundaries between AI claims and physics ground truth.
 """
 
-from typing import Dict, Any, List, Optional, Tuple
-from core.models import EngineeringModel, SolverResult, SectionStress
+from typing import Any
+
+from core.models import EngineeringModel, SolverResult
 from materials.database import MaterialDatabase
+
 
 class DesignCritic:
     @staticmethod
-    def review_design(model: EngineeringModel, result: SolverResult) -> Dict[str, Any]:
+    def review_design(model: EngineeringModel, result: SolverResult) -> dict[str, Any]:
         """
         Produce a structured design review with PASS / WARNING / FAIL ratings,
         root-cause decomposition, and concrete engineering recommendations.
@@ -20,19 +22,25 @@ class DesignCritic:
 
         # 1. Component Reviews
         strength_status = "PASS" if result.yield_passed else "FAIL"
-        fatigue_status = "PASS" if result.fatigue_passed else ("WARNING" if result.min_fatigue_safety_factor >= 1.0 else "FAIL")
+        fatigue_status = (
+            "PASS"
+            if result.fatigue_passed
+            else ("WARNING" if result.min_fatigue_safety_factor >= 1.0 else "FAIL")
+        )
         deflection_status = "PASS" if result.deflection_passed else "FAIL"
-        
+
         mass_status = "PASS"
         if c.max_mass_kg is not None:
             mass_status = "PASS" if result.total_mass_kg <= c.max_mass_kg else "FAIL"
 
-        overall_status = "PASS" if (result.all_constraints_passed and mass_status == "PASS") else "FAIL"
+        overall_status = (
+            "PASS" if (result.all_constraints_passed and mass_status == "PASS") else "FAIL"
+        )
 
         # 2. Stress & Failure Decomposition
-        issues: List[str] = []
-        recommendations: List[str] = []
-        stress_breakdown: Dict[str, Any] = {}
+        issues: list[str] = []
+        recommendations: list[str] = []
+        stress_breakdown: dict[str, Any] = {}
 
         if crit_sec:
             # Contribution percentages to unnotched Von Mises
@@ -96,15 +104,14 @@ class DesignCritic:
 
             if crit_sec.kt_bending > 1.4 or crit_sec.kt_torsion > 1.4:
                 recommendations.append(
-                    f"High geometric stress concentration detected at x={crit_sec.x*1000:.0f} mm (Kt = {crit_sec.kt_bending:.2f}). "
+                    f"High geometric stress concentration detected at x={crit_sec.x * 1000:.0f} mm (Kt = {crit_sec.kt_bending:.2f}). "
                     "Increase transition fillet radius r to reduce peak stress without increasing total shaft mass."
                 )
 
             if not result.yield_passed or not result.fatigue_passed:
                 # Suggest material upgrade
                 better_materials = MaterialDatabase.find_candidates_for_safety_factor(
-                    result.max_von_mises_mpa,
-                    c.min_yield_safety_factor
+                    result.max_von_mises_mpa, c.min_yield_safety_factor
                 )
                 if better_materials:
                     recommendations.append(
@@ -123,7 +130,7 @@ class DesignCritic:
         }
 
     @staticmethod
-    def verify_ai_claim(ai_claim_is_safe: bool, solver_result: SolverResult) -> Tuple[bool, str]:
+    def verify_ai_claim(ai_claim_is_safe: bool, solver_result: SolverResult) -> tuple[bool, str]:
         """
         Enforce Section 2: AI is not the physics engine.
         If AI claims safe but solver calculates failure, solver vetoes AI.

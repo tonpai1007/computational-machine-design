@@ -4,10 +4,13 @@ Generates valid ISO 10303-21 (AP203 / AP214) STEP format 3D solid models directl
 Natively importable as solid geometry in SolidWorks, Autodesk Inventor, Fusion 360, FreeCAD, and Mastercam.
 """
 
+from __future__ import annotations
+
 from datetime import datetime
-from typing import List, Tuple
-from core.models import EngineeringModel
+
 from cad.stl_exporter import STLExporter
+from core.models import EngineeringModel
+
 
 class STEPExporter:
     @classmethod
@@ -34,7 +37,7 @@ class STEPExporter:
 
         entity_id = 1
 
-        def next_id():
+        def next_id() -> int:
             nonlocal entity_id
             i = entity_id
             entity_id += 1
@@ -48,11 +51,13 @@ class STEPExporter:
         id_dir_x = next_id()
         lines.append(f"#{id_dir_x}=DIRECTION('axis_x',(1.,0.,0.));")
         id_axis = next_id()
-        lines.append(f"#{id_axis}=AXIS2_PLACEMENT_3D('world_cs',#{id_origin},#{id_dir_z},#{id_dir_x});")
+        lines.append(
+            f"#{id_axis}=AXIS2_PLACEMENT_3D('world_cs',#{id_origin},#{id_dir_z},#{id_dir_x});"
+        )
 
         # Unique vertex index mapping
-        vertex_map = {}
-        vertex_ids = []
+        vertex_map: dict[tuple[float, float, float], int] = {}
+        vertex_ids: list[int] = []
 
         for v1, v2, v3 in triangles:
             for v in (v1, v2, v3):
@@ -60,7 +65,9 @@ class STEPExporter:
                 key = (round(v[0], 5), round(v[1], 5), round(v[2], 5))
                 if key not in vertex_map:
                     vid = next_id()
-                    lines.append(f"#{vid}=CARTESIAN_POINT('',({key[0]:.5f},{key[1]:.5f},{key[2]:.5f}));")
+                    lines.append(
+                        f"#{vid}=CARTESIAN_POINT('',({key[0]:.5f},{key[1]:.5f},{key[2]:.5f}));"
+                    )
                     vertex_map[key] = vid
 
         # Faces
@@ -76,7 +83,7 @@ class STEPExporter:
 
             id_loop = next_id()
             lines.append(f"#{id_loop}=POLY_LOOP('',(#{vid1},#{vid2},#{vid3}));")
-            
+
             id_bound = next_id()
             lines.append(f"#{id_bound}=FACE_OUTER_BOUND('',#{id_loop},.T.);")
 
@@ -84,10 +91,10 @@ class STEPExporter:
             norm = STLExporter._normal(v1, v2, v3)
             id_norm = next_id()
             lines.append(f"#{id_norm}=DIRECTION('',({norm[0]:.6f},{norm[1]:.6f},{norm[2]:.6f}));")
-            
+
             id_surf_pos = next_id()
             lines.append(f"#{id_surf_pos}=AXIS2_PLACEMENT_3D('',#{vid1},#{id_norm},#{id_dir_x});")
-            
+
             id_plane = next_id()
             lines.append(f"#{id_plane}=PLANE('',#{id_surf_pos});")
 
@@ -113,14 +120,20 @@ class STEPExporter:
         lines.append(f"#{id_solid_ang}=(NAMED_UNIT(*)SI_UNIT($,.STERADIAN.)SOLID_ANGLE_UNIT());")
 
         id_measure_ctx = next_id()
-        lines.append(f"#{id_measure_ctx}=(GEOMETRIC_REPRESENTATION_CONTEXT(3)GLOBAL_UNCERTAINTY_ASSIGNED_CONTEXT((#{next_id()}))GLOBAL_UNIT_ASSIGNED_CONTEXT((#{id_len_unit},#{id_ang_unit},#{id_solid_ang}))REPRESENTATION_CONTEXT('3D','MDIE Solid'));")
+        lines.append(
+            f"#{id_measure_ctx}=(GEOMETRIC_REPRESENTATION_CONTEXT(3)GLOBAL_UNCERTAINTY_ASSIGNED_CONTEXT((#{next_id()}))GLOBAL_UNIT_ASSIGNED_CONTEXT((#{id_len_unit},#{id_ang_unit},#{id_solid_ang}))REPRESENTATION_CONTEXT('3D','MDIE Solid'));"
+        )
 
         # Uncertainty definition
         id_uncert = entity_id - 1
-        lines.append(f"#{id_uncert}=UNCERTAINTY_MEASURE_WITH_UNIT(LENGTH_MEASURE(1.E-05),#{id_len_unit},'closure',0.);")
+        lines.append(
+            f"#{id_uncert}=UNCERTAINTY_MEASURE_WITH_UNIT(LENGTH_MEASURE(1.E-05),#{id_len_unit},'closure',0.);"
+        )
 
         id_shape_rep = next_id()
-        lines.append(f"#{id_shape_rep}=ADVANCED_BREP_SHAPE_REPRESENTATION('{model_name}',(#{id_solid},#{id_axis}),#{id_measure_ctx});")
+        lines.append(
+            f"#{id_shape_rep}=ADVANCED_BREP_SHAPE_REPRESENTATION('{model_name}',(#{id_solid},#{id_axis}),#{id_measure_ctx});"
+        )
 
         # Product definition
         id_prod = next_id()
@@ -132,7 +145,9 @@ class STEPExporter:
         id_shape_def = next_id()
         lines.append(f"#{id_shape_def}=PRODUCT_DEFINITION_SHAPE('','',#{id_prod_def});")
         id_prod_shape = next_id()
-        lines.append(f"#{id_prod_shape}=SHAPE_DEFINITION_REPRESENTATION(#{id_shape_def},#{id_shape_rep});")
+        lines.append(
+            f"#{id_prod_shape}=SHAPE_DEFINITION_REPRESENTATION(#{id_shape_def},#{id_shape_rep});"
+        )
 
         lines.append("ENDSEC;")
         lines.append("END-ISO-10303-21;")

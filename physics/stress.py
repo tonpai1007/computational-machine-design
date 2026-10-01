@@ -4,15 +4,20 @@ Calculates bending, torsional, axial, and multiaxial Von Mises stresses,
 along with geometric (Kt) and fatigue (Kf) stress concentration factors.
 """
 
+from __future__ import annotations
+
 import math
+from typing import Any
+
 import numpy as np
-from typing import List, Dict, Any, Tuple, Optional
-from core.models import EngineeringModel, ShaftSegment, SectionStress
+
+from core.models import EngineeringModel, SectionStress, ShaftSegment
 from materials.database import Material
+
 
 class StressConcentration:
     @staticmethod
-    def shoulder_fillet_kt(d_small: float, d_large: float, r_fillet: float) -> Tuple[float, float]:
+    def shoulder_fillet_kt(d_small: float, d_large: float, r_fillet: float) -> tuple[float, float]:
         """
         Computes geometric stress concentration factors Kt (bending) and Kts (torsion)
         for a stepped circular shaft with a shoulder fillet.
@@ -32,11 +37,11 @@ class StressConcentration:
 
         # Peterson approximation for circular shaft shoulder with fillet in bending
         # Kt_b ~ 1 + 0.355 * (r/d)^(-0.37) * (D/d - 1)^0.22
-        kt_bending = 1.0 + 0.355 * (ratio_r ** -0.37) * ((ratio_d - 1.0) ** 0.22)
+        kt_bending = 1.0 + 0.355 * (ratio_r**-0.37) * ((ratio_d - 1.0) ** 0.22)
 
         # Kts in torsion
         # Kts ~ 1 + 0.262 * (r/d)^(-0.35) * (D/d - 1)^0.20
-        kt_torsion = 1.0 + 0.262 * (ratio_r ** -0.35) * ((ratio_d - 1.0) ** 0.20)
+        kt_torsion = 1.0 + 0.262 * (ratio_r**-0.35) * ((ratio_d - 1.0) ** 0.20)
 
         return float(kt_bending), float(kt_torsion)
 
@@ -56,7 +61,9 @@ class StressConcentration:
         # sqrt(a) = 0.246 - 3.08e-3 * Sut + 1.51e-5 * Sut^2 - 2.67e-9 * Sut^3
         # with Sut in kpsi. In MPa, let's use direct polynomial:
         s_ut_kpsi = s_ut * 0.145038
-        sqrt_a_inch = 0.246 - 3.08e-3 * s_ut_kpsi + 1.51e-5 * (s_ut_kpsi**2) - 2.67e-9 * (s_ut_kpsi**3)
+        sqrt_a_inch = (
+            0.246 - 3.08e-3 * s_ut_kpsi + 1.51e-5 * (s_ut_kpsi**2) - 2.67e-9 * (s_ut_kpsi**3)
+        )
         sqrt_a_mm = sqrt_a_inch * math.sqrt(25.4)
 
         q = 1.0 / (1.0 + (sqrt_a_mm / math.sqrt(r_mm)))
@@ -70,21 +77,21 @@ class StressConcentration:
 
 class StressSolver:
     @staticmethod
-    def get_diameter_and_segment_at(model: EngineeringModel, x: float) -> Tuple[float, float, Optional[ShaftSegment]]:
+    def get_diameter_and_segment_at(
+        model: EngineeringModel, x: float
+    ) -> tuple[float, float, ShaftSegment | None]:
         """Return (outer_diameter, inner_diameter, segment) at axial coordinate x."""
         for seg in model.segments:
             if seg.start_pos <= x <= seg.end_pos:
                 return seg.outer_diameter, seg.inner_diameter, seg
-        
+
         # Fallback if no explicit segments defined
         return 0.030, 0.0, None  # default 30mm
 
     @staticmethod
     def calculate_stresses(
-        model: EngineeringModel,
-        internal_dist: Dict[str, Any],
-        material: Material
-    ) -> Dict[str, Any]:
+        model: EngineeringModel, internal_dist: dict[str, Any], material: Material
+    ) -> dict[str, Any]:
         """
         Compute bending, torsional, and Von Mises stresses across all stations.
         Applies stress concentrations at shoulder fillets and keyways.
@@ -126,14 +133,15 @@ class StressSolver:
                 kw = seg.keyway
                 keyway_zones.append((kw.position, kw.position + kw.length, 2.14, 3.0))
 
-        critical_sec: Optional[SectionStress] = None
+        critical_sec: SectionStress | None = None
         max_vm_eff = -1.0
         critical_idx = 0
 
         for i, x in enumerate(x_arr):
-            do, di, seg = StressSolver.get_diameter_and_segment_at(model, x)
+            do, di, seg_opt = StressSolver.get_diameter_and_segment_at(model, x)
+            seg = seg_opt if seg_opt is not None else ShaftSegment(start_pos=0.0, end_pos=model.total_length, outer_diameter=do, inner_diameter=di)
             diameters[i] = do * 1000.0  # in mm for display
-            
+
             c = do / 2.0
             I = (math.pi / 64.0) * (do**4 - di**4) if do > 0 else 1e-12
             J = (math.pi / 32.0) * (do**4 - di**4) if do > 0 else 1e-12
@@ -161,8 +169,12 @@ class StressSolver:
                 if kw_start <= x <= kw_end:
                     kt_b = max(kt_b, kw_kt_b)
                     kt_t = max(kt_t, kw_kt_t)
-                    q_kw = StressConcentration.notch_sensitivity(material.ultimate_strength_mpa, 0.0005)
-                    kf_b = max(kf_b, StressConcentration.fatigue_stress_concentration(kw_kt_b, q_kw))
+                    q_kw = StressConcentration.notch_sensitivity(
+                        material.ultimate_strength_mpa, 0.0005
+                    )
+                    kf_b = max(
+                        kf_b, StressConcentration.fatigue_stress_concentration(kw_kt_b, q_kw)
+                    )
 
             kt_bending_arr[i] = kt_b
             kt_torsion_arr[i] = kt_t
@@ -171,7 +183,7 @@ class StressSolver:
             # Unnotched Von Mises (MPa)
             vm = math.sqrt(sigma_b**2 + 3.0 * (tau_t**2)) / 1e6
             # Effective concentrated Von Mises (for peak yield evaluation)
-            vm_eff = math.sqrt((kt_b * sigma_b)**2 + 3.0 * ((kt_t * tau_t)**2)) / 1e6
+            vm_eff = math.sqrt((kt_b * sigma_b) ** 2 + 3.0 * ((kt_t * tau_t) ** 2)) / 1e6
 
             sigma_bending[i] = sigma_b / 1e6
             tau_torsion[i] = tau_t / 1e6
@@ -197,7 +209,7 @@ class StressSolver:
         # Principal stresses at critical section
         sig_x = c_kt_b * c_sb
         tau_xy = c_kt_t * c_tau
-        r_mohr = math.sqrt((sig_x / 2.0)**2 + tau_xy**2)
+        r_mohr = math.sqrt((sig_x / 2.0) ** 2 + tau_xy**2)
         p1 = (sig_x / 2.0) + r_mohr
         p2 = (sig_x / 2.0) - r_mohr
 
@@ -220,7 +232,7 @@ class StressSolver:
             effective_von_mises=c_vm_eff,
             yield_safety_factor=sf_yield,
             fatigue_safety_factor=1.0,  # Will be updated by fatigue solver
-            predicted_cycles=1e9
+            predicted_cycles=1e9,
         )
 
         return {

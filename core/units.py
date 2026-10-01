@@ -3,11 +3,10 @@ MDIE Core Units Module
 Handles engineering unit conversions between SI, metric engineering, and Imperial units.
 """
 
-from typing import Union, Dict
 
 class Units:
     # Length conversions to meters (m)
-    LENGTH_TO_M: Dict[str, float] = {
+    LENGTH_TO_M: dict[str, float] = {
         "m": 1.0,
         "mm": 1e-3,
         "cm": 1e-2,
@@ -16,7 +15,7 @@ class Units:
     }
 
     # Force conversions to Newtons (N)
-    FORCE_TO_N: Dict[str, float] = {
+    FORCE_TO_N: dict[str, float] = {
         "N": 1.0,
         "kN": 1e3,
         "MN": 1e6,
@@ -25,7 +24,7 @@ class Units:
     }
 
     # Stress / Pressure conversions to Pascals (Pa)
-    STRESS_TO_PA: Dict[str, float] = {
+    STRESS_TO_PA: dict[str, float] = {
         "Pa": 1.0,
         "kPa": 1e3,
         "MPa": 1e6,
@@ -37,7 +36,7 @@ class Units:
     }
 
     # Torque / Moment conversions to Newton-meters (N*m)
-    TORQUE_TO_NM: Dict[str, float] = {
+    TORQUE_TO_NM: dict[str, float] = {
         "N*m": 1.0,
         "Nm": 1.0,
         "N*mm": 1e-3,
@@ -48,7 +47,7 @@ class Units:
     }
 
     # Power conversions to Watts (W)
-    POWER_TO_W: Dict[str, float] = {
+    POWER_TO_W: dict[str, float] = {
         "W": 1.0,
         "kW": 1e3,
         "MW": 1e6,
@@ -69,11 +68,13 @@ class Units:
         }
         if unit_type not in table_map:
             raise ValueError(f"Unknown unit type '{unit_type}'. Valid: {list(table_map.keys())}")
-        
+
         table = table_map[unit_type]
         if from_unit not in table:
-            raise ValueError(f"Unknown unit '{from_unit}' for {unit_type}. Valid: {list(table.keys())}")
-        
+            raise ValueError(
+                f"Unknown unit '{from_unit}' for {unit_type}. Valid: {list(table.keys())}"
+            )
+
         return value * table[from_unit]
 
     @classmethod
@@ -89,21 +90,23 @@ class Units:
         }
         if unit_type not in table_map:
             raise ValueError(f"Unknown unit type '{unit_type}'")
-        
+
         table = table_map[unit_type]
         if to_unit not in table:
             raise ValueError(f"Unknown unit '{to_unit}' for {unit_type}")
-        
+
         return value / table[to_unit]
 
     @classmethod
     def rpm_to_rad_per_sec(cls, rpm: float) -> float:
         """Convert rotational speed in RPM to angular velocity in rad/s."""
         import math
+
         return rpm * (2.0 * math.pi / 60.0)
 
     @classmethod
     def rad_per_sec_to_rpm(cls, rad_s: float) -> float:
         """Convert angular velocity in rad/s to RPM."""
         import math
+
         return rad_s * (60.0 / (2.0 * math.pi))

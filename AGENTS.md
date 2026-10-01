@@ -30,7 +30,9 @@ All internal calculations and models strictly use the mechanical engineering SI 
   on Windows may fail to resolve the root packages, and a bare `pytest` may
   land in the wrong environment entirely.)*
 - Keep all unit and integration tests passing (100% green) before concluding any code changes.
+- Ship a regression test with every bug fix — one that fails without the fix.
 - Full specification: [`.agents/rules/testing-and-dev.md`](file:///c:/codework/computational-machine-design/.agents/rules/testing-and-dev.md).
+- Execution protocol (batching, ground-truth dumps, no mid-task narration): [`.agents/rules/agent-workflow.md`](file:///c:/codework/computational-machine-design/.agents/rules/agent-workflow.md).
 
 ### 4. CAD & Geometry Standards
 - **Coordinate Conventions:**

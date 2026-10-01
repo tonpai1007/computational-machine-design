@@ -6,12 +6,12 @@ Standards: VDI 2230 / Shigley's Mechanical Engineering Design.
 """
 
 import math
-from typing import Dict, Any, List
+
 from components.bolted_joints import (
-    BoltedJointSpecification,
-    BoltedJointResult,
     METRIC_BOLT_CATALOG,
     PROPERTY_CLASS_DATA,
+    BoltedJointResult,
+    BoltedJointSpecification,
 )
 
 
@@ -30,7 +30,7 @@ class BoltedJointSolver:
 
         d = bolt_geo.nominal_diameter_mm
         at = bolt_geo.tensile_stress_area_mm2
-        ad = (math.pi * (d ** 2)) / 4.0
+        ad = (math.pi * (d**2)) / 4.0
 
         # Property class strengths
         pclass = spec.property_class.strip()
@@ -121,13 +121,21 @@ class BoltedJointSolver:
 
         recs = []
         if sf_sep < 1.2:
-            recs.append(f"Joint separation safety factor ({sf_sep:.2f}) is low. Joint will leak or gap under {p_max/1000:.1f} kN. Increase bolt size or preload.")
+            recs.append(
+                f"Joint separation safety factor ({sf_sep:.2f}) is low. Joint will leak or gap under {p_max / 1000:.1f} kN. Increase bolt size or preload."
+            )
         if sf_proof < 1.15:
-            recs.append(f"Proof load safety factor ({sf_proof:.2f}) is below 1.15. Risk of permanent bolt elongation. Use Grade 10.9 or larger diameter.")
+            recs.append(
+                f"Proof load safety factor ({sf_proof:.2f}) is below 1.15. Risk of permanent bolt elongation. Use Grade 10.9 or larger diameter."
+            )
         if sf_fatigue < 1.3:
-            recs.append(f"Fatigue safety factor ({sf_fatigue:.2f}) is below 1.3 for cyclic load. Increase clamped member stiffness or use Grade 10.9.")
+            recs.append(
+                f"Fatigue safety factor ({sf_fatigue:.2f}) is below 1.3 for cyclic load. Increase clamped member stiffness or use Grade 10.9."
+            )
         if not recs:
-            recs.append("All bolted joint clamping, separation, proof load, and fatigue criteria are safely satisfied.")
+            recs.append(
+                "All bolted joint clamping, separation, proof load, and fatigue criteria are safely satisfied."
+            )
 
         return BoltedJointResult(
             spec=spec,

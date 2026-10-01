@@ -3,13 +3,16 @@ MDIE Physics Equilibrium Solver
 Computes support reaction forces, reaction moments, and internal shear/bending/torque distributions.
 """
 
+from typing import Any
+
 import numpy as np
-from typing import List, Tuple, Dict, Any, Optional
-from core.models import EngineeringModel, Support, PointLoad, DistributedLoad, SupportReaction
+
+from core.models import EngineeringModel, Support, SupportReaction
+
 
 class EquilibriumSolver:
     @staticmethod
-    def solve_reactions(model: EngineeringModel) -> Tuple[List[SupportReaction], List[str]]:
+    def solve_reactions(model: EngineeringModel) -> tuple[list[SupportReaction], list[str]]:
         """
         Solve static equilibrium equations for support reactions:
         sum(Fy) = 0, sum(M_about_ref) = 0.
@@ -18,9 +21,11 @@ class EquilibriumSolver:
         logs = []
         supports = model.supports
         num_supports = len(supports)
-        
+
         if num_supports == 0:
-            raise ValueError("Statically unconstrained system: No supports defined. Cannot solve equilibrium.")
+            raise ValueError(
+                "Statically unconstrained system: No supports defined. Cannot solve equilibrium."
+            )
 
         # Total applied downward transverse loads
         total_point_force = sum(p.magnitude for p in model.point_loads)
@@ -28,11 +33,11 @@ class EquilibriumSolver:
         for d in model.distributed_loads:
             w_avg = 0.5 * (d.w_start + d.get_w_end())
             total_dist_force += w_avg * (d.end_pos - d.start_pos)
-        
+
         total_applied_force = total_point_force + total_dist_force
         logs.append(f"Total applied transverse load: {total_applied_force:.2f} N")
 
-        reactions: List[SupportReaction] = []
+        reactions: list[SupportReaction] = []
 
         if num_supports == 1:
             sup = supports[0]
@@ -44,7 +49,7 @@ class EquilibriumSolver:
             # Cantilever beam fixed at sup.position
             # R = total_applied_force
             r_force = total_applied_force
-            
+
             # Moment about support
             m_reaction = 0.0
             for p in model.point_loads:
@@ -58,14 +63,18 @@ class EquilibriumSolver:
                 f_tri = 0.5 * abs(w2 - w1) * dx
                 c_tri = d.start_pos + (2.0 / 3.0 * dx if w2 > w1 else 1.0 / 3.0 * dx)
                 m_reaction += f_rect * (c_rect - sup.position) + f_tri * (c_tri - sup.position)
-            
-            reactions.append(SupportReaction(
-                support_name=f"{sup.name} (Fixed @ x={sup.position:.3f}m)",
-                position=sup.position,
-                reaction_force_n=r_force,
-                reaction_moment_nm=m_reaction
-            ))
-            logs.append(f"Fixed Support Reaction: R = {r_force:.2f} N, M_react = {m_reaction:.2f} N*m")
+
+            reactions.append(
+                SupportReaction(
+                    support_name=f"{sup.name} (Fixed @ x={sup.position:.3f}m)",
+                    position=sup.position,
+                    reaction_force_n=r_force,
+                    reaction_moment_nm=m_reaction,
+                )
+            )
+            logs.append(
+                f"Fixed Support Reaction: R = {r_force:.2f} N, M_react = {m_reaction:.2f} N*m"
+            )
             return reactions, logs
 
         elif num_supports == 2:
@@ -73,7 +82,9 @@ class EquilibriumSolver:
             x1, x2 = s1.position, s2.position
             span = x2 - x1
             if abs(span) < 1e-6:
-                raise ValueError("Both supports are placed at the exact same axial location. Degenerate support geometry.")
+                raise ValueError(
+                    "Both supports are placed at the exact same axial location. Degenerate support geometry."
+                )
 
             # Moment equilibrium about support 1: sum(M_about_x1) = 0
             # R2 * span - sum(F_i * (x_i - x1)) = 0  =>  R2 = sum(F_i * (x_i - x1)) / span
@@ -92,18 +103,22 @@ class EquilibriumSolver:
             r2 = m_about_1 / span
             r1 = total_applied_force - r2
 
-            reactions.append(SupportReaction(
-                support_name=f"{s1.name} (A @ x={x1:.3f}m)",
-                position=x1,
-                reaction_force_n=r1,
-                reaction_moment_nm=0.0
-            ))
-            reactions.append(SupportReaction(
-                support_name=f"{s2.name} (B @ x={x2:.3f}m)",
-                position=x2,
-                reaction_force_n=r2,
-                reaction_moment_nm=0.0
-            ))
+            reactions.append(
+                SupportReaction(
+                    support_name=f"{s1.name} (A @ x={x1:.3f}m)",
+                    position=x1,
+                    reaction_force_n=r1,
+                    reaction_moment_nm=0.0,
+                )
+            )
+            reactions.append(
+                SupportReaction(
+                    support_name=f"{s2.name} (B @ x={x2:.3f}m)",
+                    position=x2,
+                    reaction_force_n=r2,
+                    reaction_moment_nm=0.0,
+                )
+            )
             logs.append(f"Support 1 Reaction (x={x1:.3f}m): R1 = {r1:.2f} N")
             logs.append(f"Support 2 Reaction (x={x2:.3f}m): R2 = {r2:.2f} N")
             return reactions, logs
@@ -115,37 +130,39 @@ class EquilibriumSolver:
             return EquilibriumSolver._solve_indeterminate(model, supports)
 
     @staticmethod
-    def _solve_indeterminate(model: EngineeringModel, supports: List[Support]) -> Tuple[List[SupportReaction], List[str]]:
+    def _solve_indeterminate(
+        model: EngineeringModel, supports: list[Support]
+    ) -> tuple[list[SupportReaction], list[str]]:
         """Solves indeterminate multi-support shafts using matrix flexibility / direct stiffness."""
         logs = ["Solving statically indeterminate continuous shaft system."]
         sorted_sups = sorted(supports, key=lambda s: s.position)
         n = len(sorted_sups)
-        
+
         # Build 1D beam stiffness matrix with n internal support constraints
         # For typical machine shafts with bearings, 2 bearings is standard.
         # Approximation via equalized load sharing for initial candidate:
         total_p = sum(p.magnitude for p in model.point_loads)
         for d in model.distributed_loads:
             total_p += 0.5 * (d.w_start + d.get_w_end()) * (d.end_pos - d.start_pos)
-        
+
         reactions = []
         r_each = total_p / n
         for i, s in enumerate(sorted_sups):
-            reactions.append(SupportReaction(
-                support_name=f"Bearing {i+1} @ x={s.position:.3f}m",
-                position=s.position,
-                reaction_force_n=r_each,
-                reaction_moment_nm=0.0
-            ))
-            logs.append(f"Multi-bearing support reaction {i+1}: {r_each:.2f} N")
+            reactions.append(
+                SupportReaction(
+                    support_name=f"Bearing {i + 1} @ x={s.position:.3f}m",
+                    position=s.position,
+                    reaction_force_n=r_each,
+                    reaction_moment_nm=0.0,
+                )
+            )
+            logs.append(f"Multi-bearing support reaction {i + 1}: {r_each:.2f} N")
         return reactions, logs
 
     @staticmethod
     def calculate_internal_distributions(
-        model: EngineeringModel,
-        reactions: List[SupportReaction],
-        num_points: int = 500
-    ) -> Dict[str, Any]:
+        model: EngineeringModel, reactions: list[SupportReaction], num_points: int = 500
+    ) -> dict[str, Any]:
         """
         Compute shear force V(x), bending moment M(x), and torque T(x) along shaft stations.
         """
@@ -177,7 +194,7 @@ class EquilibriumSolver:
         # Transverse loads convention: downward loads decrease shear, upward reactions increase shear
         # V(x) = sum(R_i for x_Ri <= x) - sum(P_j for x_Pj <= x) - integral(w(xi) dxi)
         # M(x) = sum(R_i * (x - x_Ri)) - sum(P_j * (x - x_Pj)) - integral(w(xi)*(x - xi) dxi)
-        
+
         # Nominal shaft torque
         nominal_torque = model.calculate_nominal_torque()
 

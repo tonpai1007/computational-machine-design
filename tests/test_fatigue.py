@@ -3,10 +3,11 @@ Tests for Fatigue & Lifecycle Analysis
 """
 
 import pytest
-from core.models import SectionStress, EngineeringModel, ShaftSegment, Support, PointLoad
-from materials.database import MaterialDatabase
-from physics.fatigue import MarinFactors, FatigueSolver
+
+from core.models import EngineeringModel, PointLoad, ShaftSegment, Support
+from physics.fatigue import MarinFactors
 from physics.solver import PhysicsSolver
+
 
 def test_marin_factors():
     # Steel with Sut = 600 MPa, diameter 25 mm
@@ -20,6 +21,7 @@ def test_marin_factors():
     ke = MarinFactors.reliability_factor(0.99)
     assert pytest.approx(ke, 0.001) == 0.814
 
+
 def test_infinite_life_prediction():
     # Low stress condition: 50mm shaft with light 100N load -> should easily be infinite life
     model = EngineeringModel(
@@ -28,7 +30,7 @@ def test_infinite_life_prediction():
         material_id="AISI_1045_CD",
         segments=[ShaftSegment(start_pos=0.0, end_pos=0.4, outer_diameter=0.05)],
         supports=[Support(position=0.05), Support(position=0.35)],
-        point_loads=[PointLoad(position=0.2, magnitude=100.0)]
+        point_loads=[PointLoad(position=0.2, magnitude=100.0)],
     )
     res = PhysicsSolver.solve(model)
     assert res.success is True

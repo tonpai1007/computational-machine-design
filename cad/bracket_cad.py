@@ -4,12 +4,9 @@ Generates OpenSCAD (.scad), Binary STL (.stl), and ISO-10303 STEP Solids (.step)
 for L-brackets, motor faceplates, and foot-mounted brackets.
 """
 
-import math
-import struct
-from typing import List, Tuple
-from core.bracket_model import BracketModel
-from cad.assembly import MeshPrimitives, Point3D, Triangle
+from cad.assembly import MeshPrimitives, Triangle
 from cad.step_assembly import MultiBodySTEPExporter, SolidPart
+from core.bracket_model import BracketModel
 
 
 class BracketCADEngine:
@@ -92,14 +89,14 @@ class BracketCADEngine:
         return "\n".join(lines)
 
     @classmethod
-    def generate_mesh_triangles(cls, model: BracketModel) -> List[Triangle]:
+    def generate_mesh_triangles(cls, model: BracketModel) -> list[Triangle]:
         g = model.geometry
         t = g.thickness_mm
         bl = g.base_length_mm
         bw = g.base_width_mm
         uh = g.upright_height_mm
 
-        tris: List[Triangle] = []
+        tris: list[Triangle] = []
         # Base plate box
         tris.extend(MeshPrimitives.create_box_triangles(bl / 2.0, 0.0, t / 2.0, bl, bw, t))
         # Upright flange box

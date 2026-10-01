@@ -8,10 +8,9 @@ Verifies:
 5. OpenSCAD, STL, and STEP CAD generation.
 """
 
-import pytest
-from core.frame_model import FrameDesignModel, FrameGeometry, FrameLoads, STRUCTURAL_MATERIALS
-from physics.frame_physics import FramePhysicsSolver
 from cad.assembly import FrameCADEngine
+from core.frame_model import STRUCTURAL_MATERIALS, FrameDesignModel, FrameGeometry, FrameLoads
+from physics.frame_physics import FramePhysicsSolver
 
 ChairDesignModel = FrameDesignModel
 ChairGeometry = FrameGeometry
@@ -20,11 +19,9 @@ CHAIR_MATERIALS = STRUCTURAL_MATERIALS
 ChairPhysicsSolver = FramePhysicsSolver
 ChairCADEngine = FrameCADEngine
 
+
 def test_chair_physics_equilibrium():
-    model = ChairDesignModel(
-        name="Test Chair Model",
-        material=CHAIR_MATERIALS["STEEL_1018"]
-    )
+    model = ChairDesignModel(name="Test Chair Model", material=CHAIR_MATERIALS["STEEL_1018"])
     result = ChairPhysicsSolver.solve(model)
 
     assert result.is_statically_stable is True
@@ -41,6 +38,7 @@ def test_chair_physics_equilibrium():
         assert leg.yield_passed is True
         assert leg.buckling_safety_factor >= 2.0
 
+
 def test_chair_armrest_mechanics():
     model = ChairDesignModel(
         name="Armrest Test",
@@ -49,8 +47,8 @@ def test_chair_armrest_mechanics():
             left_arm_vertical_n=600.0,
             right_arm_vertical_n=600.0,
             left_arm_lateral_n=-200.0,
-            right_arm_lateral_n=200.0
-        )
+            right_arm_lateral_n=200.0,
+        ),
     )
     result = ChairPhysicsSolver.solve(model)
     assert len(result.armrests) == 2
@@ -59,9 +57,10 @@ def test_chair_armrest_mechanics():
         assert arm.arm_safety_factor >= 2.0
         assert arm.strut_combined_stress_mpa < model.material.yield_strength_mpa / 2.0
 
+
 def test_chair_cad_generation():
     model = ChairDesignModel(name="CAD Validation Chair")
-    
+
     # 1. OpenSCAD code
     scad = ChairCADEngine.generate_openscad(model)
     assert "module chair_assembly()" in scad
@@ -72,8 +71,15 @@ def test_chair_cad_generation():
     # 2. Binary STL
     stl_bytes = ChairCADEngine.export_binary_stl(model)
     assert len(stl_bytes) > 84
-    # 84-byte header + 50 bytes per triangle (880 tris, incl. 4 arm mounting brackets)
-    assert len(stl_bytes) == 44084
+    # Binary STL is an 84-byte header plus 50 bytes per triangle. Derive the
+    # expected count from the exported parts rather than pinning a byte total,
+    # so adding a real member (e.g. the armrest brace) does not read as drift.
+    from cad.assembly import FrameCADEngine
+
+    expected_tris = sum(
+        len(part.triangles) for part in FrameCADEngine.generate_assembly_parts(model)
+    )
+    assert len(stl_bytes) == 84 + 50 * expected_tris
 
     # 3. ISO-10303 STEP solid
     step_str = ChairCADEngine.export_step_solid(model)
@@ -81,6 +87,7 @@ def test_chair_cad_generation():
     assert "MANIFOLD_SOLID_BREP" in step_str
     assert "CLOSED_SHELL" in step_str
     assert "END-ISO-10303-21;" in step_str
+
 
 def test_armrest_brackets_reach_seat_frame():
     """Armrest posts sit outboard of the seat frame; mounting brackets must bridge the gap.

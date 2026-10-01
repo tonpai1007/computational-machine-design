@@ -11,8 +11,8 @@ Two tiers:
 
 from __future__ import annotations
 
-import shutil
 import os
+import shutil
 import struct
 import subprocess
 import tempfile
@@ -36,6 +36,7 @@ class ConversionError(RuntimeError):
 
 # ------------------------------------------------------------------- STL I/O
 
+
 def read_stl(path: Path) -> list[Triangle]:
     """Read binary or ASCII STL into triangles."""
     data = path.read_bytes()
@@ -52,9 +53,13 @@ def _read_binary_stl(data: bytes, count: int) -> list[Triangle]:
     for i in range(count):
         off = 84 + i * 50
         vals = struct.unpack_from("<12f", data, off)
-        tris.append(((vals[3], vals[4], vals[5]),
-                     (vals[6], vals[7], vals[8]),
-                     (vals[9], vals[10], vals[11])))
+        tris.append(
+            (
+                (vals[3], vals[4], vals[5]),
+                (vals[6], vals[7], vals[8]),
+                (vals[9], vals[10], vals[11]),
+            )
+        )
     return tris
 
 
@@ -105,6 +110,7 @@ def write_stl(path: Path, tris: list[Triangle], binary: bool = True) -> Path:
 
 
 # ------------------------------------------------------------------- OBJ I/O
+
 
 def read_obj(path: Path) -> list[Triangle]:
     verts: list[Vec] = []
@@ -175,9 +181,13 @@ _3MF_RELS = """<?xml version="1.0" encoding="UTF-8"?>
 
 def write_3mf(path: Path, tris: list[Triangle]) -> Path:
     verts = [v for tri in tris for v in tri]
-    v_xml = "\n".join(f'      <vertex x="{v[0]:.6g}" y="{v[1]:.6g}" z="{v[2]:.6g}"/>' for v in verts)
-    f_xml = "\n".join(f'      <triangle v1="{i * 3}" v2="{i * 3 + 1}" v3="{i * 3 + 2}"/>'
-                      for i in range(len(tris)))
+    v_xml = "\n".join(
+        f'      <vertex x="{v[0]:.6g}" y="{v[1]:.6g}" z="{v[2]:.6g}"/>' for v in verts
+    )
+    f_xml = "\n".join(
+        f'      <triangle v1="{i * 3}" v2="{i * 3 + 1}" v3="{i * 3 + 2}"/>'
+        for i in range(len(tris))
+    )
     path.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("[Content_Types].xml", _3MF_CONTENT_TYPES)
@@ -195,7 +205,9 @@ def read_3mf(path: Path) -> list[Triangle]:
 
     verts: list[Vec] = [
         (float(x), float(y), float(z))
-        for x, y, z in re.findall(r'<vertex[^>]*x="([-\d.eE+]+)"[^>]*y="([-\d.eE+]+)"[^>]*z="([-\d.eE+]+)"', xml)
+        for x, y, z in re.findall(
+            r'<vertex[^>]*x="([-\d.eE+]+)"[^>]*y="([-\d.eE+]+)"[^>]*z="([-\d.eE+]+)"', xml
+        )
     ]
     tris: list[Triangle] = []
     for a, b, c in re.findall(r'<triangle[^>]*v1="(\d+)"[^>]*v2="(\d+)"[^>]*v3="(\d+)"', xml):
@@ -209,6 +221,7 @@ def read_3mf(path: Path) -> list[Triangle]:
 
 
 # --------------------------------------------------------------- mesh helpers
+
 
 def triangle_normal(tri: Triangle) -> Vec:
     (ax, ay, az), (bx, by, bz), (cx, cy, cz) = tri
@@ -261,6 +274,7 @@ def find_kernel() -> str | None:
             return found
 
     from cli.viewers import find_cad_tools
+
     gui = find_cad_tools().get("freecad")
     if gui:
         sibling = Path(gui).parent / "FreeCADCmd.exe"
@@ -288,8 +302,7 @@ Mesh.Mesh(triangles).write(dst)
 """
 
 
-def convert_via_kernel(src: Path, dst: Path, dst_format: str,
-                       timeout: int = 300) -> Path:
+def convert_via_kernel(src: Path, dst: Path, dst_format: str, timeout: int = 300) -> Path:
     """Convert a B-rep or SCAD file to a mesh format.
 
     SCAD goes through OpenSCAD; STEP/IGES go through FreeCAD's console binary.
@@ -303,30 +316,37 @@ def convert_via_kernel(src: Path, dst: Path, dst_format: str,
     if not kernel:
         raise ConversionError(
             f"converting '{src.suffix}' needs a geometry kernel. Install FreeCAD "
-            "(its console binary FreeCADCmd.exe) and make sure it is on PATH.")
+            "(its console binary FreeCADCmd.exe) and make sure it is on PATH."
+        )
     if dst_format not in MESH_FORMATS:
         raise ConversionError(
-            f"FreeCAD cannot export '{dst_format}' here; use one of {sorted(MESH_FORMATS)}")
+            f"FreeCAD cannot export '{dst_format}' here; use one of {sorted(MESH_FORMATS)}"
+        )
 
     with tempfile.TemporaryDirectory() as tmp:
         script = Path(tmp) / "_convert.py"
         staged = Path(tmp) / "out.stl"
         script.write_text(_KERNEL_SCRIPT, encoding="utf-8")
-        env = {**os.environ, "MDIE_SRC": str(src.resolve()),
-               "MDIE_DST": str(staged.resolve())}
+        env = {**os.environ, "MDIE_SRC": str(src.resolve()), "MDIE_DST": str(staged.resolve())}
         try:
             proc = subprocess.run(
                 [kernel, str(script)],
-                capture_output=True, text=True, timeout=timeout,
-                creationflags=_NO_WINDOW, env=env)
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                creationflags=_NO_WINDOW,
+                env=env,
+            )
         except subprocess.TimeoutExpired:
             raise ConversionError(
                 f"FreeCAD did not finish within {timeout}s; "
-                "the kernel hung or the model is too large to tessellate")
+                "the kernel hung or the model is too large to tessellate"
+            )
         if not staged.exists():
             raise ConversionError(
                 "FreeCAD produced no mesh: "
-                + (proc.stderr.strip() or proc.stdout.strip() or "no diagnostics"))
+                + (proc.stderr.strip() or proc.stdout.strip() or "no diagnostics")
+            )
 
         # Finish inside the temp directory - it is removed on the way out.
         if dst_format == "stl":
@@ -342,23 +362,24 @@ def find_openscad() -> str | None:
         if found:
             return found
     from cli.viewers import find_cad_tools
+
     return find_cad_tools().get("openscad")
 
 
-def convert_scad(src: Path, dst: Path, dst_format: str,
-                 timeout: int = 300) -> Path:
+def convert_scad(src: Path, dst: Path, dst_format: str, timeout: int = 300) -> Path:
     """Render an OpenSCAD source file with OpenSCAD's CLI.
 
     OpenSCAD always emits STL; other mesh targets are finished in pure Python.
     """
     if dst_format not in MESH_FORMATS:
         raise ConversionError(
-            f"OpenSCAD cannot export '{dst_format}'; use one of {sorted(MESH_FORMATS)}")
+            f"OpenSCAD cannot export '{dst_format}'; use one of {sorted(MESH_FORMATS)}"
+        )
     binary = find_openscad()
     if not binary:
         raise ConversionError(
-            f"converting '{src.suffix}' needs OpenSCAD. Install it and make "
-            "sure it is on PATH.")
+            f"converting '{src.suffix}' needs OpenSCAD. Install it and make sure it is on PATH."
+        )
 
     dst.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
@@ -366,14 +387,18 @@ def convert_scad(src: Path, dst: Path, dst_format: str,
         try:
             proc = subprocess.run(
                 [binary, "-o", str(staged), str(src)],
-                capture_output=True, text=True, timeout=timeout,
-                creationflags=_NO_WINDOW)
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                creationflags=_NO_WINDOW,
+            )
         except subprocess.TimeoutExpired:
             raise ConversionError(f"OpenSCAD did not finish within {timeout}s")
         if not staged.exists():
             raise ConversionError(
                 "OpenSCAD produced no mesh: "
-                + (proc.stderr.strip() or proc.stdout.strip() or "no diagnostics"))
+                + (proc.stderr.strip() or proc.stdout.strip() or "no diagnostics")
+            )
         if dst_format == "stl":
             shutil.copyfile(staged, dst)
             return dst
@@ -383,12 +408,15 @@ def convert_scad(src: Path, dst: Path, dst_format: str,
 def describe_mesh(path: Path) -> str:
     """Human-readable summary of a mesh file: bounds, triangle count, extents."""
     from convert.registry import format_for_extension
+
     fmt = format_for_extension(path)
     if fmt not in READERS:
         raise ConversionError(f"cannot inspect '{path.name}'")
     tris = READERS[fmt](path)
     lo, hi = mesh_bounds(tris)
     size = tuple(hi[i] - lo[i] for i in range(3))
-    return (f"{path.name}: {len(tris)} triangles, "
-            f"bounds {size[0]:.3f} x {size[1]:.3f} x {size[2]:.3f} mm "
-            f"(origin {lo[0]:.3f}, {lo[1]:.3f}, {lo[2]:.3f})")
+    return (
+        f"{path.name}: {len(tris)} triangles, "
+        f"bounds {size[0]:.3f} x {size[1]:.3f} x {size[2]:.3f} mm "
+        f"(origin {lo[0]:.3f}, {lo[1]:.3f}, {lo[2]:.3f})"
+    )

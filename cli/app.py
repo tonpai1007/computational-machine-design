@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Optional
 
 from rich.console import Console
 from rich.markdown import Markdown
@@ -34,9 +33,23 @@ from cli.viewers import find_cad_tools, launch_cad_viewer
 console = Console()
 
 SUBCOMMANDS = {
-    "design", "chair", "bracket", "shaft", "solve", "optimize",
-    "view", "convert", "docx", "convert-docx", "word",
-    "drawings", "report", "consolidate", "study", "info", "help",
+    "design",
+    "chair",
+    "bracket",
+    "shaft",
+    "solve",
+    "optimize",
+    "view",
+    "convert",
+    "docx",
+    "convert-docx",
+    "word",
+    "drawings",
+    "report",
+    "consolidate",
+    "study",
+    "info",
+    "help",
 }
 
 CANNED = {
@@ -52,24 +65,25 @@ def _report_unsupported(meta: dict) -> None:
     the honest response where synthesising would be a guess.
     """
     domain = meta.get("unsupported_domain", "this domain")
-    console.print(Panel(
-        f"[bold yellow]Unsupported domain:[/bold yellow] {domain}\n\n"
-        "MDIE only verifies designs it has a deterministic solver for, so it "
-        "declines this request rather than emitting a guess.\n\n"
-        "[bold cyan]Supported design families:[/bold cyan]\n"
-        '  1. Rotating shafts / power transmission  (e.g. "stepped shaft 500 mm, 10 kW")\n'
-        '  2. Frames & furniture                     (e.g. "chair with 4 splayed legs")\n'
-        '  3. 3D space frames & trusses              (e.g. "transmission tower, 5 kN")\n'
-        '  4. Mounting brackets & flange plates      (e.g. "motor bracket, 4 bolt holes")\n'
-        "  5. Power-transmission elements: gears, springs, bolted joints, lead/power screws\n\n"
-        "[dim]Rephrase using one of the families above.[/dim]",
-        title="[bold red]Out of Scope[/bold red]",
-        border_style="yellow",
-    ))
+    console.print(
+        Panel(
+            f"[bold yellow]Unsupported domain:[/bold yellow] {domain}\n\n"
+            "MDIE only verifies designs it has a deterministic solver for, so it "
+            "declines this request rather than emitting a guess.\n\n"
+            "[bold cyan]Supported design families:[/bold cyan]\n"
+            '  1. Rotating shafts / power transmission  (e.g. "stepped shaft 500 mm, 10 kW")\n'
+            '  2. Frames & furniture                     (e.g. "chair with 4 splayed legs")\n'
+            '  3. 3D space frames & trusses              (e.g. "transmission tower, 5 kN")\n'
+            '  4. Mounting brackets & flange plates      (e.g. "motor bracket, 4 bolt holes")\n'
+            "  5. Power-transmission elements: gears, springs, bolted joints, lead/power screws\n\n"
+            "[dim]Rephrase using one of the families above.[/dim]",
+            title="[bold red]Out of Scope[/bold red]",
+            border_style="yellow",
+        )
+    )
 
 
-def process_prompt(prompt: str, output_dir: Optional[str] = None,
-                   auto_open: bool = False) -> bool:
+def process_prompt(prompt: str, output_dir: str | None = None, auto_open: bool = False) -> bool:
     """Classify a plain-English prompt and run the matching design pipeline."""
     p_lower = prompt.lower().strip()
     if not p_lower:
@@ -78,24 +92,31 @@ def process_prompt(prompt: str, output_dir: Optional[str] = None,
     console.print(f"\n[bold cyan]>> Analyzing Prompt:[/bold cyan] [italic]{prompt}[/italic]")
 
     from ai.classifier import DomainClassifier
+
     domain, meta = DomainClassifier.classify(prompt)
 
     if domain == "bracket":
-        console.print(f"[bold cyan]>> Classified Domain:[/bold cyan] [bold green]Mounting Bracket & Flange Plate[/bold green] (confidence: {meta.get('confidence', 0.95):.0%})")
+        console.print(
+            f"[bold cyan]>> Classified Domain:[/bold cyan] [bold green]Mounting Bracket & Flange Plate[/bold green] (confidence: {meta.get('confidence', 0.95):.0%})"
+        )
         res = _handle_bracket(prompt, p_lower, output_dir)
         if res and auto_open:
             launch_cad_viewer(Path(output_dir or "Project/bracket"))
         return res
 
     if domain == "space_frame":
-        console.print(f"[bold cyan]>> Classified Domain:[/bold cyan] [bold green]3D Space Frame & Truss[/bold green] (confidence: {meta.get('confidence', 0.95):.0%})")
+        console.print(
+            f"[bold cyan]>> Classified Domain:[/bold cyan] [bold green]3D Space Frame & Truss[/bold green] (confidence: {meta.get('confidence', 0.95):.0%})"
+        )
         res = _handle_space_frame(prompt, p_lower, output_dir)
         if res and auto_open:
             launch_cad_viewer(Path(output_dir or "Project/space_frame"))
         return res
 
     if domain == "frame":
-        console.print(f"[bold cyan]>> Classified Domain:[/bold cyan] [bold green]Structural Frame & Furniture[/bold green] (confidence: {meta.get('confidence', 0.95):.0%})")
+        console.print(
+            f"[bold cyan]>> Classified Domain:[/bold cyan] [bold green]Structural Frame & Furniture[/bold green] (confidence: {meta.get('confidence', 0.95):.0%})"
+        )
         res = _handle_chair(prompt, p_lower, output_dir)
         if res and auto_open:
             launch_cad_viewer(Path(output_dir or "Project/chair"))
@@ -103,8 +124,11 @@ def process_prompt(prompt: str, output_dir: Optional[str] = None,
 
     if domain == "unsupported":
         from ai.generative_agent import GenerativeEngineeringAgent
+
         if GenerativeEngineeringAgent.is_specialized(prompt):
-            console.print("[bold cyan]>> Classified Domain:[/bold cyan] [bold green]Specialized Power-Transmission Element[/bold green]")
+            console.print(
+                "[bold cyan]>> Classified Domain:[/bold cyan] [bold green]Specialized Power-Transmission Element[/bold green]"
+            )
             res = _handle_generative(prompt, p_lower, output_dir)
             if res and auto_open:
                 slug = meta.get("slug", "generative_part")
@@ -114,18 +138,23 @@ def process_prompt(prompt: str, output_dir: Optional[str] = None,
         _report_unsupported(meta)
         return False
 
-    if (any(w in p_lower for w in ["shaft", "spindle", "rotor", "axle", "bearing seat"])
-            or (domain == "shaft" and meta.get("confidence", 0.5) > 0.8)) and not any(
-            w in p_lower for w in ["bolt", "fastener", "spring", "gear", "screw"]):
+    if (
+        any(w in p_lower for w in ["shaft", "spindle", "rotor", "axle", "bearing seat"])
+        or (domain == "shaft" and meta.get("confidence", 0.5) > 0.8)
+    ) and not any(w in p_lower for w in ["bolt", "fastener", "spring", "gear", "screw"]):
         confidence = meta.get("confidence", 0.50)
         conf_str = f" (confidence: {confidence:.0%})" if confidence < 0.9 else ""
-        console.print(f"[bold cyan]>> Classified Domain:[/bold cyan] [bold green]Rotating Shaft & Power Transmission[/bold green]{conf_str}")
+        console.print(
+            f"[bold cyan]>> Classified Domain:[/bold cyan] [bold green]Rotating Shaft & Power Transmission[/bold green]{conf_str}"
+        )
         res = _handle_shaft(prompt, p_lower, output_dir)
         if res and auto_open:
             launch_cad_viewer(Path(output_dir or "Project/shaft"))
         return res
 
-    console.print(f"[bold cyan]>> Engaging AI Generative Engineering Agent:[/bold cyan] [bold green]On-the-Fly CAD & Physics Synthesis[/bold green]")
+    console.print(
+        "[bold cyan]>> Engaging AI Generative Engineering Agent:[/bold cyan] [bold green]On-the-Fly CAD & Physics Synthesis[/bold green]"
+    )
     res = _handle_generative(prompt, p_lower, output_dir)
     if res and auto_open:
         slug = meta.get("slug", "generative_part")
@@ -135,13 +164,15 @@ def process_prompt(prompt: str, output_dir: Optional[str] = None,
 
 def interactive_repl() -> None:
     """Interactive terminal prompt where the user can type anything."""
-    console.print(Panel(
-        "[bold cyan]MACHINE DESIGN INTELLIGENCE ENGINE (MDIE)[/bold cyan]\n"
-        "AI Proposes CAD Solid Geometry. Physics Solves Forces & Stresses.\n"
-        "[italic]Type what you want in plain words (e.g. 'design a chair with 4 legs and two arms', "
-        "'shaft with keyway', or 'exit')[/italic]",
-        border_style="cyan"
-    ))
+    console.print(
+        Panel(
+            "[bold cyan]MACHINE DESIGN INTELLIGENCE ENGINE (MDIE)[/bold cyan]\n"
+            "AI Proposes CAD Solid Geometry. Physics Solves Forces & Stresses.\n"
+            "[italic]Type what you want in plain words (e.g. 'design a chair with 4 legs and two arms', "
+            "'shaft with keyway', or 'exit')[/italic]",
+            border_style="cyan",
+        )
+    )
 
     while True:
         try:
@@ -164,43 +195,54 @@ def _show_help() -> None:
     rows = []
     for name in ["openscad", "freecad"]:
         p = tools.get(name)
-        rows.append((name.capitalize(),
-                     f"[green]Installed[/green] ({p})" if p else "[yellow]Not detected[/yellow]"))
+        rows.append(
+            (
+                name.capitalize(),
+                f"[green]Installed[/green] ({p})" if p else "[yellow]Not detected[/yellow]",
+            )
+        )
 
     from ai.llm_router import LLMRouter
+
     providers = LLMRouter.get_configured_providers()
-    llm = (f"[green]{' -> '.join(p.upper() for p in providers)}[/green]" if providers
-           else "[yellow]none configured (offline heuristic engine)[/yellow]")
+    llm = (
+        f"[green]{' -> '.join(p.upper() for p in providers)}[/green]"
+        if providers
+        else "[yellow]none configured (offline heuristic engine)[/yellow]"
+    )
 
     from convert import available_formats
+
     conv = ", ".join(available_formats())
 
-    console.print(Panel(
-        "[bold cyan]MDIE - Mechanical Design Intelligence Engine[/bold cyan]\n\n"
-        "[bold]Design:[/bold]\n"
-        '  mdie "design a chair with 4 splayed legs" [--output-dir DIR] [--open]\n'
-        "  mdie chair | bracket                     canned designs\n"
-        "  mdie shaft [--d 40 --l 500]               rotating shaft\n\n"
-        "[bold]Files:[/bold]\n"
-        "  mdie convert <input> --to <fmt> [-o OUT]  convert a file (see formats below)\n"
-        "  mdie drawings [--outdir DIR] [--pdf]      regenerate chair drawing sheets\n"
-        "  mdie report <project> [--ai]              consolidate an engineering report\n"
-        "  mdie view <project|file> [--freecad]     open in a CAD viewer\n\n"
-        "[bold]Other:[/bold]\n"
-        "  mdie info                                 detected tools and providers\n"
-        "  mdie                                      interactive prompt\n\n"
-        f"[bold cyan]Convertible formats:[/bold cyan] {conv}\n\n"
-        f"[bold cyan]Local CAD tools:[/bold cyan]\n"
-        + "\n".join(f"  * {n}: {s}" for n, s in rows)
-        + f"\n\n[bold cyan]LLM cascade:[/bold cyan] {llm}\n"
-          "  [dim](GROQ_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY, OLLAMA_HOST)[/dim]",
-        border_style="cyan"
-    ))
+    console.print(
+        Panel(
+            "[bold cyan]MDIE - Mechanical Design Intelligence Engine[/bold cyan]\n\n"
+            "[bold]Design:[/bold]\n"
+            '  mdie "design a chair with 4 splayed legs" [--output-dir DIR] [--open]\n'
+            "  mdie chair | bracket                     canned designs\n"
+            "  mdie shaft [--d 40 --l 500]               rotating shaft\n\n"
+            "[bold]Files:[/bold]\n"
+            "  mdie convert <input> --to <fmt> [-o OUT]  convert a file (see formats below)\n"
+            "  mdie drawings [--outdir DIR] [--pdf]      regenerate chair drawing sheets\n"
+            "  mdie report <project> [--ai]              consolidate an engineering report\n"
+            "  mdie view <project|file> [--freecad]     open in a CAD viewer\n\n"
+            "[bold]Other:[/bold]\n"
+            "  mdie info                                 detected tools and providers\n"
+            "  mdie                                      interactive prompt\n\n"
+            f"[bold cyan]Convertible formats:[/bold cyan] {conv}\n\n"
+            f"[bold cyan]Local CAD tools:[/bold cyan]\n"
+            + "\n".join(f"  * {n}: {s}" for n, s in rows)
+            + f"\n\n[bold cyan]LLM cascade:[/bold cyan] {llm}\n"
+            "  [dim](GROQ_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY, OLLAMA_HOST)[/dim]",
+            border_style="cyan",
+        )
+    )
 
 
 def _show_info() -> None:
-    from core import __version__
     from ai.llm_router import LLMRouter
+    from core import __version__
 
     table = Table(title=f"MDIE {__version__}", show_header=True, header_style="bold cyan")
     table.add_column("Component")
@@ -211,9 +253,12 @@ def _show_info() -> None:
         p = find_cad_tools().get(name)
         table.add_row(name, p or "not detected")
     providers = LLMRouter.get_configured_providers()
-    table.add_row("llm cascade", " -> ".join(providers) if providers else "offline heuristic engine")
+    table.add_row(
+        "llm cascade", " -> ".join(providers) if providers else "offline heuristic engine"
+    )
 
     from convert import available_formats, missing_dependencies
+
     table.add_row("convert formats", ", ".join(available_formats()))
     missing = missing_dependencies()
     if missing:
@@ -226,23 +271,32 @@ def _resolve_target(name: str) -> Path:
     target = Path(name)
     if target.exists():
         return target
-    for candidate in (Path("Project") / name, Path(f"{name}.scad"),
-                      Path("Project") / name / f"{name}.step"):
+    for candidate in (
+        Path("Project") / name,
+        Path(f"{name}.scad"),
+        Path("Project") / name / f"{name}.step",
+    ):
         if candidate.exists():
             return candidate
     return target
 
 
 def _cmd_convert(argv: list[str]) -> int:
+    import argparse
+
     from convert import convert_file, describe_formats
 
-    import argparse
     ap = argparse.ArgumentParser(
         prog="mdie convert",
-        description="Convert engineering files between documents, CAD solids and drawing sheets.")
+        description="Convert engineering files between documents, CAD solids and drawing sheets.",
+    )
     ap.add_argument("input", nargs="?", help="source file")
-    ap.add_argument("--to", "-t", dest="to", help="target format (docx, pdf, html, md, "
-                                                   "stl, step, scad, 3mf, iges, obj, png)")
+    ap.add_argument(
+        "--to",
+        "-t",
+        dest="to",
+        help="target format (docx, pdf, html, md, stl, step, scad, 3mf, iges, obj, png)",
+    )
     ap.add_argument("-o", "--output", dest="output", help="output path")
     ap.add_argument("--list-formats", action="store_true", help="show supported conversions")
     ap.add_argument("--ai", action="store_true", help="AI pass on document output (docx/html)")
@@ -259,27 +313,33 @@ def _cmd_convert(argv: list[str]) -> int:
         return 1
 
     try:
-        result = convert_file(args.input, target_format=args.to,
-                              output_path=args.output, use_ai=args.ai, dpi=args.dpi)
+        result = convert_file(
+            args.input, target_format=args.to, output_path=args.output, use_ai=args.ai, dpi=args.dpi
+        )
     except Exception as exc:
         console.print(f"[bold red]Conversion failed:[/bold red] {exc}")
         return 1
 
     size = result.stat().st_size / 1024
-    console.print(f"[bold green]>> Wrote[/bold green] [bold cyan]{result}[/bold cyan] ({size:.1f} KB)")
+    console.print(
+        f"[bold green]>> Wrote[/bold green] [bold cyan]{result}[/bold cyan] ({size:.1f} KB)"
+    )
     return 0
 
 
 def _cmd_drawings(argv: list[str]) -> int:
     import argparse
-    ap = argparse.ArgumentParser(prog="mdie drawings",
-                                 description="Regenerate the dimensioned chair drawing sheets.")
+
+    ap = argparse.ArgumentParser(
+        prog="mdie drawings", description="Regenerate the dimensioned chair drawing sheets."
+    )
     ap.add_argument("--outdir", default="Project/chair/drawings")
     ap.add_argument("--pdf", action="store_true", help="also emit a combined PDF sheet")
     ap.add_argument("--chrome", help="explicit Chrome/Chromium path for PDF output")
     args = ap.parse_args(argv)
 
     import subprocess
+
     cmd = [sys.executable, "-m", "drafting.part_drawings", "--outdir", args.outdir]
     if args.pdf:
         cmd.append("--pdf")
@@ -290,13 +350,16 @@ def _cmd_drawings(argv: list[str]) -> int:
 
 def _cmd_report(argv: list[str]) -> int:
     import argparse
-    ap = argparse.ArgumentParser(prog="mdie report",
-                                 description="Consolidate an engineering report via learning-tools.")
+
+    ap = argparse.ArgumentParser(
+        prog="mdie report", description="Consolidate an engineering report via learning-tools."
+    )
     ap.add_argument("target", nargs="?", default="chair", help="project name or report path")
     ap.add_argument("--ai", action="store_true", help="enable AI summarisation")
     args = ap.parse_args(argv)
 
     from integrations.learning_tools import LearningToolsBridge
+
     bridge = LearningToolsBridge()
 
     target_p = Path(args.target)
@@ -304,9 +367,11 @@ def _cmd_report(argv: list[str]) -> int:
         target_file = target_p
     else:
         target_file = None
-        for cand in (Path("Project") / args.target / "academic_assignment_report.html",
-                     Path("Project") / args.target / f"{args.target}_report.html",
-                     Path("Project") / args.target / "report.html"):
+        for cand in (
+            Path("Project") / args.target / "academic_assignment_report.html",
+            Path("Project") / args.target / f"{args.target}_report.html",
+            Path("Project") / args.target / "report.html",
+        ):
             if cand.exists():
                 target_file = cand
                 break
@@ -318,11 +383,19 @@ def _cmd_report(argv: list[str]) -> int:
         return 1
 
     console.print(f"[bold cyan]>> Consolidating:[/bold cyan] {target_file}")
-    console.print(f"[dim]Bridge mode: {'REST API (port 5000)' if bridge.is_online() else 'Direct Library Import'}[/dim]")
-    res = bridge.consolidate_report(report_path=target_file, convert_docx=True,
-                                    generate_summaries=True, generate_notebooklm=True,
-                                    enable_ai=args.ai)
-    console.print(f"[bold green]>> Consolidated[/bold green] (chunks: {res.get('chunks_count', 0)})")
+    console.print(
+        f"[dim]Bridge mode: {'REST API (port 5000)' if bridge.is_online() else 'Direct Library Import'}[/dim]"
+    )
+    res = bridge.consolidate_report(
+        report_path=target_file,
+        convert_docx=True,
+        generate_summaries=True,
+        generate_notebooklm=True,
+        enable_ai=args.ai,
+    )
+    console.print(
+        f"[bold green]>> Consolidated[/bold green] (chunks: {res.get('chunks_count', 0)})"
+    )
     for ftype, fpath in res.get("generated_files", {}).items():
         console.print(f"   - [bold]{ftype.upper()}:[/bold] [cyan]{fpath}[/cyan]")
     return 0
@@ -330,6 +403,7 @@ def _cmd_report(argv: list[str]) -> int:
 
 def _cmd_view(argv: list[str]) -> int:
     import argparse
+
     ap = argparse.ArgumentParser(prog="mdie view", description="Open a project in a CAD viewer.")
     ap.add_argument("target", nargs="?", default="chair")
     ap.add_argument("--freecad", "--fc", dest="freecad", action="store_true")
@@ -347,8 +421,10 @@ def _cmd_view(argv: list[str]) -> int:
 
 def _build_parser():
     import argparse
-    ap = argparse.ArgumentParser(prog="mdie", add_help=False,
-                                 description="MDIE - plain-language mechanical design.")
+
+    ap = argparse.ArgumentParser(
+        prog="mdie", add_help=False, description="MDIE - plain-language mechanical design."
+    )
     ap.add_argument("prompt", nargs="*", help="design prompt (omit to open the interactive prompt)")
     ap.add_argument("-o", "--output-dir", dest="output_dir")
     ap.add_argument("--open", dest="auto_open", action="store_true")
@@ -356,7 +432,7 @@ def _build_parser():
     return ap
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
 
     if not argv:
@@ -385,8 +461,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         prompt, default_dir = CANNED[head]
         rest = argv[1:]
         out_dir, auto_open = _design_flags(rest)
-        return 0 if process_prompt(prompt, output_dir=out_dir or default_dir,
-                                   auto_open=auto_open) else 1
+        return (
+            0
+            if process_prompt(prompt, output_dir=out_dir or default_dir, auto_open=auto_open)
+            else 1
+        )
 
     if head in ("solve", "optimize", "design"):
         prompt = " ".join(a for a in argv[1:] if not a.startswith("-"))
@@ -400,7 +479,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     return 0 if process_prompt(prompt, output_dir=out_dir, auto_open=auto_open) else 1
 
 
-def _design_flags(args: list[str]) -> tuple[Optional[str], bool]:
+def _design_flags(args: list[str]) -> tuple[str | None, bool]:
     out_dir = None
     auto_open = False
     i = 0

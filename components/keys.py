@@ -4,8 +4,10 @@ Sizes standard parallel keys per DIN 6885-1 / ISO 2491,
 and checks shear stress (tau_key) and contact crushing pressure (sigma_crush).
 """
 
-from typing import Dict, Any, Optional, Tuple
-from pydantic import BaseModel, Field
+from __future__ import annotations
+
+from pydantic import BaseModel
+
 
 class KeyCheckResult(BaseModel):
     standard: str = "DIN 6885-1 Form A"
@@ -41,9 +43,10 @@ DIN_6885_TABLE = [
     (95.0, 110.0, 28.0, 16.0, 10.0),
 ]
 
+
 class KeyEngine:
     @staticmethod
-    def get_standard_key_size(shaft_diameter_mm: float) -> Tuple[float, float, float]:
+    def get_standard_key_size(shaft_diameter_mm: float) -> tuple[float, float, float]:
         """Lookup DIN 6885 standard (width_mm, height_mm, depth_t1_mm) for shaft diameter."""
         d = float(shaft_diameter_mm)
         for d_min, d_max, w, h, t1 in DIN_6885_TABLE:
@@ -59,10 +62,10 @@ class KeyEngine:
         cls,
         shaft_diameter_m: float,
         torque_nm: float,
-        key_length_m: Optional[float] = None,
+        key_length_m: float | None = None,
         key_yield_strength_mpa: float = 370.0,  # Standard C45 / AISI 1045 key stock (Sy ~ 370-530 MPa)
         allowable_crush_sf: float = 1.5,
-        allowable_shear_sf: float = 2.0
+        allowable_shear_sf: float = 2.0,
     ) -> KeyCheckResult:
         """
         Calculates key shear stress tau and contact crushing pressure sigma_c.
@@ -109,7 +112,7 @@ class KeyEngine:
         sf_crush = s_cy / sigma_c_mpa if sigma_c_mpa > 0 else 999.0
 
         passed = bool(sf_shear >= allowable_shear_sf and sf_crush >= allowable_crush_sf)
-        
+
         if passed:
             note = f"Standard key {w_mm:.0f}x{h_mm:.0f}x{l_mm:.0f} mm verified. Shear SF = {sf_shear:.2f}, Crushing SF = {sf_crush:.2f}."
         else:
@@ -129,5 +132,5 @@ class KeyEngine:
             shear_safety_factor=round(sf_shear, 2),
             crushing_safety_factor=round(sf_crush, 2),
             passed=passed,
-            status_note=note
+            status_note=note,
         )

@@ -2,10 +2,9 @@
 Test Suite: Helical Spring DIN 2089 / Shigley Physics & CAD
 """
 
-import pytest
+from cad.springs_cad import SpringCADGenerator
 from components.springs import SpringSpecification
 from physics.springs import SpringSolver
-from cad.springs_cad import SpringCADGenerator
 
 
 def test_compression_spring_solver():
@@ -15,7 +14,7 @@ def test_compression_spring_solver():
         mean_diameter_d_mm=24.0,
         active_coils_na=8.0,
         max_operating_force_n=200.0,
-        min_operating_force_n=40.0
+        min_operating_force_n=40.0,
     )
 
     res = SpringSolver.solve(spec)

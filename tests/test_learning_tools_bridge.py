@@ -2,12 +2,13 @@
 Unit tests for the Learning Tools Integration Bridge (Dual-Mode).
 """
 
-from pathlib import Path
 import importlib.util
+from pathlib import Path
+
 import pytest
 
-from integrations.learning_tools import LearningToolsBridge
 from convert.docx_bridge import HTMLToDocxConverter
+from integrations.learning_tools import LearningToolsBridge
 
 
 def test_docx_converter_bridge_import():
@@ -30,8 +31,7 @@ def _require_learning_tools_deps():
     (bs4, yaml) belong to learning-tools, not to this project, so they are not
     declared in pyproject.toml. Skip rather than fail when they are missing.
     """
-    missing = [m for m in ("bs4", "yaml")
-               if importlib.util.find_spec(m) is None]
+    missing = [m for m in ("bs4", "yaml") if importlib.util.find_spec(m) is None]
     if missing:
         pytest.skip(f"optional learning-tools deps not installed: {missing}")
 
@@ -42,7 +42,10 @@ def test_learning_tools_bridge_convert_docx(tmp_path):
     bridge = LearningToolsBridge()
 
     html_file = tmp_path / "test_report.html"
-    html_file.write_text("<html><body><h1>Test Calculation</h1><p>Stress = 120 MPa</p></body></html>", encoding="utf-8")
+    html_file.write_text(
+        "<html><body><h1>Test Calculation</h1><p>Stress = 120 MPa</p></body></html>",
+        encoding="utf-8",
+    )
 
     out_docx = tmp_path / "test_report.docx"
     result_docx = bridge.convert_docx(html_file, out_docx)
@@ -62,7 +65,7 @@ def test_learning_tools_bridge_consolidate(tmp_path):
         "Shafts are rotating machine elements used to transmit power and torque. "
         "Under ASME shaft design codes, fatigue is evaluated using the modified Goodman criterion. "
         "Deflection must be limited to prevent tooth misalignment in spur gears.\n",
-        encoding="utf-8"
+        encoding="utf-8",
     )
 
     out_dir = tmp_path / "study_output"
@@ -71,7 +74,7 @@ def test_learning_tools_bridge_consolidate(tmp_path):
         output_dir=out_dir,
         convert_docx=False,
         generate_summaries=False,
-        generate_notebooklm=False
+        generate_notebooklm=False,
     )
 
     assert res["status"] == "ok"

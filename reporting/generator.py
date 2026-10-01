@@ -4,22 +4,23 @@ Generates comprehensive, audit-ready engineering calculation reports in HTML, SV
 Includes executive compliance summary, equation trace, stress/deflection diagrams, and OpenSCAD CAD scripts.
 """
 
-from typing import Dict, Any, List, Optional
 import html
-from core.models import EngineeringModel, SolverResult
+
 from ai.critic import DesignCritic
+from core.models import EngineeringModel, SolverResult
+
 
 class ReportGenerator:
     @staticmethod
     def generate_svg_diagram(
-        x_vals: List[float],
-        y_vals: List[float],
+        x_vals: list[float],
+        y_vals: list[float],
         title: str,
         y_label: str,
         stroke_color: str = "#2563eb",
         fill_color: str = "rgba(37, 99, 235, 0.15)",
         width: int = 680,
-        height: int = 180
+        height: int = 180,
     ) -> str:
         """Generate clean, scalable SVG diagram for internal force/moment/stress curves."""
         if not x_vals or not y_vals or len(x_vals) != len(y_vals):
@@ -58,27 +59,29 @@ class ReportGenerator:
         polyline_pts = " ".join(points)
 
         # Polygon for fill under curve
-        polygon_pts = f"{map_x(min_x):.1f},{zero_y:.1f} " + polyline_pts + f" {map_x(max_x):.1f},{zero_y:.1f}"
+        polygon_pts = (
+            f"{map_x(min_x):.1f},{zero_y:.1f} " + polyline_pts + f" {map_x(max_x):.1f},{zero_y:.1f}"
+        )
 
         # SVG elements
         svg = [
             f'<svg viewBox="0 0 {width} {height}" class="chart-svg" xmlns="http://www.w3.org/2000/svg">',
             f'  <rect width="{width}" height="{height}" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1" rx="4" />',
             f'  <text x="{padding}" y="22" fill="#0f172a" font-size="12" font-family="sans-serif" font-weight="bold">{html.escape(title)}</text>',
-            f'  <!-- Zero Baseline -->',
+            "  <!-- Zero Baseline -->",
             f'  <line x1="{padding}" y1="{zero_y:.1f}" x2="{width - padding}" y2="{zero_y:.1f}" stroke="#94a3b8" stroke-dasharray="3,3" stroke-width="1" />',
-            f'  <!-- Y-Axis labels -->',
+            "  <!-- Y-Axis labels -->",
             f'  <text x="{padding - 8}" y="{map_y(max_y):.1f}" fill="#475569" font-size="10" text-anchor="end">{max_y:.1f}</text>',
             f'  <text x="{padding - 8}" y="{zero_y + 3:.1f}" fill="#475569" font-size="10" text-anchor="end">0.0</text>',
             f'  <text x="{padding - 8}" y="{map_y(min_y):.1f}" fill="#475569" font-size="10" text-anchor="end">{min_y:.1f}</text>',
-            f'  <!-- Filled Area -->',
+            "  <!-- Filled Area -->",
             f'  <polygon points="{polygon_pts}" fill="{fill_color}" />',
-            f'  <!-- Curve Line -->',
+            "  <!-- Curve Line -->",
             f'  <polyline points="{polyline_pts}" fill="none" stroke="{stroke_color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />',
-            f'  <!-- X-Axis Labels -->',
-            f'  <text x="{padding}" y="{height - 8}" fill="#475569" font-size="10">x = {min_x*1000:.0f} mm</text>',
-            f'  <text x="{width - padding}" y="{height - 8}" fill="#475569" font-size="10" text-anchor="end">x = {max_x*1000:.0f} mm</text>',
-            '</svg>'
+            "  <!-- X-Axis Labels -->",
+            f'  <text x="{padding}" y="{height - 8}" fill="#475569" font-size="10">x = {min_x * 1000:.0f} mm</text>',
+            f'  <text x="{width - padding}" y="{height - 8}" fill="#475569" font-size="10" text-anchor="end">x = {max_x * 1000:.0f} mm</text>',
+            "</svg>",
         ]
         return "\n".join(svg)
 
@@ -87,28 +90,42 @@ class ReportGenerator:
         """Generate comprehensive printable and interactive HTML engineering report."""
         review = DesignCritic.review_design(model, result)
         badge_class = "badge-pass" if result.all_constraints_passed else "badge-fail"
-        badge_text = "VERIFIED COMPLIANT (PASS)" if result.all_constraints_passed else "NON-COMPLIANT (FAIL)"
+        badge_text = (
+            "VERIFIED COMPLIANT (PASS)" if result.all_constraints_passed else "NON-COMPLIANT (FAIL)"
+        )
 
         # SVG charts
         svg_shear = cls.generate_svg_diagram(
-            result.x_stations, result.shear_force,
-            "Shear Force Diagram V(x) [N]", "Force (N)",
-            stroke_color="#38bdf8", fill_color="rgba(56, 189, 248, 0.15)"
+            result.x_stations,
+            result.shear_force,
+            "Shear Force Diagram V(x) [N]",
+            "Force (N)",
+            stroke_color="#38bdf8",
+            fill_color="rgba(56, 189, 248, 0.15)",
         )
         svg_moment = cls.generate_svg_diagram(
-            result.x_stations, result.bending_moment,
-            "Bending Moment Diagram M(x) [N*m]", "Moment (N*m)",
-            stroke_color="#a855f7", fill_color="rgba(168, 85, 247, 0.15)"
+            result.x_stations,
+            result.bending_moment,
+            "Bending Moment Diagram M(x) [N*m]",
+            "Moment (N*m)",
+            stroke_color="#a855f7",
+            fill_color="rgba(168, 85, 247, 0.15)",
         )
         svg_stress = cls.generate_svg_diagram(
-            result.x_stations, result.von_mises_stress_mpa,
-            "Von Mises Stress Distribution σ_vm(x) [MPa]", "Stress (MPa)",
-            stroke_color="#f43f5e", fill_color="rgba(244, 63, 94, 0.15)"
+            result.x_stations,
+            result.von_mises_stress_mpa,
+            "Von Mises Stress Distribution σ_vm(x) [MPa]",
+            "Stress (MPa)",
+            stroke_color="#f43f5e",
+            fill_color="rgba(244, 63, 94, 0.15)",
         )
         svg_deflection = cls.generate_svg_diagram(
-            result.x_stations, result.deflection_mm,
-            "Deflection Profile v(x) [mm]", "Deflection (mm)",
-            stroke_color="#10b981", fill_color="rgba(16, 185, 129, 0.15)"
+            result.x_stations,
+            result.deflection_mm,
+            "Deflection Profile v(x) [mm]",
+            "Deflection (mm)",
+            stroke_color="#10b981",
+            fill_color="rgba(16, 185, 129, 0.15)",
         )
 
         crit_sec = result.critical_section
@@ -296,7 +313,9 @@ class ReportGenerator:
     <div class="header">
       <div>
         <h1>Machine Design Intelligence Engine</h1>
-        <div class="subtitle">Deterministic Engineering Calculation Sheet &middot; Model: <strong>{html.escape(model.name)}</strong></div>
+        <div class="subtitle">Deterministic Engineering Calculation Sheet &middot; Model: <strong>{
+            html.escape(model.name)
+        }</strong></div>
       </div>
       <div>
         <span class="badge {badge_class}">{badge_text}</span>
@@ -307,17 +326,25 @@ class ReportGenerator:
     <div class="grid-4">
       <div class="card">
         <div class="kpi-label">Yield Safety Factor</div>
-        <div class="kpi-val" style="color: {'#10b981' if result.yield_passed else '#ef4444'};">{result.min_yield_safety_factor:.2f}</div>
+        <div class="kpi-val" style="color: {"#10b981" if result.yield_passed else "#ef4444"};">{
+            result.min_yield_safety_factor:.2f}</div>
         <div class="kpi-sub">Constraint: &ge; {model.constraints.min_yield_safety_factor:.2f}</div>
       </div>
       <div class="card">
         <div class="kpi-label">Fatigue SF (Goodman)</div>
-        <div class="kpi-val" style="color: {'#10b981' if result.fatigue_passed else '#ef4444'};">{result.min_fatigue_safety_factor:.2f}</div>
-        <div class="kpi-sub">Life: {'Infinite (&gt;10⁷ cycles)' if result.is_infinite_life else f'{result.fatigue_life_cycles:,.0f} cycles'}</div>
+        <div class="kpi-val" style="color: {"#10b981" if result.fatigue_passed else "#ef4444"};">{
+            result.min_fatigue_safety_factor:.2f}</div>
+        <div class="kpi-sub">Life: {
+            "Infinite (&gt;10⁷ cycles)"
+            if result.is_infinite_life
+            else f"{result.fatigue_life_cycles:,.0f} cycles"
+        }</div>
       </div>
       <div class="card">
         <div class="kpi-label">Max Deflection</div>
-        <div class="kpi-val" style="color: {'#10b981' if result.deflection_passed else '#ef4444'};">{result.max_deflection_mm:.3f} mm</div>
+        <div class="kpi-val" style="color: {
+            "#10b981" if result.deflection_passed else "#ef4444"
+        };">{result.max_deflection_mm:.3f} mm</div>
         <div class="kpi-sub">Tolerance: &le; {model.constraints.max_deflection_mm:.3f} mm</div>
       </div>
       <div class="card">
@@ -330,13 +357,23 @@ class ReportGenerator:
     <!-- AI Critic & Copilot Review -->
     <div class="review-box">
       <h3>AI Design Review &amp; Root-Cause Analysis</h3>
-      <p><strong>Overall Evaluation:</strong> {review['overall_status']} &mdash; Strength: <strong>{review['strength_review']}</strong>, Fatigue: <strong>{review['fatigue_review']}</strong>, Deflection: <strong>{review['deflection_review']}</strong>, Mass: <strong>{review['mass_review']}</strong>.</p>
+      <p><strong>Overall Evaluation:</strong> {review["overall_status"]} &mdash; Strength: <strong>{
+            review["strength_review"]
+        }</strong>, Fatigue: <strong>{review["fatigue_review"]}</strong>, Deflection: <strong>{
+            review["deflection_review"]
+        }</strong>, Mass: <strong>{review["mass_review"]}</strong>.</p>
       
-      {'<h4>Critical Issues:</h4><ul>' + ''.join(f'<li>{html.escape(iss)}</li>' for iss in review['critical_issues']) + '</ul>' if review['critical_issues'] else ''}
+      {
+            "<h4>Critical Issues:</h4><ul>"
+            + "".join(f"<li>{html.escape(iss)}</li>" for iss in review["critical_issues"])
+            + "</ul>"
+            if review["critical_issues"]
+            else ""
+        }
       
       <h4>Recommended Engineering Actions:</h4>
       <ul class="actions-list">
-        {''.join(f'<li>{html.escape(r)}</li>' for r in review['recommendations'])}
+        {"".join(f"<li>{html.escape(r)}</li>" for r in review["recommendations"])}
       </ul>
     </div>
 
@@ -353,7 +390,12 @@ class ReportGenerator:
         </tr>
       </thead>
       <tbody>
-        {''.join(f'<tr><td>{html.escape(a.parameter)}</td><td><strong>{html.escape(str(a.value))}</strong></td><td>{html.escape(a.source)}</td><td><span style="color: {"#10b981" if a.status=="CONFIRMED" else "#f59e0b"}; font-weight:600;">{html.escape(a.status)}</span></td><td>{html.escape(a.notes or "")}</td></tr>' for a in model.assumptions)}
+        {
+            "".join(
+                f'<tr><td>{html.escape(a.parameter)}</td><td><strong>{html.escape(str(a.value))}</strong></td><td>{html.escape(a.source)}</td><td><span style="color: {"#10b981" if a.status == "CONFIRMED" else "#f59e0b"}; font-weight:600;">{html.escape(a.status)}</span></td><td>{html.escape(a.notes or "")}</td></tr>'
+                for a in model.assumptions
+            )
+        }
       </tbody>
     </table>
 
@@ -394,7 +436,12 @@ class ReportGenerator:
         </tr>
       </thead>
       <tbody>
-        {''.join(f'<tr><td>{html.escape(r.support_name)}</td><td>{r.position*1000.0:.1f} mm</td><td><strong>{r.reaction_force_n:.2f} N</strong></td><td>{r.reaction_moment_nm:.2f} N&middot;m</td></tr>' for r in result.reactions)}
+        {
+            "".join(
+                f"<tr><td>{html.escape(r.support_name)}</td><td>{r.position * 1000.0:.1f} mm</td><td><strong>{r.reaction_force_n:.2f} N</strong></td><td>{r.reaction_moment_nm:.2f} N&middot;m</td></tr>"
+                for r in result.reactions
+            )
+        }
       </tbody>
     </table>
     <p><strong>Nominal Transmitted Torque:</strong> {result.applied_torque_nm:.2f} N&middot;m</p>
@@ -410,19 +457,34 @@ class ReportGenerator:
 
     <!-- Critical Section Analysis -->
     <h2>5. Critical Section Analysis (Peak Stress Plane)</h2>
-    {'<table><thead><tr><th>Station (x)</th><th>Diameter</th><th>Bending Moment</th><th>Bending Stress</th><th>Torque</th><th>Torsional Stress</th><th>Kt (Bending)</th><th>Von Mises &sigma;_vm</th></tr></thead><tbody>' +
-     f'<tr><td><strong>{crit_sec.x*1000.0:.1f} mm</strong></td><td>{crit_sec.outer_diameter*1000.0:.1f} mm</td><td>{crit_sec.bending_moment:.2f} N&middot;m</td><td>{crit_sec.bending_stress:.2f} MPa</td><td>{crit_sec.torque:.2f} N&middot;m</td><td>{crit_sec.torsional_stress:.2f} MPa</td><td>{crit_sec.kt_bending:.2f}</td><td><strong style="color: #f43f5e;">{crit_sec.effective_von_mises:.2f} MPa</strong></td></tr></tbody></table>' if crit_sec else '<p>No critical section data.</p>'}
+    {
+            "<table><thead><tr><th>Station (x)</th><th>Diameter</th><th>Bending Moment</th><th>Bending Stress</th><th>Torque</th><th>Torsional Stress</th><th>Kt (Bending)</th><th>Von Mises &sigma;_vm</th></tr></thead><tbody>"
+            + f'<tr><td><strong>{crit_sec.x * 1000.0:.1f} mm</strong></td><td>{crit_sec.outer_diameter * 1000.0:.1f} mm</td><td>{crit_sec.bending_moment:.2f} N&middot;m</td><td>{crit_sec.bending_stress:.2f} MPa</td><td>{crit_sec.torque:.2f} N&middot;m</td><td>{crit_sec.torsional_stress:.2f} MPa</td><td>{crit_sec.kt_bending:.2f}</td><td><strong style="color: #f43f5e;">{crit_sec.effective_von_mises:.2f} MPa</strong></td></tr></tbody></table>'
+            if crit_sec
+            else "<p>No critical section data.</p>"
+        }
 
     <!-- Standard Machine Components (Bearings & Keyways) -->
     <h2>6. Standard Machine Components: Bearings &amp; Keys</h2>
     
     <h3>A. SKF Standard Rolling Bearings (ISO 281 L10h Life)</h3>
-    {'<table><thead><tr><th>Location</th><th>Bearing Designation</th><th>Bore (d)</th><th>Outer (D)</th><th>Width (B)</th><th>Dynamic Capacity (C)</th><th>Equivalent Load (P)</th><th>Rating Life (L10h)</th><th>Suitability</th></tr></thead><tbody>' +
-     ''.join(f'<tr><td>Support @ {b.get("bearing", {}).get("bore_diameter_mm")} mm journal</td><td><strong>{b.get("bearing", {}).get("designation")}</strong></td><td>{b.get("bearing", {}).get("bore_diameter_mm")} mm</td><td>{b.get("bearing", {}).get("outer_diameter_mm")} mm</td><td>{b.get("bearing", {}).get("width_mm")} mm</td><td>{b.get("bearing", {}).get("dynamic_load_c_kn")} kN</td><td>{b.get("radial_load_n", 0):.1f} N</td><td><strong style="color: #38bdf8;">{b.get("l10h_hours", 0):,.0f} hours</strong></td><td><span style="color: {"#10b981" if b.get("status") in ("EXCELLENT", "GOOD") else "#f59e0b"}; font-weight:600;">{b.get("status")}</span></td></tr>' for b in result.bearings_selected) +
-     '</tbody></table>' if result.bearings_selected else '<p>No bearing data available.</p>'}
+    {
+            "<table><thead><tr><th>Location</th><th>Bearing Designation</th><th>Bore (d)</th><th>Outer (D)</th><th>Width (B)</th><th>Dynamic Capacity (C)</th><th>Equivalent Load (P)</th><th>Rating Life (L10h)</th><th>Suitability</th></tr></thead><tbody>"
+            + "".join(
+                f'<tr><td>Support @ {b.get("bearing", {}).get("bore_diameter_mm")} mm journal</td><td><strong>{b.get("bearing", {}).get("designation")}</strong></td><td>{b.get("bearing", {}).get("bore_diameter_mm")} mm</td><td>{b.get("bearing", {}).get("outer_diameter_mm")} mm</td><td>{b.get("bearing", {}).get("width_mm")} mm</td><td>{b.get("bearing", {}).get("dynamic_load_c_kn")} kN</td><td>{b.get("radial_load_n", 0):.1f} N</td><td><strong style="color: #38bdf8;">{b.get("l10h_hours", 0):,.0f} hours</strong></td><td><span style="color: {"#10b981" if b.get("status") in ("EXCELLENT", "GOOD") else "#f59e0b"}; font-weight:600;">{b.get("status")}</span></td></tr>'
+                for b in result.bearings_selected
+            )
+            + "</tbody></table>"
+            if result.bearings_selected
+            else "<p>No bearing data available.</p>"
+        }
 
     <h3>B. Standard Parallel Key &amp; Keyway Verification (DIN 6885-1)</h3>
-    {f'<table><thead><tr><th>Standard</th><th>Shaft Bore</th><th>Key Section (w &times; h)</th><th>Key Length (L)</th><th>Shear Stress (&tau;)</th><th>Shear SF</th><th>Crush Pressure (&sigma;_c)</th><th>Crush SF</th><th>Status</th></tr></thead><tbody><tr><td>{result.keyway_analysis.get("standard")}</td><td>{result.keyway_analysis.get("shaft_diameter_mm")} mm</td><td>{result.keyway_analysis.get("key_width_mm")}&times;{result.keyway_analysis.get("key_height_mm")} mm</td><td>{result.keyway_analysis.get("key_length_mm")} mm</td><td>{result.keyway_analysis.get("shear_stress_mpa")} MPa</td><td><strong>{result.keyway_analysis.get("shear_safety_factor")}</strong></td><td>{result.keyway_analysis.get("crushing_stress_mpa")} MPa</td><td><strong>{result.keyway_analysis.get("crushing_safety_factor")}</strong></td><td><span style="color: {"#10b981" if result.keyway_analysis.get("passed") else "#ef4444"}; font-weight:600;">{"PASS" if result.keyway_analysis.get("passed") else "FAIL"}</span></td></tr></tbody></table>' if result.keyway_analysis else '<p>No keyway required for this load condition.</p>'}
+    {
+            f'<table><thead><tr><th>Standard</th><th>Shaft Bore</th><th>Key Section (w &times; h)</th><th>Key Length (L)</th><th>Shear Stress (&tau;)</th><th>Shear SF</th><th>Crush Pressure (&sigma;_c)</th><th>Crush SF</th><th>Status</th></tr></thead><tbody><tr><td>{result.keyway_analysis.get("standard")}</td><td>{result.keyway_analysis.get("shaft_diameter_mm")} mm</td><td>{result.keyway_analysis.get("key_width_mm")}&times;{result.keyway_analysis.get("key_height_mm")} mm</td><td>{result.keyway_analysis.get("key_length_mm")} mm</td><td>{result.keyway_analysis.get("shear_stress_mpa")} MPa</td><td><strong>{result.keyway_analysis.get("shear_safety_factor")}</strong></td><td>{result.keyway_analysis.get("crushing_stress_mpa")} MPa</td><td><strong>{result.keyway_analysis.get("crushing_safety_factor")}</strong></td><td><span style="color: {"#10b981" if result.keyway_analysis.get("passed") else "#ef4444"}; font-weight:600;">{"PASS" if result.keyway_analysis.get("passed") else "FAIL"}</span></td></tr></tbody></table>'
+            if result.keyway_analysis
+            else "<p>No keyway required for this load condition.</p>"
+        }
 
     <!-- OpenSCAD CAD Code -->
     <h2>7. Parametric OpenSCAD 3D CAD Definition</h2>
@@ -432,7 +494,7 @@ class ReportGenerator:
     <!-- Verification Audit Trace -->
     <h2>8. Deterministic Physics Solver Audit Trace</h2>
     <ol>
-      {''.join(f'<li>{html.escape(step)}</li>' for step in result.calculation_steps)}
+      {"".join(f"<li>{html.escape(step)}</li>" for step in result.calculation_steps)}
     </ol>
 
     <footer style="margin-top: 50px; padding-top: 20px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 11px; text-align: center;">
@@ -448,21 +510,25 @@ class ReportGenerator:
     def generate_markdown_report(cls, model: EngineeringModel, result: SolverResult) -> str:
         """Generate GitHub-flavored Markdown engineering report."""
         review = DesignCritic.review_design(model, result)
-        badge = "✅ PASS - VERIFIED COMPLIANT" if result.all_constraints_passed else "❌ FAIL - NON-COMPLIANT"
+        badge = (
+            "✅ PASS - VERIFIED COMPLIANT"
+            if result.all_constraints_passed
+            else "❌ FAIL - NON-COMPLIANT"
+        )
 
         lines = [
-            f"# Machine Design Intelligence Engine (MDIE) - Calculation Sheet",
+            "# Machine Design Intelligence Engine (MDIE) - Calculation Sheet",
             f"**Model:** {model.name}  ",
             f"**Verification Status:** {badge}  ",
-            f"**Authority:** Deterministic Physics Engine  ",
+            "**Authority:** Deterministic Physics Engine  ",
             "",
             "## 1. Executive Summary",
-            f"| Metric | Calculated | Allowable / Limit | Status |",
-            f"| :--- | :--- | :--- | :--- |",
+            "| Metric | Calculated | Allowable / Limit | Status |",
+            "| :--- | :--- | :--- | :--- |",
             f"| **Yield Safety Factor** | {result.min_yield_safety_factor:.2f} | &ge; {model.constraints.min_yield_safety_factor:.2f} | {'PASS' if result.yield_passed else 'FAIL'} |",
             f"| **Fatigue Safety Factor (Goodman)** | {result.min_fatigue_safety_factor:.2f} | &ge; {model.constraints.min_fatigue_safety_factor:.2f} | {'PASS' if result.fatigue_passed else 'FAIL'} |",
             f"| **Maximum Deflection** | {result.max_deflection_mm:.3f} mm | &le; {model.constraints.max_deflection_mm:.3f} mm | {'PASS' if result.deflection_passed else 'FAIL'} |",
-            f"| **Component Total Mass** | {result.total_mass_kg:.3f} kg | {f'<= {model.constraints.max_mass_kg} kg' if model.constraints.max_mass_kg else 'Unconstrained'} | {'PASS' if review['mass_review']=='PASS' else 'FAIL'} |",
+            f"| **Component Total Mass** | {result.total_mass_kg:.3f} kg | {f'<= {model.constraints.max_mass_kg} kg' if model.constraints.max_mass_kg else 'Unconstrained'} | {'PASS' if review['mass_review'] == 'PASS' else 'FAIL'} |",
             f"| **Fatigue Life Prediction** | {result.fatigue_life_cycles:,.0f} cycles | Target: {model.constraints.target_life_cycles:,.0f} | {'PASS' if result.fatigue_passed else 'FAIL'} |",
             "",
             "## 2. AI Design Critic Review",
@@ -474,33 +540,43 @@ class ReportGenerator:
         for r in review["recommendations"]:
             lines.append(f"- {r}")
 
-        lines.extend([
-            "",
-            "## 3. Engineering Assumptions Log",
-            "| Parameter | Value | Source | Status | Notes |",
-            "| :--- | :--- | :--- | :--- | :--- |",
-        ])
+        lines.extend(
+            [
+                "",
+                "## 3. Engineering Assumptions Log",
+                "| Parameter | Value | Source | Status | Notes |",
+                "| :--- | :--- | :--- | :--- | :--- |",
+            ]
+        )
         for a in model.assumptions:
-            lines.append(f"| {a.parameter} | {a.value} | {a.source} | {a.status} | {a.notes or ''} |")
+            lines.append(
+                f"| {a.parameter} | {a.value} | {a.source} | {a.status} | {a.notes or ''} |"
+            )
 
-        lines.extend([
-            "",
-            "## 4. Support Reactions",
-            "| Support | Axial Position | Reaction Force | Reaction Moment |",
-            "| :--- | :--- | :--- | :--- |",
-        ])
+        lines.extend(
+            [
+                "",
+                "## 4. Support Reactions",
+                "| Support | Axial Position | Reaction Force | Reaction Moment |",
+                "| :--- | :--- | :--- | :--- |",
+            ]
+        )
         for r in result.reactions:
-            lines.append(f"| {r.support_name} | {r.position*1000.0:.1f} mm | {r.reaction_force_n:.2f} N | {r.reaction_moment_nm:.2f} N*m |")
+            lines.append(
+                f"| {r.support_name} | {r.position * 1000.0:.1f} mm | {r.reaction_force_n:.2f} N | {r.reaction_moment_nm:.2f} N*m |"
+            )
 
-        lines.extend([
-            "",
-            "## 5. Parametric OpenSCAD Code",
-            "```scad",
-            result.openscad_code,
-            "```",
-            "",
-            "## 6. Physics Solver Trace",
-        ])
+        lines.extend(
+            [
+                "",
+                "## 5. Parametric OpenSCAD Code",
+                "```scad",
+                result.openscad_code,
+                "```",
+                "",
+                "## 6. Physics Solver Trace",
+            ]
+        )
         for step in result.calculation_steps:
             lines.append(f"- {step}")
 

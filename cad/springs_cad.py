@@ -14,7 +14,7 @@ class SpringCADGenerator:
         """
         spec = result.spec
         geom = result.geometry
-        
+
         lines = [
             "// ====================================================================",
             f"// MDIE Parametric Helical Spring: {spec.name}",

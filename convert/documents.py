@@ -15,9 +15,9 @@ from __future__ import annotations
 
 import html as html_mod
 import re
+from collections.abc import Iterable
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Iterable
 
 Block = tuple
 
@@ -116,6 +116,7 @@ def _split_table_row(line: str) -> list[str]:
 
 
 # --------------------------------------------------------------- parsing: html
+
 
 class _HtmlBlocks(HTMLParser):
     """Collect block-level text out of an HTML document."""
@@ -236,6 +237,7 @@ def blocks_from_html(text: str) -> list[Block]:
 
 # --------------------------------------------------------------- parsing: docx
 
+
 def blocks_from_docx(path: Path) -> list[Block]:
     """Read a Word document back into blocks."""
     import docx as python_docx
@@ -267,6 +269,7 @@ def blocks_from_docx(path: Path) -> list[Block]:
 
 
 # --------------------------------------------------------------- parsing: pdf
+
 
 def blocks_from_pdf(path: Path) -> list[Block]:
     """Extract text from a PDF into paragraphs."""
@@ -343,12 +346,16 @@ def blocks_to_html(blocks: Iterable[Block], title: str = "MDIE Document") -> str
             body.append(f"<pre>{html_mod.escape(block[1])}</pre>")
         elif kind == "table":
             rows = block[1]
-            cells = "".join("<tr>" + "".join(f"<td>{html_mod.escape(c)}</td>" for c in r) + "</tr>"
-                            for r in rows)
+            cells = "".join(
+                "<tr>" + "".join(f"<td>{html_mod.escape(c)}</td>" for c in r) + "</tr>"
+                for r in rows
+            )
             body.append(f"<table>{cells}</table>")
-    return (f"<!DOCTYPE html><html><head><meta charset='utf-8'>"
-            f"<title>{html_mod.escape(title)}</title></head>"
-            f"<body>{''.join(body)}</body></html>")
+    return (
+        f"<!DOCTYPE html><html><head><meta charset='utf-8'>"
+        f"<title>{html_mod.escape(title)}</title></head>"
+        f"<body>{''.join(body)}</body></html>"
+    )
 
 
 def blocks_to_text(blocks: Iterable[Block]) -> str:

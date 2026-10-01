@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import struct
 import zipfile
 from pathlib import Path
 
@@ -67,11 +66,12 @@ SAMPLE_SVG = (
     '<rect x="10" y="10" width="180" height="80" fill="none" stroke="black" stroke-width="2"/>'
     '<circle cx="100" cy="50" r="20" fill="black"/>'
     '<text x="100" y="95" font-size="10" text-anchor="middle">SHEET</text>'
-    '</svg>'
+    "</svg>"
 )
 
 
 # ------------------------------------------------------------------ registry
+
 
 def test_every_declared_format_resolves_back_from_its_extension():
     assert format_for_extension(Path("a.step")) == "step"
@@ -96,6 +96,7 @@ def test_describe_formats_lists_every_category():
 
 
 # ----------------------------------------------------------------- documents
+
 
 def test_markdown_parses_every_block_kind():
     kinds = [b[0] for b in blocks_from_markdown(MD_SAMPLE)]
@@ -141,8 +142,10 @@ def test_markdown_roundtrips_through_html():
 
 
 def test_html_head_and_title_content_is_ignored():
-    html = "<html><head><title>Sheet Title</title><style>p{}</style></head>" \
-           "<body><p>body text</p></body></html>"
+    html = (
+        "<html><head><title>Sheet Title</title><style>p{}</style></head>"
+        "<body><p>body text</p></body></html>"
+    )
     blocks = blocks_from_html(html)
     assert [b for b in blocks if b[0] == "para"] == [("para", "body text")]
 
@@ -213,6 +216,7 @@ def test_thai_text_survives_a_document_roundtrip(tmp_path):
 
 # -------------------------------------------------------------------- sheets
 
+
 @pytest.fixture
 def sheet(tmp_path) -> Path:
     path = tmp_path / "Sheet.svg"
@@ -272,9 +276,12 @@ def test_svg_cannot_be_converted_to_a_solid(sheet, tmp_path):
 
 # -------------------------------------------------------------------- solids
 
+
 def _sample_tris():
-    return [((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)),
-            ((0.0, 0.0, 1.0), (1.0, 0.0, 1.0), (0.0, 1.0, 1.0))]
+    return [
+        ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)),
+        ((0.0, 0.0, 1.0), (1.0, 0.0, 1.0), (0.0, 1.0, 1.0)),
+    ]
 
 
 def test_binary_stl_roundtrips_triangles(tmp_path):
@@ -342,17 +349,20 @@ def test_step_without_a_kernel_raises_a_clear_error(tmp_path, monkeypatch):
 
 # ------------------------------------------------------- external tool safety
 
+
 def test_find_kernel_never_returns_the_gui_binary(monkeypatch):
     """Driving FreeCAD.exe from a script pops a window and hangs the caller."""
     from convert.solids import find_kernel
 
-    monkeypatch.setattr("convert.solids.shutil.which",
-                        lambda name: r"C:\FreeCAD\bin\freecadcmd.exe")
+    monkeypatch.setattr(
+        "convert.solids.shutil.which", lambda name: r"C:\FreeCAD\bin\freecadcmd.exe"
+    )
     assert "freecadcmd" in find_kernel().lower()
 
     monkeypatch.setattr("convert.solids.shutil.which", lambda name: None)
-    monkeypatch.setattr("cli.viewers.find_cad_tools",
-                        lambda: {"freecad": r"C:\FreeCAD\bin\FreeCAD.exe"})
+    monkeypatch.setattr(
+        "cli.viewers.find_cad_tools", lambda: {"freecad": r"C:\FreeCAD\bin\FreeCAD.exe"}
+    )
     monkeypatch.setattr(Path, "exists", lambda self: False)
     assert find_kernel() is None
 
@@ -371,8 +381,10 @@ def test_a_wedged_kernel_times_out_instead_of_hanging(tmp_path, monkeypatch):
     src = tmp_path / "part.step"
     src.write_text("ISO-10303-21;", encoding="utf-8")
     monkeypatch.setattr("convert.solids.find_kernel", lambda: "freecadcmd")
-    monkeypatch.setattr("convert.solids.subprocess.run",
-                        lambda *a, **k: (_ for _ in ()).throw(sp.TimeoutExpired("fc", 1)))
+    monkeypatch.setattr(
+        "convert.solids.subprocess.run",
+        lambda *a, **k: (_ for _ in ()).throw(sp.TimeoutExpired("fc", 1)),
+    )
     with pytest.raises(ConversionError, match="did not finish"):
         convert_file(src, "stl", tmp_path / "part.stl", timeout=1)
 
@@ -385,7 +397,8 @@ def test_a_kernel_that_writes_nothing_reports_its_stderr(tmp_path, monkeypatch):
     monkeypatch.setattr("convert.solids.find_kernel", lambda: "freecadcmd")
     monkeypatch.setattr(
         "convert.solids.subprocess.run",
-        lambda *a, **k: sp.CompletedProcess(a[0], 1, "", "shape not a solid"))
+        lambda *a, **k: sp.CompletedProcess(a[0], 1, "", "shape not a solid"),
+    )
     with pytest.raises(ConversionError, match="shape not a solid"):
         convert_file(src, "stl", tmp_path / "part.stl")
 
@@ -403,7 +416,8 @@ def test_kernel_output_survives_the_temporary_directory(tmp_path, monkeypatch):
         # Write the mesh to the path the script was told to use.
         Path(k["env"]["MDIE_DST"]).write_bytes(
             b"solid x\nfacet normal 0 0 1\nouter loop\nvertex 0 0 0\n"
-            b"vertex 1 0 0\nvertex 0 1 0\nendloop\nendfacet\nendsolid x\n")
+            b"vertex 1 0 0\nvertex 0 1 0\nendloop\nendfacet\nendsolid x\n"
+        )
         return sp.CompletedProcess(a[0], 0, "", "")
 
     monkeypatch.setattr("convert.solids.subprocess.run", fake_run)

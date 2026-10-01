@@ -31,3 +31,6 @@ dist/
 # Generated engineering run artifacts (keep project folders clean)
 Project/*/
 !Project/README.md
+
+# Disposable agent scratch space (see .agents/rules/agent-workflow.md)
+scratch/

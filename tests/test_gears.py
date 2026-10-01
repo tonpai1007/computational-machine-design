@@ -2,10 +2,9 @@
 Test Suite: AGMA 2001-D04 / ISO 6336 Gear Physics & CAD
 """
 
-import pytest
+from cad.gears_cad import GearCADGenerator
 from components.gears import GearPairSpecification
 from physics.gears import GearSolver
-from cad.gears_cad import GearCADGenerator
 
 
 def test_spur_gear_physics_solver():
@@ -18,7 +17,7 @@ def test_spur_gear_physics_solver():
         gear_teeth=60,
         normal_module_mm=3.0,
         helix_angle_deg=0.0,
-        material_id="AISI_4140_QT"
+        material_id="AISI_4140_QT",
     )
 
     res = GearSolver.solve(spec)
@@ -43,7 +42,7 @@ def test_helical_gear_physics_and_cad():
         gear_teeth=72,
         normal_module_mm=4.0,
         helix_angle_deg=20.0,
-        material_id="AISI_4140_QT"
+        material_id="AISI_4140_QT",
     )
 
     res = GearSolver.solve(spec)

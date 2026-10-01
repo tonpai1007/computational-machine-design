@@ -6,10 +6,10 @@ Standards: ASME B1.5 / DIN 103 / Shigley.
 """
 
 import math
-from typing import Dict, Any, List
+
 from components.power_screws import (
-    PowerScrewSpecification,
     PowerScrewResult,
+    PowerScrewSpecification,
 )
 
 
@@ -97,12 +97,18 @@ class PowerScrewSolver:
 
         recs = []
         if is_self_locking:
-            recs.append("Lead screw is self-locking: will safely hold load without a holding brake.")
+            recs.append(
+                "Lead screw is self-locking: will safely hold load without a holding brake."
+            )
         else:
-            recs.append("Lead screw will BACK-DRIVE under axial load! A holding brake or irreversible worm drive is required.")
+            recs.append(
+                "Lead screw will BACK-DRIVE under axial load! A holding brake or irreversible worm drive is required."
+            )
 
         if p_bearing_mpa > 15.0:
-            recs.append(f"Thread bearing pressure ({p_bearing_mpa:.1f} MPa) exceeds bronze limit (15 MPa). Increase nut engagement length (nut_length > {nut_l} mm).")
+            recs.append(
+                f"Thread bearing pressure ({p_bearing_mpa:.1f} MPa) exceeds bronze limit (15 MPa). Increase nut engagement length (nut_length > {nut_l} mm)."
+            )
 
         if not recs:
             recs.append("All torque, power, bearing pressure, and kinematic criteria verified.")

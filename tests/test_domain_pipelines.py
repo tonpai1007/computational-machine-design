@@ -11,9 +11,7 @@ def test_shaft_pipeline_produces_result_and_scad():
     from ai.parser import NLParser
     from physics.solver import PhysicsSolver
 
-    model, _ = NLParser.parse(
-        "Design a stepped shaft 500 mm long with 30 mm diameter, power 10 kW"
-    )
+    model, _ = NLParser.parse("Design a stepped shaft 500 mm long with 30 mm diameter, power 10 kW")
     result = PhysicsSolver.solve(model)
 
     assert result.success
@@ -21,10 +19,10 @@ def test_shaft_pipeline_produces_result_and_scad():
 
 
 def test_chair_pipeline_exports_step_stl_scad_and_report():
-    from core.frame_model import FrameDesignModel, STRUCTURAL_MATERIALS
-    from physics.frame_physics import FramePhysicsSolver
-    from physics.fea_3d import build_chair_3d_fea_model
     from cad.assembly import FrameCADEngine
+    from core.frame_model import STRUCTURAL_MATERIALS, FrameDesignModel
+    from physics.fea_3d import build_chair_3d_fea_model
+    from physics.frame_physics import FramePhysicsSolver
     from reporting.frame_report import FrameReportGenerator
 
     chair = FrameDesignModel(
@@ -58,8 +56,8 @@ def test_chair_pipeline_exports_step_stl_scad_and_report():
 
 def test_space_frame_fea_pipelines():
     from physics.fea_3d import (
-        build_space_truss_tower_model,
         build_cantilever_space_frame_model,
+        build_space_truss_tower_model,
     )
 
     tower = build_space_truss_tower_model().solve()

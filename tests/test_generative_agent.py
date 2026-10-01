@@ -2,7 +2,6 @@
 Test Suite: Generative Engineering Agent On-The-Fly Synthesis
 """
 
-import pytest
 from ai.generative_agent import GenerativeEngineeringAgent
 
 

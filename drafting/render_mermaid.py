@@ -42,7 +42,6 @@ import sys
 import tempfile
 import unicodedata
 from pathlib import Path
-from typing import List, Tuple
 
 DEFAULT_REPORT = Path("Project/chair/chair_design_report.md")
 CACHE_DIR = Path(os.environ.get("USERPROFILE", Path.home())) / ".cache" / "mdie-mermaid"
@@ -89,8 +88,15 @@ def ensure_mmdc(setup: bool = False) -> str:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
         print(f"[setup] installing @mermaid-js/mermaid-cli into {CACHE_DIR} ...")
         subprocess.run(
-            ["npm", "install", "@mermaid-js/mermaid-cli", "--no-audit", "--no-fund",
-             "--prefix", str(CACHE_DIR)],
+            [
+                "npm",
+                "install",
+                "@mermaid-js/mermaid-cli",
+                "--no-audit",
+                "--no-fund",
+                "--prefix",
+                str(CACHE_DIR),
+            ],
             check=True,
         )
     local = CACHE_DIR / "node_modules" / ".bin" / ("mmdc.cmd" if os.name == "nt" else "mmdc")
@@ -111,7 +117,7 @@ def ensure_mmdc(setup: bool = False) -> str:
     )
 
 
-def extract_blocks(md_path: Path) -> List[Tuple[int, str]]:
+def extract_blocks(md_path: Path) -> list[tuple[int, str]]:
     """Return (1-based index, block source) for every mermaid block."""
     text = md_path.read_text(encoding="utf-8")
     blocks = [(i, m.group(1)) for i, m in enumerate(MERMAID_RE.finditer(text), 1)]
@@ -136,25 +142,27 @@ def slug(block: str, index: int) -> str:
     # Keep letters/digits from any script plus Thai combining marks (vowels and
     # tone marks), which \w alone drops and which would corrupt the filename.
     s = unicodedata.normalize("NFC", s)
-    s = "".join(
-        ch for ch in s
-        if ch.isalnum() or ch in "-_" or unicodedata.category(ch) == "Mn"
-    )
+    s = "".join(ch for ch in s if ch.isalnum() or ch in "-_" or unicodedata.category(ch) == "Mn")
     s = re.sub(r"_+", "_", s).strip("_")
     return f"{index:02d}_{s[:48]}" if s else f"block{index:02d}"
 
 
-def render_one(mmdc_cmd: List[str], src: Path, out: Path, fmt: str,
-               chrome: str | None, scale: float, bg: str) -> bool:
+def render_one(
+    mmdc_cmd: list[str], src: Path, out: Path, fmt: str, chrome: str | None, scale: float, bg: str
+) -> bool:
     env = dict(os.environ)
     if chrome:
         env["PUPPETEER_EXECUTABLE_PATH"] = chrome
     cmd = list(mmdc_cmd)
     cmd += [
-        "-i", str(src),
-        "-o", str(out),
-        "-b", bg,
-        "-s", str(scale),
+        "-i",
+        str(src),
+        "-o",
+        str(out),
+        "-b",
+        bg,
+        "-s",
+        str(scale),
     ]
     try:
         r = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=300)
@@ -174,23 +182,39 @@ def render_one(mmdc_cmd: List[str], src: Path, out: Path, fmt: str,
 
 def main(argv=None) -> int:
     force_utf8()
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("report", nargs="?", type=Path, default=DEFAULT_REPORT,
-                    help=f"Markdown file to scan (default: {DEFAULT_REPORT})")
-    ap.add_argument("--format", choices=("svg", "png"), default="svg",
-                    help="output image format (default: svg)")
-    ap.add_argument("--outdir", type=Path, default=None,
-                    help="output directory (default: <report_dir>/diagrams)")
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument(
+        "report",
+        nargs="?",
+        type=Path,
+        default=DEFAULT_REPORT,
+        help=f"Markdown file to scan (default: {DEFAULT_REPORT})",
+    )
+    ap.add_argument(
+        "--format", choices=("svg", "png"), default="svg", help="output image format (default: svg)"
+    )
+    ap.add_argument(
+        "--outdir",
+        type=Path,
+        default=None,
+        help="output directory (default: <report_dir>/diagrams)",
+    )
     ap.add_argument("--scale", type=float, default=2.0, help="render scale (default 2)")
     ap.add_argument("--bg", default="white", help="background color (default white)")
     ap.add_argument("--chrome", default=None, help="explicit Chrome/Chromium path")
-    ap.add_argument("--no-keep-source", action="store_true",
-                    help="delete the intermediate .mmd files after rendering")
-    ap.add_argument("--setup", action="store_true",
-                    help="install mermaid-cli into the cache dir first")
-    ap.add_argument("--list", action="store_true",
-                    help="list the mermaid blocks and exit without rendering")
+    ap.add_argument(
+        "--no-keep-source",
+        action="store_true",
+        help="delete the intermediate .mmd files after rendering",
+    )
+    ap.add_argument(
+        "--setup", action="store_true", help="install mermaid-cli into the cache dir first"
+    )
+    ap.add_argument(
+        "--list", action="store_true", help="list the mermaid blocks and exit without rendering"
+    )
     args = ap.parse_args(argv)
 
     if not args.report.exists():

@@ -3,8 +3,8 @@ MDIE Standard Gear Specification & Geometry Engine
 Covers Spur and Helical gears per AGMA 2001-D04 and ISO 6336.
 """
 
-import math
-from typing import Optional, Dict, Any, List
+from __future__ import annotations
+
 from pydantic import BaseModel, Field
 
 
@@ -16,13 +16,23 @@ class GearPairSpecification(BaseModel):
     pinion_teeth: int = Field(default=20, ge=12, description="Number of teeth on pinion (z1)")
     gear_teeth: int = Field(default=60, ge=12, description="Number of teeth on driven gear (z2)")
     normal_module_mm: float = Field(default=3.0, gt=0, description="Normal module mn in mm")
-    pressure_angle_deg: float = Field(default=20.0, description="Standard pressure angle (normally 20 deg)")
-    helix_angle_deg: float = Field(default=0.0, ge=0.0, le=45.0, description="Helix angle beta in degrees (0 for spur)")
-    face_width_mm: Optional[float] = Field(default=None, description="Face width b in mm (auto-sized if None)")
-    pinion_bore_mm: float = Field(default=25.0, gt=0, description="Pinion shaft bore diameter in mm")
+    pressure_angle_deg: float = Field(
+        default=20.0, description="Standard pressure angle (normally 20 deg)"
+    )
+    helix_angle_deg: float = Field(
+        default=0.0, ge=0.0, le=45.0, description="Helix angle beta in degrees (0 for spur)"
+    )
+    face_width_mm: float | None = Field(
+        default=None, description="Face width b in mm (auto-sized if None)"
+    )
+    pinion_bore_mm: float = Field(
+        default=25.0, gt=0, description="Pinion shaft bore diameter in mm"
+    )
     gear_bore_mm: float = Field(default=40.0, gt=0, description="Gear shaft bore diameter in mm")
     material_id: str = Field(default="AISI_4140_QT", description="Gear material ID")
-    quality_grade: int = Field(default=7, ge=5, le=11, description="AGMA quality grade (typically 6-8)")
+    quality_grade: int = Field(
+        default=7, ge=5, le=11, description="AGMA quality grade (typically 6-8)"
+    )
     service_factor: float = Field(default=1.25, ge=1.0, description="Application service factor Ko")
 
 
@@ -61,7 +71,7 @@ class GearStressResult(BaseModel):
     contact_safety_factor: float
     all_safety_criteria_passed: bool
     verdict: str
-    recommendations: List[str] = []
+    recommendations: list[str] = []
 
 
 class GearPairResult(BaseModel):

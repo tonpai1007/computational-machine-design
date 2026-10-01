@@ -2,12 +2,11 @@
 Test Suite: Automated 2D Technical Drawing Blueprint Generator
 """
 
-import pytest
-from core.models import EngineeringModel, ShaftSegment
-from physics.solver import PhysicsSolver
-from drafting.blueprint_2d import Blueprint2DGenerator
 from components.gears import GearPairSpecification
+from core.models import EngineeringModel, ShaftSegment
+from drafting.blueprint_2d import Blueprint2DGenerator
 from physics.gears import GearSolver
+from physics.solver import PhysicsSolver
 
 
 def test_shaft_blueprint_svg_generation():
@@ -16,10 +15,16 @@ def test_shaft_blueprint_svg_generation():
         total_length=0.4,
         material_id="AISI_4140_QT",
         segments=[
-            ShaftSegment(start_pos=0.0, end_pos=0.1, outer_diameter=0.025, feature_type="bearing_seat"),
-            ShaftSegment(start_pos=0.1, end_pos=0.3, outer_diameter=0.035, feature_type="gear_mount"),
-            ShaftSegment(start_pos=0.3, end_pos=0.4, outer_diameter=0.025, feature_type="bearing_seat"),
-        ]
+            ShaftSegment(
+                start_pos=0.0, end_pos=0.1, outer_diameter=0.025, feature_type="bearing_seat"
+            ),
+            ShaftSegment(
+                start_pos=0.1, end_pos=0.3, outer_diameter=0.035, feature_type="gear_mount"
+            ),
+            ShaftSegment(
+                start_pos=0.3, end_pos=0.4, outer_diameter=0.025, feature_type="bearing_seat"
+            ),
+        ],
     )
     result = PhysicsSolver.solve(model)
 

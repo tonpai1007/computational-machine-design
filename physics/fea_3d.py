@@ -5,13 +5,17 @@ Implements the Direct Stiffness Method for 3D space frames with 6 DOFs per node
 Authority: Physics verifies.
 """
 
+from __future__ import annotations
+
 import math
+from typing import Any
+
 import numpy as np
-from typing import List, Dict, Tuple, Optional, Any
-from pydantic import BaseModel, Field
+
 
 class FEANode:
     """A node in 3D space with 6 Degrees of Freedom."""
+
     def __init__(self, node_id: int, x: float, y: float, z: float, name: str = ""):
         self.id = node_id
         self.x = float(x)
@@ -29,19 +33,20 @@ class FEANode:
 
 class FEAMember:
     """A 3D beam-column frame element connecting two nodes."""
+
     def __init__(
         self,
         member_id: str,
         node_start: FEANode,
         node_end: FEANode,
-        E: float,          # Young's modulus (Pa)
-        G: float,          # Shear modulus (Pa)
-        A: float,          # Cross-sectional area (m^2)
-        Iy: float,         # Second moment of area about local y (m^4)
-        Iz: float,         # Second moment of area about local z (m^4)
-        J: float,          # Polar/torsional moment (m^4)
+        E: float,  # Young's modulus (Pa)
+        G: float,  # Shear modulus (Pa)
+        A: float,  # Cross-sectional area (m^2)
+        Iy: float,  # Second moment of area about local y (m^4)
+        Iz: float,  # Second moment of area about local z (m^4)
+        J: float,  # Polar/torsional moment (m^4)
         outer_dim: float,  # Outer dimension for stress calculation (m)
-        yield_strength: float = 250e6
+        yield_strength: float = 250e6,
     ):
         self.id = member_id
         self.n1 = node_start
@@ -138,7 +143,7 @@ class FEAMember:
         # Build 12x12 block diagonal transformation matrix
         T = np.zeros((12, 12), dtype=float)
         for i in range(4):
-            T[i*3:(i+1)*3, i*3:(i+1)*3] = R
+            T[i * 3 : (i + 1) * 3, i * 3 : (i + 1) * 3] = R
 
         return T
 
@@ -148,8 +153,8 @@ class FEA3DSolver:
 
     def __init__(self, name: str = "3D Frame FEA Model"):
         self.name = name
-        self.nodes: List[FEANode] = []
-        self.members: List[FEAMember] = []
+        self.nodes: list[FEANode] = []
+        self.members: list[FEAMember] = []
 
     def add_node(self, x: float, y: float, z: float, name: str = "") -> FEANode:
         node_id = len(self.nodes)
@@ -169,17 +174,17 @@ class FEA3DSolver:
         Iz: float,
         J: float,
         outer_dim: float,
-        yield_strength: float = 250e6
+        yield_strength: float = 250e6,
     ) -> FEAMember:
         m = FEAMember(name, node_start, node_end, E, G, A, Iy, Iz, J, outer_dim, yield_strength)
         self.members.append(m)
         return m
 
-    def set_support(self, node: FEANode, tx=True, ty=True, tz=True, rx=False, ry=False, rz=False):
+    def set_support(self, node: FEANode, tx: bool = True, ty: bool = True, tz: bool = True, rx: bool = False, ry: bool = False, rz: bool = False) -> None:
         """Sets support boundary conditions for a node."""
         node.restraints = [tx, ty, tz, rx, ry, rz]
 
-    def add_nodal_load(self, node: FEANode, fx=0.0, fy=0.0, fz=0.0, mx=0.0, my=0.0, mz=0.0):
+    def add_nodal_load(self, node: FEANode, fx: float = 0.0, fy: float = 0.0, fz: float = 0.0, mx: float = 0.0, my: float = 0.0, mz: float = 0.0) -> None:
         """Applies external point loads and moments to a node."""
         node.loads[0] += fx
         node.loads[1] += fy
@@ -188,7 +193,7 @@ class FEA3DSolver:
         node.loads[4] += my
         node.loads[5] += mz
 
-    def solve(self) -> Dict[str, Any]:
+    def solve(self) -> dict[str, Any]:
         """
         Executes Direct Stiffness Method:
         1. Assembles global stiffness matrix K_global
@@ -214,7 +219,7 @@ class FEA3DSolver:
             k_glob = T.T @ k_loc @ T
 
             # Map member DOFs to global DOFs
-            dofs = []
+            dofs: list[int] = []
             for n in (mem.n1, mem.n2):
                 base = n.id * 6
                 dofs.extend(range(base, base + 6))
@@ -243,7 +248,7 @@ class FEA3DSolver:
 
         # Solve linear system
         try:
-            U_f = np.linalg.solve(K_ff, F_f)
+            U_f: np.ndarray[Any, Any] = np.linalg.solve(K_ff, F_f)
         except np.linalg.LinAlgError:
             # Add tiny regularization if singular (e.g. unconstrained torsional mechanism)
             K_ff_reg = K_ff + np.eye(len(free_dofs)) * 1e-6
@@ -260,8 +265,8 @@ class FEA3DSolver:
         # Store results in nodes
         for node in self.nodes:
             base = node.id * 6
-            node.displacements = U_total[base:base+6].tolist()
-            node.reactions = R_total[base:base+6].tolist()
+            node.displacements = U_total[base : base + 6].tolist()
+            node.reactions = R_total[base : base + 6].tolist()
 
         # Compute element end forces and internal stresses
         max_stress_overall = 0.0
@@ -284,9 +289,15 @@ class FEA3DSolver:
             # Internal forces (axial, shear, torsion, bending)
             # f_elem_loc: [N1, Vy1, Vz1, T1, My1, Mz1, N2, Vy2, Vz2, T2, My2, Mz2]
             axial_force = abs(f_elem_loc[6])
-            shear_force = max(math.sqrt(f_elem_loc[1]**2 + f_elem_loc[2]**2), math.sqrt(f_elem_loc[7]**2 + f_elem_loc[8]**2))
+            shear_force = max(
+                math.sqrt(f_elem_loc[1] ** 2 + f_elem_loc[2] ** 2),
+                math.sqrt(f_elem_loc[7] ** 2 + f_elem_loc[8] ** 2),
+            )
             torsion = max(abs(f_elem_loc[3]), abs(f_elem_loc[9]))
-            moment = max(math.sqrt(f_elem_loc[4]**2 + f_elem_loc[5]**2), math.sqrt(f_elem_loc[10]**2 + f_elem_loc[11]**2))
+            moment = max(
+                math.sqrt(f_elem_loc[4] ** 2 + f_elem_loc[5] ** 2),
+                math.sqrt(f_elem_loc[10] ** 2 + f_elem_loc[11] ** 2),
+            )
 
             sigma_axial = axial_force / mem.A
             c = mem.outer_dim / 2.0
@@ -297,7 +308,7 @@ class FEA3DSolver:
             sigma_axial_mpa = sigma_axial / 1e6
             sigma_bend_mpa = sigma_bend / 1e6
             tau_mpa = (shear_force / mem.A) / 1e6
-            sigma_vm_mpa = math.sqrt((sigma_axial_mpa + sigma_bend_mpa)**2 + 3.0 * (tau_mpa**2))
+            sigma_vm_mpa = math.sqrt((sigma_axial_mpa + sigma_bend_mpa) ** 2 + 3.0 * (tau_mpa**2))
 
             sf = (mem.yield_strength / 1e6) / max(sigma_vm_mpa, 0.01)
 
@@ -315,24 +326,35 @@ class FEA3DSolver:
             if sf < min_sf_overall:
                 min_sf_overall = sf
 
-            member_results.append({
-                "member_id": mem.id,
-                "node_start_id": mem.n1.id,
-                "node_end_id": mem.n2.id,
-                "p1": [mem.n1.x, mem.n1.y, mem.n1.z],
-                "p2": [mem.n2.x, mem.n2.y, mem.n2.z],
-                "outer_dim_m": mem.outer_dim,
-                "length_m": mem.length,
-                "axial_force_n": axial_force,
-                "max_moment_nm": moment,
-                "axial_stress_mpa": sigma_axial_mpa,
-                "bending_stress_mpa": sigma_bend_mpa,
-                "von_mises_mpa": sigma_vm_mpa,
-                "safety_factor": sf,
-                "passed": (sf >= 2.0)
-            })
+            member_results.append(
+                {
+                    "member_id": mem.id,
+                    "node_start_id": mem.n1.id,
+                    "node_end_id": mem.n2.id,
+                    "p1": [mem.n1.x, mem.n1.y, mem.n1.z],
+                    "p2": [mem.n2.x, mem.n2.y, mem.n2.z],
+                    "outer_dim_m": mem.outer_dim,
+                    "length_m": mem.length,
+                    "axial_force_n": axial_force,
+                    "max_moment_nm": moment,
+                    "axial_stress_mpa": sigma_axial_mpa,
+                    "bending_stress_mpa": sigma_bend_mpa,
+                    "von_mises_mpa": sigma_vm_mpa,
+                    "safety_factor": sf,
+                    "passed": (sf >= 2.0),
+                }
+            )
 
-        max_disp_m = max(math.sqrt(n.displacements[0]**2 + n.displacements[1]**2 + n.displacements[2]**2) for n in self.nodes) if self.nodes else 0.0
+        max_disp_m = (
+            max(
+                math.sqrt(
+                    n.displacements[0] ** 2 + n.displacements[1] ** 2 + n.displacements[2] ** 2
+                )
+                for n in self.nodes
+            )
+            if self.nodes
+            else 0.0
+        )
 
         nodes_data = [
             {
@@ -341,7 +363,7 @@ class FEA3DSolver:
                 "coords": [n.x, n.y, n.z],
                 "displacements": n.displacements,
                 "reactions": n.reactions,
-                "restraints": n.restraints
+                "restraints": n.restraints,
             }
             for n in self.nodes
         ]
@@ -357,7 +379,7 @@ class FEA3DSolver:
             "min_safety_factor": min_sf_overall,
             "nodes": nodes_data,
             "members": member_results,
-            "passed": (min_sf_overall >= 2.0)
+            "passed": (min_sf_overall >= 2.0),
         }
 
 
@@ -365,7 +387,6 @@ def build_chair_3d_fea_model(chair_model: Any) -> FEA3DSolver:
     """
     Constructs a complete 3D space frame FEA model for the 4-leg armchair.
     """
-    from core.frame_model import FrameDesignModel
     g = chair_model.geometry
     l = chair_model.loads
     m = chair_model.material
@@ -392,20 +413,22 @@ def build_chair_3d_fea_model(chair_model: Any) -> FEA3DSolver:
         r_bot = r_top + delta
         angles = [math.pi / 2.0, 7.0 * math.pi / 6.0, 11.0 * math.pi / 6.0]
         for i, ang in enumerate(angles):
-            bx = r_bot * math.cos(ang); by = r_bot * math.sin(ang)
-            tx = r_top * math.cos(ang); ty = r_top * math.sin(ang)
-            bn = solver.add_node(bx, by, 0.0, f"Foot_Leg{i+1}")
-            tn = solver.add_node(tx, ty, h, f"SeatCorner_Leg{i+1}")
+            bx = r_bot * math.cos(ang)
+            by = r_bot * math.sin(ang)
+            tx = r_top * math.cos(ang)
+            ty = r_top * math.sin(ang)
+            bn = solver.add_node(bx, by, 0.0, f"Foot_Leg{i + 1}")
+            tn = solver.add_node(tx, ty, h, f"SeatCorner_Leg{i + 1}")
             solver.set_support(bn, tx=True, ty=True, tz=True, rx=True, ry=True, rz=True)
             bot_nodes.append(bn)
             top_nodes.append(tn)
     else:
         # Standard 4 Splayed Legs
         corners = [
-            ("FL", -w/2,  d/2, -w/2 - delta,  d/2 + delta),
-            ("FR",  w/2,  d/2,  w/2 + delta,  d/2 + delta),
-            ("RR",  w/2, -d/2,  w/2 + delta, -d/2 - delta),
-            ("RL", -w/2, -d/2, -w/2 - delta, -d/2 - delta),
+            ("FL", -w / 2, d / 2, -w / 2 - delta, d / 2 + delta),
+            ("FR", w / 2, d / 2, w / 2 + delta, d / 2 + delta),
+            ("RR", w / 2, -d / 2, w / 2 + delta, -d / 2 - delta),
+            ("RL", -w / 2, -d / 2, -w / 2 - delta, -d / 2 - delta),
         ]
         for name, tx, ty, bx, by in corners:
             bn = solver.add_node(bx, by, 0.0, f"Foot_{name}")
@@ -417,13 +440,37 @@ def build_chair_3d_fea_model(chair_model: Any) -> FEA3DSolver:
     # 2. Leg Members
     lp = g.leg_profile
     for i in range(len(bot_nodes)):
-        solver.add_member(f"Leg_{i+1}", bot_nodes[i], top_nodes[i], E, G, lp.area_m2, lp.moment_of_inertia_m4, lp.moment_of_inertia_m4, lp.moment_of_inertia_m4*2, lp.outer_dim_m, Sy)
+        solver.add_member(
+            f"Leg_{i + 1}",
+            bot_nodes[i],
+            top_nodes[i],
+            E,
+            G,
+            lp.area_m2,
+            lp.moment_of_inertia_m4,
+            lp.moment_of_inertia_m4,
+            lp.moment_of_inertia_m4 * 2,
+            lp.outer_dim_m,
+            Sy,
+        )
 
     # 3. Seat Frame Rails (Perimeter ring connecting top nodes)
     fp = g.frame_profile
     for i in range(len(top_nodes)):
         next_i = (i + 1) % len(top_nodes)
-        solver.add_member(f"Rail_{i+1}_{next_i+1}", top_nodes[i], top_nodes[next_i], E, G, fp.area_m2, fp.moment_of_inertia_m4, fp.moment_of_inertia_m4, fp.moment_of_inertia_m4*2, fp.outer_dim_m, Sy)
+        solver.add_member(
+            f"Rail_{i + 1}_{next_i + 1}",
+            top_nodes[i],
+            top_nodes[next_i],
+            E,
+            G,
+            fp.area_m2,
+            fp.moment_of_inertia_m4,
+            fp.moment_of_inertia_m4,
+            fp.moment_of_inertia_m4 * 2,
+            fp.outer_dim_m,
+            Sy,
+        )
 
     # 4. Lower Stretchers (if enabled)
     if g.has_stretchers:
@@ -435,15 +482,16 @@ def build_chair_3d_fea_model(chair_model: Any) -> FEA3DSolver:
             r_stretcher = (min(w, d) / 2.0) + s_delta
             angles = [math.pi / 2.0, 7.0 * math.pi / 6.0, 11.0 * math.pi / 6.0]
             for i, ang in enumerate(angles):
-                sx = r_stretcher * math.cos(ang); sy = r_stretcher * math.sin(ang)
-                sn = solver.add_node(sx, sy, sh, f"Stretcher_Node_{i+1}")
+                sx = r_stretcher * math.cos(ang)
+                sy = r_stretcher * math.sin(ang)
+                sn = solver.add_node(sx, sy, sh, f"Stretcher_Node_{i + 1}")
                 stretcher_nodes.append(sn)
         else:
             s_corners = [
-                ("FL", -w/2 - s_delta,  d/2 + s_delta),
-                ("FR",  w/2 + s_delta,  d/2 + s_delta),
-                ("RR",  w/2 + s_delta, -d/2 - s_delta),
-                ("RL", -w/2 - s_delta, -d/2 - s_delta),
+                ("FL", -w / 2 - s_delta, d / 2 + s_delta),
+                ("FR", w / 2 + s_delta, d / 2 + s_delta),
+                ("RR", w / 2 + s_delta, -d / 2 - s_delta),
+                ("RL", -w / 2 - s_delta, -d / 2 - s_delta),
             ]
             for name, sx, sy in s_corners:
                 sn = solver.add_node(sx, sy, sh, f"Stretcher_{name}")
@@ -451,16 +499,28 @@ def build_chair_3d_fea_model(chair_model: Any) -> FEA3DSolver:
 
         for i in range(len(stretcher_nodes)):
             next_i = (i + 1) % len(stretcher_nodes)
-            solver.add_member(f"Stretcher_{i+1}_{next_i+1}", stretcher_nodes[i], stretcher_nodes[next_i], E, G, sp.area_m2, sp.moment_of_inertia_m4, sp.moment_of_inertia_m4, sp.moment_of_inertia_m4*2, sp.outer_dim_m, Sy)
+            solver.add_member(
+                f"Stretcher_{i + 1}_{next_i + 1}",
+                stretcher_nodes[i],
+                stretcher_nodes[next_i],
+                E,
+                G,
+                sp.area_m2,
+                sp.moment_of_inertia_m4,
+                sp.moment_of_inertia_m4,
+                sp.moment_of_inertia_m4 * 2,
+                sp.outer_dim_m,
+                Sy,
+            )
 
     # 5. Armrests (if enabled)
     if g.has_arms:
         arm_h = g.armrest_height_above_seat_mm / 1000.0
-        arm_x_l = -(w/2 + 0.025)
-        arm_x_r = +(w/2 + 0.025)
+        arm_x_l = -(w / 2 + 0.025)
+        arm_x_r = +(w / 2 + 0.025)
         # Match OpenSCAD: front arm post at y=+40mm, rear at y=-seat_d/3=-160mm
-        arm_y_front = 40 / 1000.0    # +40 mm (front)
-        arm_y_rear  = -d / 3.0       # -160 mm (rear, matches seat_d/3)
+        arm_y_front = 40 / 1000.0  # +40 mm (front)
+        arm_y_rear = -d / 3.0  # -160 mm (rear, matches seat_d/3)
 
         # Left side arm posts (front + rear)
         n_arm_l_front_top = solver.add_node(arm_x_l, arm_y_front, h + arm_h, "Arm_Left_Front_Top")
@@ -476,23 +536,167 @@ def build_chair_3d_fea_model(chair_model: Any) -> FEA3DSolver:
 
         ap = g.arm_profile
         # Vertical arm posts (front and rear, per side)
-        solver.add_member("Arm_Post_L_Front", n_arm_l_front_base, n_arm_l_front_top, E, G, ap.area_m2, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4*2, ap.outer_dim_m, Sy)
-        solver.add_member("Arm_Post_L_Rear", n_arm_l_rear_base, n_arm_l_rear_top, E, G, ap.area_m2, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4*2, ap.outer_dim_m, Sy)
-        solver.add_member("Arm_Post_R_Front", n_arm_r_front_base, n_arm_r_front_top, E, G, ap.area_m2, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4*2, ap.outer_dim_m, Sy)
-        solver.add_member("Arm_Post_R_Rear", n_arm_r_rear_base, n_arm_r_rear_top, E, G, ap.area_m2, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4*2, ap.outer_dim_m, Sy)
+        solver.add_member(
+            "Arm_Post_L_Front",
+            n_arm_l_front_base,
+            n_arm_l_front_top,
+            E,
+            G,
+            ap.area_m2,
+            ap.moment_of_inertia_m4,
+            ap.moment_of_inertia_m4,
+            ap.moment_of_inertia_m4 * 2,
+            ap.outer_dim_m,
+            Sy,
+        )
+        solver.add_member(
+            "Arm_Post_L_Rear",
+            n_arm_l_rear_base,
+            n_arm_l_rear_top,
+            E,
+            G,
+            ap.area_m2,
+            ap.moment_of_inertia_m4,
+            ap.moment_of_inertia_m4,
+            ap.moment_of_inertia_m4 * 2,
+            ap.outer_dim_m,
+            Sy,
+        )
+        solver.add_member(
+            "Arm_Post_R_Front",
+            n_arm_r_front_base,
+            n_arm_r_front_top,
+            E,
+            G,
+            ap.area_m2,
+            ap.moment_of_inertia_m4,
+            ap.moment_of_inertia_m4,
+            ap.moment_of_inertia_m4 * 2,
+            ap.outer_dim_m,
+            Sy,
+        )
+        solver.add_member(
+            "Arm_Post_R_Rear",
+            n_arm_r_rear_base,
+            n_arm_r_rear_top,
+            E,
+            G,
+            ap.area_m2,
+            ap.moment_of_inertia_m4,
+            ap.moment_of_inertia_m4,
+            ap.moment_of_inertia_m4 * 2,
+            ap.outer_dim_m,
+            Sy,
+        )
 
         # Short connecting members from arm posts to nearest seat frame corners
         # Left side: FL connects to front arm base, RL connects to rear arm base
-        solver.add_member("Arm_Post_L_Front_FLT", top_nodes[0], n_arm_l_front_base, E, G, ap.area_m2, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4*2, ap.outer_dim_m, Sy)
-        solver.add_member("Arm_Post_L_Rear_RLT", top_nodes[3], n_arm_l_rear_base, E, G, ap.area_m2, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4*2, ap.outer_dim_m, Sy)
-        solver.add_member("Arm_Post_R_Front_FRT", top_nodes[1], n_arm_r_front_base, E, G, ap.area_m2, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4*2, ap.outer_dim_m, Sy)
-        solver.add_member("Arm_Post_R_Rear_RRT", top_nodes[2], n_arm_r_rear_base, E, G, ap.area_m2, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4*2, ap.outer_dim_m, Sy)
+        solver.add_member(
+            "Arm_Post_L_Front_FLT",
+            top_nodes[0],
+            n_arm_l_front_base,
+            E,
+            G,
+            ap.area_m2,
+            ap.moment_of_inertia_m4,
+            ap.moment_of_inertia_m4,
+            ap.moment_of_inertia_m4 * 2,
+            ap.outer_dim_m,
+            Sy,
+        )
+        solver.add_member(
+            "Arm_Post_L_Rear_RLT",
+            top_nodes[3],
+            n_arm_l_rear_base,
+            E,
+            G,
+            ap.area_m2,
+            ap.moment_of_inertia_m4,
+            ap.moment_of_inertia_m4,
+            ap.moment_of_inertia_m4 * 2,
+            ap.outer_dim_m,
+            Sy,
+        )
+        solver.add_member(
+            "Arm_Post_R_Front_FRT",
+            top_nodes[1],
+            n_arm_r_front_base,
+            E,
+            G,
+            ap.area_m2,
+            ap.moment_of_inertia_m4,
+            ap.moment_of_inertia_m4,
+            ap.moment_of_inertia_m4 * 2,
+            ap.outer_dim_m,
+            Sy,
+        )
+        solver.add_member(
+            "Arm_Post_R_Rear_RRT",
+            top_nodes[2],
+            n_arm_r_rear_base,
+            E,
+            G,
+            ap.area_m2,
+            ap.moment_of_inertia_m4,
+            ap.moment_of_inertia_m4,
+            ap.moment_of_inertia_m4 * 2,
+            ap.outer_dim_m,
+            Sy,
+        )
 
         # Cross-connectors between front and rear arm posts (top and base)
-        solver.add_member("Arm_Post_L_Top_X", n_arm_l_front_top, n_arm_l_rear_top, E, G, ap.area_m2, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4*2, ap.outer_dim_m, Sy)
-        solver.add_member("Arm_Post_R_Top_X", n_arm_r_front_top, n_arm_r_rear_top, E, G, ap.area_m2, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4*2, ap.outer_dim_m, Sy)
-        solver.add_member("Arm_Post_L_Base_X", n_arm_l_front_base, n_arm_l_rear_base, E, G, ap.area_m2, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4*2, ap.outer_dim_m, Sy)
-        solver.add_member("Arm_Post_R_Base_X", n_arm_r_front_base, n_arm_r_rear_base, E, G, ap.area_m2, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4, ap.moment_of_inertia_m4*2, ap.outer_dim_m, Sy)
+        solver.add_member(
+            "Arm_Post_L_Top_X",
+            n_arm_l_front_top,
+            n_arm_l_rear_top,
+            E,
+            G,
+            ap.area_m2,
+            ap.moment_of_inertia_m4,
+            ap.moment_of_inertia_m4,
+            ap.moment_of_inertia_m4 * 2,
+            ap.outer_dim_m,
+            Sy,
+        )
+        solver.add_member(
+            "Arm_Post_R_Top_X",
+            n_arm_r_front_top,
+            n_arm_r_rear_top,
+            E,
+            G,
+            ap.area_m2,
+            ap.moment_of_inertia_m4,
+            ap.moment_of_inertia_m4,
+            ap.moment_of_inertia_m4 * 2,
+            ap.outer_dim_m,
+            Sy,
+        )
+        solver.add_member(
+            "Arm_Post_L_Base_X",
+            n_arm_l_front_base,
+            n_arm_l_rear_base,
+            E,
+            G,
+            ap.area_m2,
+            ap.moment_of_inertia_m4,
+            ap.moment_of_inertia_m4,
+            ap.moment_of_inertia_m4 * 2,
+            ap.outer_dim_m,
+            Sy,
+        )
+        solver.add_member(
+            "Arm_Post_R_Base_X",
+            n_arm_r_front_base,
+            n_arm_r_rear_base,
+            E,
+            G,
+            ap.area_m2,
+            ap.moment_of_inertia_m4,
+            ap.moment_of_inertia_m4,
+            ap.moment_of_inertia_m4 * 2,
+            ap.outer_dim_m,
+            Sy,
+        )
 
         # Split arm loads between front and rear posts (50/50 split)
         left_force = l.left_arm_vertical_n / 2.0
@@ -512,17 +716,69 @@ def build_chair_3d_fea_model(chair_model: Any) -> FEA3DSolver:
         bp = g.leg_profile
         back_attach_y = -d / 2 + bp.outer_dim_m  # Attach at rear of seat frame
         # Backrest attachment nodes on seat frame (at rear corners)
-        back_base_fl = solver.add_node(-w/2 + bp.outer_dim_m, back_attach_y, h, "Back_Base_FL")
-        back_base_fr = solver.add_node(w/2 - bp.outer_dim_m, back_attach_y, h, "Back_Base_FR")
+        back_base_fl = solver.add_node(-w / 2 + bp.outer_dim_m, back_attach_y, h, "Back_Base_FL")
+        back_base_fr = solver.add_node(w / 2 - bp.outer_dim_m, back_attach_y, h, "Back_Base_FR")
         # Backrest top nodes (splayed at backrest angle)
-        back_top_fl = solver.add_node(-w/2 + bp.outer_dim_m, back_attach_y - dy_back, h + dz_back, "Back_Top_FL")
-        back_top_fr = solver.add_node(w/2 - bp.outer_dim_m, back_attach_y - dy_back, h + dz_back, "Back_Top_FR")
+        back_top_fl = solver.add_node(
+            -w / 2 + bp.outer_dim_m, back_attach_y - dy_back, h + dz_back, "Back_Top_FL"
+        )
+        back_top_fr = solver.add_node(
+            w / 2 - bp.outer_dim_m, back_attach_y - dy_back, h + dz_back, "Back_Top_FR"
+        )
         # Backrest leg members
-        solver.add_member("Backrest_Leg_FL", back_base_fl, back_top_fl, E, G, bp.area_m2, bp.moment_of_inertia_m4, bp.moment_of_inertia_m4, bp.moment_of_inertia_m4*2, bp.outer_dim_m, Sy)
-        solver.add_member("Backrest_Leg_FR", back_base_fr, back_top_fr, E, G, bp.area_m2, bp.moment_of_inertia_m4, bp.moment_of_inertia_m4, bp.moment_of_inertia_m4*2, bp.outer_dim_m, Sy)
+        solver.add_member(
+            "Backrest_Leg_FL",
+            back_base_fl,
+            back_top_fl,
+            E,
+            G,
+            bp.area_m2,
+            bp.moment_of_inertia_m4,
+            bp.moment_of_inertia_m4,
+            bp.moment_of_inertia_m4 * 2,
+            bp.outer_dim_m,
+            Sy,
+        )
+        solver.add_member(
+            "Backrest_Leg_FR",
+            back_base_fr,
+            back_top_fr,
+            E,
+            G,
+            bp.area_m2,
+            bp.moment_of_inertia_m4,
+            bp.moment_of_inertia_m4,
+            bp.moment_of_inertia_m4 * 2,
+            bp.outer_dim_m,
+            Sy,
+        )
         # Connect backrest base to seat frame corners
-        solver.add_member("Back_Base_FL_Connect_FL", top_nodes[0], back_base_fl, E, G, bp.area_m2, bp.moment_of_inertia_m4, bp.moment_of_inertia_m4, bp.moment_of_inertia_m4*2, bp.outer_dim_m, Sy)
-        solver.add_member("Back_Base_FR_Connect_FR", top_nodes[1], back_base_fr, E, G, bp.area_m2, bp.moment_of_inertia_m4, bp.moment_of_inertia_m4, bp.moment_of_inertia_m4*2, bp.outer_dim_m, Sy)
+        solver.add_member(
+            "Back_Base_FL_Connect_FL",
+            top_nodes[0],
+            back_base_fl,
+            E,
+            G,
+            bp.area_m2,
+            bp.moment_of_inertia_m4,
+            bp.moment_of_inertia_m4,
+            bp.moment_of_inertia_m4 * 2,
+            bp.outer_dim_m,
+            Sy,
+        )
+        solver.add_member(
+            "Back_Base_FR_Connect_FR",
+            top_nodes[1],
+            back_base_fr,
+            E,
+            G,
+            bp.area_m2,
+            bp.moment_of_inertia_m4,
+            bp.moment_of_inertia_m4,
+            bp.moment_of_inertia_m4 * 2,
+            bp.outer_dim_m,
+            Sy,
+        )
         # Apply backrest horizontal thrust (backward in -Y direction)
         f_back = l.backrest_force_n / 2.0
         solver.add_nodal_load(back_top_fl, fy=-f_back)
@@ -541,29 +797,29 @@ def build_space_truss_tower_model(
     base_w: float = 2.0,
     top_w: float = 1.0,
     wind_load_n: float = 3000.0,
-    vertical_load_n: float = 8000.0
+    vertical_load_n: float = 8000.0,
 ) -> FEA3DSolver:
     """
     Constructs a 3D transmission / telecommunication tower space truss with 3 vertical bays,
     corner chords, horizontal ties, and cross-braces.
     """
     solver = FEA3DSolver("3D Space Truss Tower")
-    E = 205e9    # Structural Steel (Pa)
+    E = 205e9  # Structural Steel (Pa)
     G = 79e9
-    Sy = 250e6   # 250 MPa yield
-    
+    Sy = 250e6  # 250 MPa yield
+
     # Outer dimension 60 mm x 4 mm tube for main chords
     d_chord = 0.060
     t_chord = 0.004
-    A_chord = math.pi * (d_chord**2 - (d_chord - 2*t_chord)**2) / 4.0
-    I_chord = math.pi * (d_chord**4 - (d_chord - 2*t_chord)**4) / 64.0
+    A_chord = math.pi * (d_chord**2 - (d_chord - 2 * t_chord) ** 2) / 4.0
+    I_chord = math.pi * (d_chord**4 - (d_chord - 2 * t_chord) ** 4) / 64.0
     J_chord = 2.0 * I_chord
 
     # Outer dimension 40 mm x 3 mm tube for braces
     d_brace = 0.040
     t_brace = 0.003
-    A_brace = math.pi * (d_brace**2 - (d_brace - 2*t_brace)**2) / 4.0
-    I_brace = math.pi * (d_brace**4 - (d_brace - 2*t_brace)**4) / 64.0
+    A_brace = math.pi * (d_brace**2 - (d_brace - 2 * t_brace) ** 2) / 4.0
+    I_brace = math.pi * (d_brace**4 - (d_brace - 2 * t_brace) ** 4) / 64.0
     J_brace = 2.0 * I_brace
 
     n_bays = 3
@@ -575,9 +831,9 @@ def build_space_truss_tower_model(
     level_nodes = []
     for lvl_idx, (z, w) in enumerate(zip(levels_z, widths)):
         hw = w / 2.0
-        n_fl = solver.add_node(-hw,  hw, z, f"Node_L{lvl_idx}_FL")
-        n_fr = solver.add_node( hw,  hw, z, f"Node_L{lvl_idx}_FR")
-        n_rr = solver.add_node( hw, -hw, z, f"Node_L{lvl_idx}_RR")
+        n_fl = solver.add_node(-hw, hw, z, f"Node_L{lvl_idx}_FL")
+        n_fr = solver.add_node(hw, hw, z, f"Node_L{lvl_idx}_FR")
+        n_rr = solver.add_node(hw, -hw, z, f"Node_L{lvl_idx}_RR")
         n_rl = solver.add_node(-hw, -hw, z, f"Node_L{lvl_idx}_RL")
         level_nodes.append([n_fl, n_fr, n_rr, n_rl])
 
@@ -592,19 +848,63 @@ def build_space_truss_tower_model(
 
         # 4 Main Chords (vertical / sloping columns)
         for i, name in enumerate(["FL", "FR", "RR", "RL"]):
-            solver.add_member(f"Chord_Bay{b}_{name}", bot[i], top[i], E, G, A_chord, I_chord, I_chord, J_chord, d_chord, Sy)
+            solver.add_member(
+                f"Chord_Bay{b}_{name}",
+                bot[i],
+                top[i],
+                E,
+                G,
+                A_chord,
+                I_chord,
+                I_chord,
+                J_chord,
+                d_chord,
+                Sy,
+            )
 
         # 4 Top Horizontal Ties
-        solver.add_member(f"Tie_Bay{b}_F", top[0], top[1], E, G, A_brace, I_brace, I_brace, J_brace, d_brace, Sy)
-        solver.add_member(f"Tie_Bay{b}_R", top[1], top[2], E, G, A_brace, I_brace, I_brace, J_brace, d_brace, Sy)
-        solver.add_member(f"Tie_Bay{b}_B", top[2], top[3], E, G, A_brace, I_brace, I_brace, J_brace, d_brace, Sy)
-        solver.add_member(f"Tie_Bay{b}_L", top[3], top[0], E, G, A_brace, I_brace, I_brace, J_brace, d_brace, Sy)
+        solver.add_member(
+            f"Tie_Bay{b}_F", top[0], top[1], E, G, A_brace, I_brace, I_brace, J_brace, d_brace, Sy
+        )
+        solver.add_member(
+            f"Tie_Bay{b}_R", top[1], top[2], E, G, A_brace, I_brace, I_brace, J_brace, d_brace, Sy
+        )
+        solver.add_member(
+            f"Tie_Bay{b}_B", top[2], top[3], E, G, A_brace, I_brace, I_brace, J_brace, d_brace, Sy
+        )
+        solver.add_member(
+            f"Tie_Bay{b}_L", top[3], top[0], E, G, A_brace, I_brace, I_brace, J_brace, d_brace, Sy
+        )
 
         # Diagonal X-Braces on all 4 faces
         faces = [(0, 1), (1, 2), (2, 3), (3, 0)]
         for f_idx, (i1, i2) in enumerate(faces):
-            solver.add_member(f"XBrace1_Bay{b}_F{f_idx}", bot[i1], top[i2], E, G, A_brace, I_brace, I_brace, J_brace, d_brace, Sy)
-            solver.add_member(f"XBrace2_Bay{b}_F{f_idx}", bot[i2], top[i1], E, G, A_brace, I_brace, I_brace, J_brace, d_brace, Sy)
+            solver.add_member(
+                f"XBrace1_Bay{b}_F{f_idx}",
+                bot[i1],
+                top[i2],
+                E,
+                G,
+                A_brace,
+                I_brace,
+                I_brace,
+                J_brace,
+                d_brace,
+                Sy,
+            )
+            solver.add_member(
+                f"XBrace2_Bay{b}_F{f_idx}",
+                bot[i2],
+                top[i1],
+                E,
+                G,
+                A_brace,
+                I_brace,
+                I_brace,
+                J_brace,
+                d_brace,
+                Sy,
+            )
 
     # Apply tip lateral wind load + vertical dead/cable load at top nodes
     top_nodes = level_nodes[-1]
@@ -617,10 +917,7 @@ def build_space_truss_tower_model(
 
 
 def build_cantilever_space_frame_model(
-    length_m: float = 4.0,
-    width_m: float = 1.0,
-    height_m: float = 1.0,
-    tip_load_n: float = 5000.0
+    length_m: float = 4.0, width_m: float = 1.0, height_m: float = 1.0, tip_load_n: float = 5000.0
 ) -> FEA3DSolver:
     """
     Constructs a 3D cantilever space truss box girder with root fixed support and tip downward shear load.
@@ -632,8 +929,8 @@ def build_cantilever_space_frame_model(
 
     d_elem = 0.050
     t_elem = 0.003
-    A_elem = math.pi * (d_elem**2 - (d_elem - 2*t_elem)**2) / 4.0
-    I_elem = math.pi * (d_elem**4 - (d_elem - 2*t_elem)**4) / 64.0
+    A_elem = math.pi * (d_elem**2 - (d_elem - 2 * t_elem) ** 2) / 4.0
+    I_elem = math.pi * (d_elem**4 - (d_elem - 2 * t_elem) ** 4) / 64.0
     J_elem = 2.0 * I_elem
 
     n_bays = 4
@@ -644,9 +941,9 @@ def build_cantilever_space_frame_model(
     bay_nodes = []
     for b in range(n_bays + 1):
         x = b * dx
-        n_top_l = solver.add_node(x, -hw,  hh, f"Node_X{b}_TL")
-        n_top_r = solver.add_node(x,  hw,  hh, f"Node_X{b}_TR")
-        n_bot_r = solver.add_node(x,  hw, -hh, f"Node_X{b}_BR")
+        n_top_l = solver.add_node(x, -hw, hh, f"Node_X{b}_TL")
+        n_top_r = solver.add_node(x, hw, hh, f"Node_X{b}_TR")
+        n_bot_r = solver.add_node(x, hw, -hh, f"Node_X{b}_BR")
         n_bot_l = solver.add_node(x, -hw, -hh, f"Node_X{b}_BL")
         bay_nodes.append([n_top_l, n_top_r, n_bot_r, n_bot_l])
 
@@ -661,20 +958,48 @@ def build_cantilever_space_frame_model(
 
         # 4 Longitudinal Chords
         for i, name in enumerate(["TL", "TR", "BR", "BL"]):
-            solver.add_member(f"Chord_{name}_Bay{b}", b0[i], b1[i], E, G, A_elem, I_elem, I_elem, J_elem, d_elem, Sy)
+            solver.add_member(
+                f"Chord_{name}_Bay{b}",
+                b0[i],
+                b1[i],
+                E,
+                G,
+                A_elem,
+                I_elem,
+                I_elem,
+                J_elem,
+                d_elem,
+                Sy,
+            )
 
         # Transverse perimeter at b1
-        solver.add_member(f"Ring_Top_B{b}", b1[0], b1[1], E, G, A_elem, I_elem, I_elem, J_elem, d_elem, Sy)
-        solver.add_member(f"Ring_Right_B{b}", b1[1], b1[2], E, G, A_elem, I_elem, I_elem, J_elem, d_elem, Sy)
-        solver.add_member(f"Ring_Bot_B{b}", b1[2], b1[3], E, G, A_elem, I_elem, I_elem, J_elem, d_elem, Sy)
-        solver.add_member(f"Ring_Left_B{b}", b1[3], b1[0], E, G, A_elem, I_elem, I_elem, J_elem, d_elem, Sy)
+        solver.add_member(
+            f"Ring_Top_B{b}", b1[0], b1[1], E, G, A_elem, I_elem, I_elem, J_elem, d_elem, Sy
+        )
+        solver.add_member(
+            f"Ring_Right_B{b}", b1[1], b1[2], E, G, A_elem, I_elem, I_elem, J_elem, d_elem, Sy
+        )
+        solver.add_member(
+            f"Ring_Bot_B{b}", b1[2], b1[3], E, G, A_elem, I_elem, I_elem, J_elem, d_elem, Sy
+        )
+        solver.add_member(
+            f"Ring_Left_B{b}", b1[3], b1[0], E, G, A_elem, I_elem, I_elem, J_elem, d_elem, Sy
+        )
 
         # Side diagonals (vertical shear carry)
-        solver.add_member(f"Diag_L_B{b}", b0[3], b1[0], E, G, A_elem, I_elem, I_elem, J_elem, d_elem, Sy)
-        solver.add_member(f"Diag_R_B{b}", b0[2], b1[1], E, G, A_elem, I_elem, I_elem, J_elem, d_elem, Sy)
+        solver.add_member(
+            f"Diag_L_B{b}", b0[3], b1[0], E, G, A_elem, I_elem, I_elem, J_elem, d_elem, Sy
+        )
+        solver.add_member(
+            f"Diag_R_B{b}", b0[2], b1[1], E, G, A_elem, I_elem, I_elem, J_elem, d_elem, Sy
+        )
         # Top and bottom diagonals
-        solver.add_member(f"Diag_Top_B{b}", b0[0], b1[1], E, G, A_elem, I_elem, I_elem, J_elem, d_elem, Sy)
-        solver.add_member(f"Diag_Bot_B{b}", b0[3], b1[2], E, G, A_elem, I_elem, I_elem, J_elem, d_elem, Sy)
+        solver.add_member(
+            f"Diag_Top_B{b}", b0[0], b1[1], E, G, A_elem, I_elem, I_elem, J_elem, d_elem, Sy
+        )
+        solver.add_member(
+            f"Diag_Bot_B{b}", b0[3], b1[2], E, G, A_elem, I_elem, I_elem, J_elem, d_elem, Sy
+        )
 
     # Tip downward load at bay_nodes[-1]
     tip_nodes = bay_nodes[-1]
@@ -683,4 +1008,3 @@ def build_cantilever_space_frame_model(
         solver.add_nodal_load(tn, fz=f_down_each)
 
     return solver
-

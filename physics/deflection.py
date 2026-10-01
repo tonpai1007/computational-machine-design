@@ -6,19 +6,20 @@ Accounts for variable second moment of area along stepped shoulders.
 """
 
 import math
+from typing import Any
+
 import numpy as np
-from typing import Dict, Any, List, Tuple
-from core.models import EngineeringModel, Support
+
+from core.models import EngineeringModel
 from materials.database import Material
 from physics.stress import StressSolver
+
 
 class DeflectionSolver:
     @staticmethod
     def solve_deflection(
-        model: EngineeringModel,
-        internal_dist: Dict[str, Any],
-        material: Material
-    ) -> Dict[str, Any]:
+        model: EngineeringModel, internal_dist: dict[str, Any], material: Material
+    ) -> dict[str, Any]:
         """
         Solves for shaft slope theta(x) [rad] and deflection v(x) [mm].
         """
@@ -58,14 +59,14 @@ class DeflectionSolver:
             # Find nearest grid index
             idx_fix = int(np.argmin(np.abs(x_arr - x_fix)))
             c1 = -theta_0[idx_fix]
-            c2 = - (v_0[idx_fix] + c1 * x_fix)
+            c2 = -(v_0[idx_fix] + c1 * x_fix)
 
         elif len(supports) >= 2:
             # Statically determinate or 2-bearing system
             s1 = supports[0]
             s2 = supports[1]
             x1, x2 = s1.position, s2.position
-            
+
             # Interpolate v_0 at x1 and x2
             v0_x1 = np.interp(x1, x_arr, v_0)
             v0_x2 = np.interp(x2, x_arr, v_0)

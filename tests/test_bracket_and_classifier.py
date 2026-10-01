@@ -7,16 +7,13 @@ Verifies:
 4. End-to-end CLI prompt processing producing all local engineering deliverables.
 """
 
-import os
-from pathlib import Path
-import pytest
 from ai.classifier import DomainClassifier
-from core.bracket_model import BracketModel, BracketGeometry, BracketLoads, BoltHolePattern
+from cad.bracket_cad import BracketCADEngine
+from cli import process_prompt
+from core.bracket_model import BoltHolePattern, BracketGeometry, BracketLoads, BracketModel
 from core.frame_model import STRUCTURAL_MATERIALS
 from physics.bracket_physics import BracketPhysicsSolver
-from cad.bracket_cad import BracketCADEngine
 from reporting.bracket_report import BracketReportGenerator
-from cli import process_prompt
 
 
 def test_domain_classifier_routing():
@@ -72,15 +69,14 @@ def test_bracket_physics_determinism():
             thickness_mm=6.0,
             upright_height_mm=110.0,
             has_gussets=True,
-            motor_bolt_pattern=BoltHolePattern(num_holes=4, hole_diameter_mm=8.5, bolt_circle_diameter_mm=75.0)
+            motor_bolt_pattern=BoltHolePattern(
+                num_holes=4, hole_diameter_mm=8.5, bolt_circle_diameter_mm=75.0
+            ),
         ),
         loads=BracketLoads(
-            motor_mass_kg=10.0,
-            motor_torque_nm=25.0,
-            cantilever_arm_mm=60.0,
-            axial_thrust_n=200.0
+            motor_mass_kg=10.0, motor_torque_nm=25.0, cantilever_arm_mm=60.0, axial_thrust_n=200.0
         ),
-        material=STRUCTURAL_MATERIALS["STEEL_1018"]
+        material=STRUCTURAL_MATERIALS["STEEL_1018"],
     )
 
     res = BracketPhysicsSolver.solve(model)
@@ -164,7 +160,8 @@ def test_unsupported_domain_is_declined_by_cli(tmp_path):
     out_dir = tmp_path / "pressure_vessel"
     ok = process_prompt(
         "design a pressure vessel 2 m diameter for 5 MPa internal pressure",
-        output_dir=str(out_dir), auto_open=False,
+        output_dir=str(out_dir),
+        auto_open=False,
     )
     assert ok is False
     assert not out_dir.exists()
@@ -175,7 +172,8 @@ def test_specialized_element_routes_through_cli(tmp_path):
     out_dir = tmp_path / "gear_pair"
     ok = process_prompt(
         "design a spur gear pair for 15 kW at 1500 rpm, steel",
-        output_dir=str(out_dir), auto_open=False,
+        output_dir=str(out_dir),
+        auto_open=False,
     )
     assert ok is True
     assert out_dir.exists()

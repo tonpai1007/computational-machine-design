@@ -12,6 +12,8 @@ from ai.generative_agent import (
     GEAR_MODULES_MM,
     POWER_SCREW_DIAMETERS_MM,
     SPRING_WIRE_DIAMETERS_MM,
+)
+from ai.generative_agent import (
     GenerativeEngineeringAgent as G,
 )
 
@@ -31,8 +33,7 @@ class TestSelectSize:
         def passed(r):
             return r["sf"] >= 5
 
-        res, size, tried, pinned = G._select_size([1, 2, 3, 4, 5], solve, passed,
-                                                 requested=1)
+        res, size, tried, pinned = G._select_size([1, 2, 3, 4, 5], solve, passed, requested=1)
         assert size == 5
         assert res == {"sf": 5}
         assert [s for s, _ in tried] == [1, 2, 3, 4, 5]
@@ -85,12 +86,15 @@ class TestSelectSize:
 class TestGenerativePromptsPass:
     """Each supported prompt family must yield a verified-passing design."""
 
-    @pytest.mark.parametrize("prompt", [
-        "spur gear pair for 15 kW at 1500 rpm, steel",
-        "helical compression spring for 200 N force, 3mm wire",
-        "24mm acme lead screw with 8 kN axial load",
-        "bolted joint M16 class 10.9 with 40 kN load",
-    ])
+    @pytest.mark.parametrize(
+        "prompt",
+        [
+            "spur gear pair for 15 kW at 1500 rpm, steel",
+            "helical compression spring for 200 N force, 3mm wire",
+            "24mm acme lead screw with 8 kN axial load",
+            "bolted joint M16 class 10.9 with 40 kN load",
+        ],
+    )
     def test_prompt_produces_passing_design(self, prompt, tmp_path):
         res = G.process(prompt, tmp_path)
         assert res.passed, f"{prompt!r} still fails: {res.verdict}"
@@ -99,12 +103,15 @@ class TestGenerativePromptsPass:
         assert res.scad_code.strip()
         assert "<html" in res.report_html.lower()
 
-    @pytest.mark.parametrize("prompt", [
-        "spur gear pair for 15 kW at 1500 rpm, steel",
-        "helical compression spring for 200 N force, 3mm wire",
-        "24mm acme lead screw with 8 kN axial load",
-        "bolted joint M16 class 10.9 with 40 kN load",
-    ])
+    @pytest.mark.parametrize(
+        "prompt",
+        [
+            "spur gear pair for 15 kW at 1500 rpm, steel",
+            "helical compression spring for 200 N force, 3mm wire",
+            "24mm acme lead screw with 8 kN axial load",
+            "bolted joint M16 class 10.9 with 40 kN load",
+        ],
+    )
     def test_size_search_is_reported(self, prompt, tmp_path):
         res = G.process(prompt, tmp_path)
         assert any("Tried" in k for k in res.key_metrics), res.key_metrics.keys()
@@ -119,8 +126,12 @@ def test_gear_honours_requested_module():
 
 class TestSizeSeries:
     def test_series_are_ascending_and_unique(self):
-        for series in (BEAM_SECTION_HEIGHTS_MM, GEAR_MODULES_MM,
-                       SPRING_WIRE_DIAMETERS_MM, POWER_SCREW_DIAMETERS_MM):
+        for series in (
+            BEAM_SECTION_HEIGHTS_MM,
+            GEAR_MODULES_MM,
+            SPRING_WIRE_DIAMETERS_MM,
+            POWER_SCREW_DIAMETERS_MM,
+        ):
             assert list(series) == sorted(series)
             assert len(set(series)) == len(series)
 

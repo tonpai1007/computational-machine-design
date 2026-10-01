@@ -8,6 +8,7 @@ renderer in ``convert.documents`` is covered unconditionally by
 """
 
 from pathlib import Path
+
 import docx
 import pytest
 
@@ -121,5 +122,7 @@ def test_docx_conversion_with_ai(tmp_path: Path):
 
     doc = docx.Document(str(out_path))
     # Should have AI peer review callout table or header
-    all_text = "\n".join(p.text for p in doc.paragraphs) + "\n".join(c.text for t in doc.tables for row in t.rows for c in row.cells)
+    all_text = "\n".join(p.text for p in doc.paragraphs) + "\n".join(
+        c.text for t in doc.tables for row in t.rows for c in row.cells
+    )
     assert "AI Engineering Executive Summary" in all_text or "Ergonomic Chair Structure" in all_text

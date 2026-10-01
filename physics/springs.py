@@ -5,11 +5,11 @@ Standards: Shigley's Mechanical Engineering Design / DIN 2089.
 """
 
 import math
-from typing import Dict, Any, List, Optional
+
 from components.springs import (
-    SpringSpecification,
-    SpringGeometry,
     SpringAnalysisResult,
+    SpringGeometry,
+    SpringSpecification,
 )
 
 
@@ -21,7 +21,7 @@ class SpringSolver:
         Deterministic engineering calculations per DIN 2089 & Shigley.
         """
         d = spec.wire_diameter_d_mm
-        
+
         # Diameter determination
         if spec.mean_diameter_d_mm and spec.mean_diameter_d_mm > 0:
             mean_d = spec.mean_diameter_d_mm
@@ -55,7 +55,7 @@ class SpringSolver:
 
         # Spring Rate k = (G * d^4) / (8 * D^3 * Na) [N/mm]
         g = spec.shear_modulus_g_mpa
-        k = (g * (d ** 4)) / (8.0 * (mean_d ** 3) * na)
+        k = (g * (d**4)) / (8.0 * (mean_d**3) * na)
 
         # Operating deflections
         f_min = spec.min_operating_force_n
@@ -92,11 +92,13 @@ class SpringSolver:
 
         # Wahl curvature correction factor Kw
         # Kw = (4C - 1) / (4C - 4) + 0.615 / C
-        kw = ((4.0 * spring_index_c - 1.0) / (4.0 * spring_index_c - 4.0)) + (0.615 / spring_index_c)
+        kw = ((4.0 * spring_index_c - 1.0) / (4.0 * spring_index_c - 4.0)) + (
+            0.615 / spring_index_c
+        )
 
         # Torsional shear stresses: tau = Kw * (8 * F * D) / (pi * d^3)
         def calc_tau(force: float) -> float:
-            return kw * (8.0 * force * mean_d) / (math.pi * (d ** 3))
+            return kw * (8.0 * force * mean_d) / (math.pi * (d**3))
 
         tau_min = calc_tau(f_min)
         tau_max = calc_tau(f_max)
@@ -107,7 +109,7 @@ class SpringSolver:
             sut = spec.tensile_strength_sut_mpa
         else:
             # Sut = A / d^m (A = 2211, m = 0.145)
-            sut = 2211.0 / (d ** 0.145)
+            sut = 2211.0 / (d**0.145)
 
         # Torsional yield strength Ssy approx 0.45 * Sut (unpreset) or 0.65 * Sut (preset)
         ssy = 0.45 * sut
@@ -133,21 +135,33 @@ class SpringSolver:
         # Recommendations & Pass/Fail
         recs = []
         if spring_index_c < 4.0:
-            recs.append(f"Spring index C={spring_index_c:.1f} is too tight (C < 4). Difficult to coil and high residual stresses.")
+            recs.append(
+                f"Spring index C={spring_index_c:.1f} is too tight (C < 4). Difficult to coil and high residual stresses."
+            )
         elif spring_index_c > 12.0:
-            recs.append(f"Spring index C={spring_index_c:.1f} is large (C > 12). Wire is prone to tangling and buckling.")
+            recs.append(
+                f"Spring index C={spring_index_c:.1f} is large (C > 12). Wire is prone to tangling and buckling."
+            )
 
         if sf_solid < 1.15:
-            recs.append(f"Solid yield safety factor ({sf_solid:.2f}) is below 1.15. Risk of permanent set when fully compressed.")
+            recs.append(
+                f"Solid yield safety factor ({sf_solid:.2f}) is below 1.15. Risk of permanent set when fully compressed."
+            )
 
         if sf_fatigue < 1.25:
-            recs.append(f"Fatigue safety factor ({sf_fatigue:.2f}) is below 1.25 for cyclic duty. Consider shot peening or larger wire diameter.")
+            recs.append(
+                f"Fatigue safety factor ({sf_fatigue:.2f}) is below 1.25 for cyclic duty. Consider shot peening or larger wire diameter."
+            )
 
         if not is_buckling_safe:
-            recs.append(f"Slenderness ratio L0/D={slenderness:.1f} exceeds 4.0. Recommend internal guide rod or external sleeve to prevent lateral buckling.")
+            recs.append(
+                f"Slenderness ratio L0/D={slenderness:.1f} exceeds 4.0. Recommend internal guide rod or external sleeve to prevent lateral buckling."
+            )
 
         if not recs:
-            recs.append("All spring rate, solid clash, fatigue, and lateral buckling criteria satisfied.")
+            recs.append(
+                "All spring rate, solid clash, fatigue, and lateral buckling criteria satisfied."
+            )
 
         passed = (sf_solid >= 1.15) and (sf_fatigue >= 1.25) and is_buckling_safe
 

@@ -2,10 +2,9 @@
 Test Suite: Bolted Joints (VDI 2230) & Power Screws (ASME B1.5)
 """
 
-import pytest
 from components.bolted_joints import BoltedJointSpecification
-from physics.bolted_joints import BoltedJointSolver
 from components.power_screws import PowerScrewSpecification
+from physics.bolted_joints import BoltedJointSolver
 from physics.power_screws import PowerScrewSolver
 
 
@@ -15,7 +14,7 @@ def test_bolted_joint_vdi2230():
         bolt_designation="M12",
         property_class="8.8",
         clamped_length_mm=40.0,
-        applied_max_load_n=12000.0
+        applied_max_load_n=12000.0,
     )
 
     res = BoltedJointSolver.solve(spec)
@@ -34,7 +33,7 @@ def test_power_screw_asme():
         pitch_p_mm=5.0,
         num_starts=1,
         axial_load_n=6000.0,
-        thread_type="acme"
+        thread_type="acme",
     )
 
     res = PowerScrewSolver.solve(spec)

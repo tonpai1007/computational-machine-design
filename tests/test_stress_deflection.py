@@ -3,11 +3,14 @@ Tests for Stress & Deflection Solvers
 """
 
 import math
+
 import pytest
-from core.models import EngineeringModel, Support, PointLoad, ShaftSegment
+
+from core.models import EngineeringModel, PointLoad, ShaftSegment, Support
 from materials.database import MaterialDatabase
 from physics.solver import PhysicsSolver
 from physics.stress import StressConcentration
+
 
 def test_circular_bending_and_torsion():
     # Solid 30mm shaft transmitting 100 Nm torque and 150 Nm bending
@@ -18,7 +21,7 @@ def test_circular_bending_and_torsion():
         material_id="AISI_1045_CD",
         segments=[ShaftSegment(start_pos=0.0, end_pos=0.5, outer_diameter=0.03)],
         supports=[Support(position=0.05), Support(position=0.45)],
-        point_loads=[PointLoad(position=0.25, magnitude=600.0)]
+        point_loads=[PointLoad(position=0.25, magnitude=600.0)],
     )
     res = PhysicsSolver.solve(model)
     assert res.success is True
@@ -27,12 +30,14 @@ def test_circular_bending_and_torsion():
     tau_theo = (16.0 * 100.0) / (math.pi * d**3) / 1e6
     assert pytest.approx(res.critical_section.torsional_stress, 0.5) == tau_theo
 
+
 def test_peterson_stress_concentration():
     # Shoulder step: d=20mm, D=30mm (D/d = 1.5), r=2mm (r/d = 0.1)
     kt_b, kt_t = StressConcentration.shoulder_fillet_kt(0.02, 0.03, 0.002)
     # Expected Kt in bending is typically ~ 1.5 - 1.8
     assert 1.4 <= kt_b <= 1.9
     assert 1.2 <= kt_t <= 1.6
+
 
 def test_deflection_simply_supported():
     # Center loaded simply supported beam deflection delta = P * L^3 / (48 * E * I)
@@ -51,7 +56,7 @@ def test_deflection_simply_supported():
         material_id="AISI_1045_CD",
         segments=[ShaftSegment(start_pos=0.0, end_pos=1.0, outer_diameter=d)],
         supports=[Support(position=0.0), Support(position=1.0)],
-        point_loads=[PointLoad(position=0.5, magnitude=P)]
+        point_loads=[PointLoad(position=0.5, magnitude=P)],
     )
     res = PhysicsSolver.solve(model)
     assert res.success is True

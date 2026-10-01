@@ -4,22 +4,33 @@ Curated mechanical properties for engineering alloys, steels, aluminums, titaniu
 Data sourced from standard engineering references (Shigley's Mechanical Engineering Design, ASM Handbooks).
 """
 
-from typing import Dict, List, Optional
+from __future__ import annotations
+
 from pydantic import BaseModel, Field
+
 
 class Material(BaseModel):
     id: str
     name: str
-    category: str = Field(..., description="'carbon_steel', 'alloy_steel', 'stainless_steel', 'aluminum', 'titanium', 'cast_iron', 'copper_alloy'")
+    category: str = Field(
+        ...,
+        description="'carbon_steel', 'alloy_steel', 'stainless_steel', 'aluminum', 'titanium', 'cast_iron', 'copper_alloy'",
+    )
     yield_strength_mpa: float = Field(..., description="Yield tensile strength Sy in MPa")
     ultimate_strength_mpa: float = Field(..., description="Ultimate tensile strength Sut in MPa")
     elastic_modulus_gpa: float = Field(..., description="Young's modulus E in GPa")
     shear_modulus_gpa: float = Field(..., description="Shear modulus G in GPa")
     poissons_ratio: float = Field(0.29, description="Poisson's ratio nu")
     density_kg_m3: float = Field(..., description="Mass density rho in kg/m3")
-    endurance_limit_base_mpa: float = Field(..., description="Uncorrected rotary beam endurance limit Se' in MPa")
-    machinability_rating: float = Field(100.0, description="Machinability index relative to AISI 1212 = 100%")
-    cost_index_per_kg: float = Field(1.0, description="Normalized relative material cost index per kg (AISI 1018 ~ 1.0)")
+    endurance_limit_base_mpa: float = Field(
+        ..., description="Uncorrected rotary beam endurance limit Se' in MPa"
+    )
+    machinability_rating: float = Field(
+        100.0, description="Machinability index relative to AISI 1212 = 100%"
+    )
+    cost_index_per_kg: float = Field(
+        1.0, description="Normalized relative material cost index per kg (AISI 1018 ~ 1.0)"
+    )
     description: str = ""
 
     @property
@@ -42,7 +53,8 @@ class Material(BaseModel):
     def endurance_limit_base_pa(self) -> float:
         return self.endurance_limit_base_mpa * 1e6
 
-MATERIALS_DB: Dict[str, Material] = {
+
+MATERIALS_DB: dict[str, Material] = {
     # Carbon Steels
     "AISI_1018_CD": Material(
         id="AISI_1018_CD",
@@ -57,7 +69,7 @@ MATERIALS_DB: Dict[str, Material] = {
         endurance_limit_base_mpa=220.0,
         machinability_rating=78.0,
         cost_index_per_kg=1.0,
-        description="General purpose low-carbon mild steel shafting, easily welded and machined."
+        description="General purpose low-carbon mild steel shafting, easily welded and machined.",
     ),
     "AISI_1045_CD": Material(
         id="AISI_1045_CD",
@@ -72,7 +84,7 @@ MATERIALS_DB: Dict[str, Material] = {
         endurance_limit_base_mpa=312.5,
         machinability_rating=57.0,
         cost_index_per_kg=1.2,
-        description="Workhorse medium-carbon machinery steel for transmission shafts, axles, and studs."
+        description="Workhorse medium-carbon machinery steel for transmission shafts, axles, and studs.",
     ),
     "AISI_1045_QT": Material(
         id="AISI_1045_QT",
@@ -87,9 +99,8 @@ MATERIALS_DB: Dict[str, Material] = {
         endurance_limit_base_mpa=385.0,
         machinability_rating=50.0,
         cost_index_per_kg=1.5,
-        description="Heat-treated carbon steel offering enhanced fatigue resistance and strength."
+        description="Heat-treated carbon steel offering enhanced fatigue resistance and strength.",
     ),
-
     # Alloy Steels
     "AISI_4140_QT": Material(
         id="AISI_4140_QT",
@@ -104,7 +115,7 @@ MATERIALS_DB: Dict[str, Material] = {
         endurance_limit_base_mpa=510.0,
         machinability_rating=55.0,
         cost_index_per_kg=2.3,
-        description="High-strength chrome-moly alloy steel for heavy duty power transmission, severe fatigue."
+        description="High-strength chrome-moly alloy steel for heavy duty power transmission, severe fatigue.",
     ),
     "AISI_4340_QT": Material(
         id="AISI_4340_QT",
@@ -119,9 +130,8 @@ MATERIALS_DB: Dict[str, Material] = {
         endurance_limit_base_mpa=640.0,
         machinability_rating=40.0,
         cost_index_per_kg=3.8,
-        description="Ultra-high strength aerospace and high-stress automotive transmission shaft alloy."
+        description="Ultra-high strength aerospace and high-stress automotive transmission shaft alloy.",
     ),
-
     # Stainless Steels
     "AISI_304_SS": Material(
         id="AISI_304_SS",
@@ -136,7 +146,7 @@ MATERIALS_DB: Dict[str, Material] = {
         endurance_limit_base_mpa=240.0,
         machinability_rating=45.0,
         cost_index_per_kg=3.5,
-        description="Austenitic stainless steel with excellent corrosion resistance in chemical & food machinery."
+        description="Austenitic stainless steel with excellent corrosion resistance in chemical & food machinery.",
     ),
     "AISI_316_SS": Material(
         id="AISI_316_SS",
@@ -151,9 +161,8 @@ MATERIALS_DB: Dict[str, Material] = {
         endurance_limit_base_mpa=275.0,
         machinability_rating=36.0,
         cost_index_per_kg=4.8,
-        description="Molybdenum-bearing marine grade stainless steel, resistant to pitting and chlorides."
+        description="Molybdenum-bearing marine grade stainless steel, resistant to pitting and chlorides.",
     ),
-
     # Aluminum Alloys
     "AL_6061_T6": Material(
         id="AL_6061_T6",
@@ -168,7 +177,7 @@ MATERIALS_DB: Dict[str, Material] = {
         endurance_limit_base_mpa=96.5,
         machinability_rating=90.0,
         cost_index_per_kg=2.8,
-        description="Lightweight structural aluminum with balanced strength, weldability, and corrosion resistance."
+        description="Lightweight structural aluminum with balanced strength, weldability, and corrosion resistance.",
     ),
     "AL_7075_T6": Material(
         id="AL_7075_T6",
@@ -183,9 +192,8 @@ MATERIALS_DB: Dict[str, Material] = {
         endurance_limit_base_mpa=159.0,
         machinability_rating=70.0,
         cost_index_per_kg=5.2,
-        description="Aircraft-grade high-strength zinc alloy aluminum for weight-critical aerospace and robotics."
+        description="Aircraft-grade high-strength zinc alloy aluminum for weight-critical aerospace and robotics.",
     ),
-
     # Titanium
     "TI_6AL_4V": Material(
         id="TI_6AL_4V",
@@ -200,9 +208,8 @@ MATERIALS_DB: Dict[str, Material] = {
         endurance_limit_base_mpa=510.0,
         machinability_rating=22.0,
         cost_index_per_kg=18.0,
-        description="Extreme specific strength, corrosion-proof, exceptional fatigue endurance at lightweight."
+        description="Extreme specific strength, corrosion-proof, exceptional fatigue endurance at lightweight.",
     ),
-
     # Bronze
     "BRONZE_C93200": Material(
         id="BRONZE_C93200",
@@ -217,9 +224,10 @@ MATERIALS_DB: Dict[str, Material] = {
         endurance_limit_base_mpa=110.0,
         machinability_rating=70.0,
         cost_index_per_kg=4.2,
-        description="Standard sleeve bearing and bushing bronze with superior antifriction and wear resistance."
-    )
+        description="Standard sleeve bearing and bushing bronze with superior antifriction and wear resistance.",
+    ),
 }
+
 
 class MaterialDatabase:
     @classmethod
@@ -228,32 +236,32 @@ class MaterialDatabase:
         # Try exact match
         if material_id in MATERIALS_DB:
             return MATERIALS_DB[material_id]
-        
+
         # Try case-insensitive and normalized match
         norm = material_id.upper().replace("-", "_").replace(" ", "_")
         for k, v in MATERIALS_DB.items():
             if norm == k or norm in k:
                 return v
-        
+
         # Keyword search
         for k, v in MATERIALS_DB.items():
             if norm in v.name.upper().replace("-", "_").replace(" ", "_"):
                 return v
 
         available = list(MATERIALS_DB.keys())
-        raise KeyError(f"Material '{material_id}' not found in database. Available options: {available}")
+        raise KeyError(
+            f"Material '{material_id}' not found in database. Available options: {available}"
+        )
 
     @classmethod
-    def list_all(cls) -> List[Material]:
+    def list_all(cls) -> list[Material]:
         """Return all materials in the database."""
         return list(MATERIALS_DB.values())
 
     @classmethod
     def find_candidates_for_safety_factor(
-        cls,
-        max_stress_mpa: float,
-        target_sf: float = 2.0
-    ) -> List[Material]:
+        cls, max_stress_mpa: float, target_sf: float = 2.0
+    ) -> list[Material]:
         """Find all materials where Sy >= max_stress * target_sf."""
         req_yield = max_stress_mpa * target_sf
         candidates = [m for m in MATERIALS_DB.values() if m.yield_strength_mpa >= req_yield]

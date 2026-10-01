@@ -7,22 +7,21 @@ full design run: parameters, geometry, structural checks and deliverables.
 
 from __future__ import annotations
 
-import os
 import re
 from pathlib import Path
-from typing import Optional
 
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
+from rich.table import Table
 
 console = Console()
 
-def _handle_bracket(prompt: str, p_lower: str, output_dir: Optional[str] = None) -> bool:
-    from core.bracket_model import BracketModel, BracketGeometry, BracketLoads, BoltHolePattern
+
+def _handle_bracket(prompt: str, p_lower: str, output_dir: str | None = None) -> bool:
+    from cad.bracket_cad import BracketCADEngine
+    from core.bracket_model import BracketGeometry, BracketLoads, BracketModel
     from core.frame_model import STRUCTURAL_MATERIALS
     from physics.bracket_physics import BracketPhysicsSolver
-    from cad.bracket_cad import BracketCADEngine
     from reporting.bracket_report import BracketReportGenerator
 
     out_path = Path(output_dir or "Project/bracket")
@@ -39,28 +38,31 @@ def _handle_bracket(prompt: str, p_lower: str, output_dir: Optional[str] = None)
     loads = BracketLoads()
 
     # 2. Extract loads
-    kg_match = re.search(r'(\d+(?:\.\d+)?)\s*kg', p_lower)
+    kg_match = re.search(r"(\d+(?:\.\d+)?)\s*kg", p_lower)
     if kg_match:
         loads.motor_mass_kg = float(kg_match.group(1))
 
-    torque_match = re.search(r'(\d+(?:\.\d+)?)\s*(?:nm|n\*m|n-m)', p_lower)
+    torque_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:nm|n\*m|n-m)", p_lower)
     if torque_match:
         loads.motor_torque_nm = float(torque_match.group(1))
 
-    thrust_match = re.search(r'(\d+(?:\.\d+)?)\s*(?:n|newtons?)\s*(?:thrust|axial)', p_lower)
+    thrust_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:n|newtons?)\s*(?:thrust|axial)", p_lower)
     if thrust_match:
         loads.axial_thrust_n = float(thrust_match.group(1))
 
     # 3. Extract bolt pattern parameters
-    holes_match = re.search(r'(\d+)\s*(?:bolt\s*holes?|holes?|bolts?)', p_lower)
+    holes_match = re.search(r"(\d+)\s*(?:bolt\s*holes?|holes?|bolts?)", p_lower)
     if holes_match:
         geom.motor_bolt_pattern.num_holes = int(holes_match.group(1))
 
-    bcd_match = re.search(r'(\d+(?:\.\d+)?)\s*mm\s*(?:bcd|bolt\s*circle|pcd)', p_lower)
+    bcd_match = re.search(r"(\d+(?:\.\d+)?)\s*mm\s*(?:bcd|bolt\s*circle|pcd)", p_lower)
     if bcd_match:
         geom.motor_bolt_pattern.bolt_circle_diameter_mm = float(bcd_match.group(1))
 
-    hole_dia_match = re.search(r'(?:m(\d+)|(?:dia(?:meter)?|hole)\s*(\d+(?:\.\d+)?)\s*mm|(\d+(?:\.\d+)?)\s*mm\s*(?:dia|hole))', p_lower)
+    hole_dia_match = re.search(
+        r"(?:m(\d+)|(?:dia(?:meter)?|hole)\s*(\d+(?:\.\d+)?)\s*mm|(\d+(?:\.\d+)?)\s*mm\s*(?:dia|hole))",
+        p_lower,
+    )
     if hole_dia_match:
         val = hole_dia_match.group(1) or hole_dia_match.group(2) or hole_dia_match.group(3)
         if val:
@@ -68,19 +70,19 @@ def _handle_bracket(prompt: str, p_lower: str, output_dir: Optional[str] = None)
             geom.motor_bolt_pattern.hole_diameter_mm = dia_f + 0.5 if "m" in p_lower else dia_f
 
     # 4. Extract dimensions
-    thick_match = re.search(r'(\d+(?:\.\d+)?)\s*mm\s*(?:thick|thickness)', p_lower)
+    thick_match = re.search(r"(\d+(?:\.\d+)?)\s*mm\s*(?:thick|thickness)", p_lower)
     if thick_match:
         geom.thickness_mm = float(thick_match.group(1))
 
-    height_match = re.search(r'(\d+(?:\.\d+)?)\s*mm\s*(?:high|height|flange)', p_lower)
+    height_match = re.search(r"(\d+(?:\.\d+)?)\s*mm\s*(?:high|height|flange)", p_lower)
     if height_match:
         geom.upright_height_mm = float(height_match.group(1))
 
-    width_match = re.search(r'(\d+(?:\.\d+)?)\s*mm\s*(?:wide|width)', p_lower)
+    width_match = re.search(r"(\d+(?:\.\d+)?)\s*mm\s*(?:wide|width)", p_lower)
     if width_match:
         geom.base_width_mm = float(width_match.group(1))
 
-    base_len_match = re.search(r'(\d+(?:\.\d+)?)\s*mm\s*(?:long|length|base)', p_lower)
+    base_len_match = re.search(r"(\d+(?:\.\d+)?)\s*mm\s*(?:long|length|base)", p_lower)
     if base_len_match:
         geom.base_length_mm = float(base_len_match.group(1))
 
@@ -92,10 +94,14 @@ def _handle_bracket(prompt: str, p_lower: str, output_dir: Optional[str] = None)
 
     model = BracketModel(name="Motor Mounting Bracket", geometry=geom, loads=loads, material=mat)
 
-    console.print(f"[bold green][1/3] Calculating Structural Forces & Bolt Stresses ({model.material.name})...[/bold green]")
+    console.print(
+        f"[bold green][1/3] Calculating Structural Forces & Bolt Stresses ({model.material.name})...[/bold green]"
+    )
     result = BracketPhysicsSolver.solve(model)
 
-    console.print(f"[bold green][2/3] Generating Multi-Body CAD Solids (.STEP, .STL, .SCAD)...[/bold green]")
+    console.print(
+        "[bold green][2/3] Generating Multi-Body CAD Solids (.STEP, .STL, .SCAD)...[/bold green]"
+    )
     scad_file = out_path / "bracket.scad"
     with open(scad_file, "w", encoding="utf-8") as f:
         f.write(BracketCADEngine.generate_openscad(model))
@@ -108,7 +114,9 @@ def _handle_bracket(prompt: str, p_lower: str, output_dir: Optional[str] = None)
     with open(step_file, "w", encoding="utf-8") as f:
         f.write(BracketCADEngine.export_step_solid(model))
 
-    console.print(f"[bold green][3/3] Generating Engineering Calculation Audit Sheet...[/bold green]")
+    console.print(
+        "[bold green][3/3] Generating Engineering Calculation Audit Sheet...[/bold green]"
+    )
     report_file = out_path / "bracket_report.html"
     with open(report_file, "w", encoding="utf-8") as f:
         f.write(BracketReportGenerator.generate_html_report(model, result))
@@ -129,7 +137,7 @@ def _handle_bracket(prompt: str, p_lower: str, output_dir: Optional[str] = None)
         f"M_root = {result.overturning_moment_nm:.1f} N*m",
         f"sigma_bend = {result.root_bending_stress_mpa:.1f} MPa",
         f"[{plate_sf_color}]{result.plate_yield_safety_factor:.2f}[/{plate_sf_color}]",
-        f"[bold {plate_sf_color}]{'PASS' if result.plate_yield_safety_factor >= 1.5 else 'FAIL'}[/bold {plate_sf_color}]"
+        f"[bold {plate_sf_color}]{'PASS' if result.plate_yield_safety_factor >= 1.5 else 'FAIL'}[/bold {plate_sf_color}]",
     )
 
     table.add_row(
@@ -137,7 +145,7 @@ def _handle_bracket(prompt: str, p_lower: str, output_dir: Optional[str] = None)
         f"Fg = {result.motor_weight_n:.1f} N",
         f"tau = {result.plate_shear_stress_mpa:.2f} MPa",
         f"[green]{(model.material.yield_strength_mpa * 0.577) / max(result.plate_shear_stress_mpa, 0.01):.1f}[/green]",
-        "[bold green]PASS[/bold green]"
+        "[bold green]PASS[/bold green]",
     )
 
     table.add_row(
@@ -145,7 +153,7 @@ def _handle_bracket(prompt: str, p_lower: str, output_dir: Optional[str] = None)
         f"Fg = {result.motor_weight_n:.1f} N + Torque reaction",
         f"tau_bolt = {result.motor_bolt_shear_stress_mpa:.1f} MPa",
         f"[{bolt_sf_color}]{result.bolt_safety_factor:.2f}[/{bolt_sf_color}]",
-        f"[bold {bolt_sf_color}]{'PASS' if result.bolt_safety_factor >= 2.0 else 'FAIL'}[/bold {bolt_sf_color}]"
+        f"[bold {bolt_sf_color}]{'PASS' if result.bolt_safety_factor >= 2.0 else 'FAIL'}[/bold {bolt_sf_color}]",
     )
 
     table.add_row(
@@ -153,7 +161,7 @@ def _handle_bracket(prompt: str, p_lower: str, output_dir: Optional[str] = None)
         f"Plate t = {geom.thickness_mm:.1f} mm",
         f"sigma_brg = {result.hole_bearing_stress_mpa:.1f} MPa",
         f"[green]{(model.material.yield_strength_mpa * 1.5) / max(result.hole_bearing_stress_mpa, 0.01):.2f}[/green]",
-        "[bold green]PASS[/bold green]"
+        "[bold green]PASS[/bold green]",
     )
 
     table.add_row(
@@ -161,7 +169,7 @@ def _handle_bracket(prompt: str, p_lower: str, output_dir: Optional[str] = None)
         f"Total tare mass = {result.plate_mass_kg:.2f} kg",
         f"sigma_vm = {result.max_von_mises_mpa:.1f} MPa",
         f"[{plate_sf_color}]{result.plate_yield_safety_factor:.2f}[/{plate_sf_color}]",
-        f"[bold {'green' if result.passed else 'red'}]{'PASS' if result.passed else 'FAIL'}[/bold {'green' if result.passed else 'red'}]"
+        f"[bold {'green' if result.passed else 'red'}]{'PASS' if result.passed else 'FAIL'}[/bold {'green' if result.passed else 'red'}]",
     )
 
     console.print(table)
@@ -170,22 +178,27 @@ def _handle_bracket(prompt: str, p_lower: str, output_dir: Optional[str] = None)
     deliv_text = (
         f"[bold green]Manufactured CAD & Physics Deliverables Generated in '{out_path}':[/bold green]\n"
         f"  * [bold cyan]{step_file.name}[/bold cyan] -> ISO-10303 Solid Assembly (SolidWorks, Fusion 360, FreeCAD)\n"
-        f"  * [bold cyan]{stl_file.name}[/bold cyan]  -> Watertight Sliced 3D Print Mesh ({len(stl_file.read_bytes())/1024:.1f} KB)\n"
+        f"  * [bold cyan]{stl_file.name}[/bold cyan]  -> Watertight Sliced 3D Print Mesh ({len(stl_file.read_bytes()) / 1024:.1f} KB)\n"
         f"  * [bold cyan]{scad_file.name}[/bold cyan] -> Parametric OpenSCAD Source Script\n"
         f"  * [bold cyan]{report_file.name}[/bold cyan] -> Engineering Calculation Audit Sheet with Free-Body Diagram"
     )
-    console.print(Panel(deliv_text, title="[bold green]CAD & Force Calculation Complete[/bold green]", border_style="green"))
+    console.print(
+        Panel(
+            deliv_text,
+            title="[bold green]CAD & Force Calculation Complete[/bold green]",
+            border_style="green",
+        )
+    )
     return True
 
 
-
-def _handle_chair(prompt: str, p_lower: str, output_dir: Optional[str] = None) -> bool:
-    from core.frame_model import FrameDesignModel, STRUCTURAL_MATERIALS
-    from physics.frame_physics import FramePhysicsSolver
+def _handle_chair(prompt: str, p_lower: str, output_dir: str | None = None) -> bool:
     from cad.assembly import FrameCADEngine
-    from reporting.frame_report import FrameReportGenerator
-    from reporting.academic_engine import AcademicAssignmentEngine
+    from core.frame_model import STRUCTURAL_MATERIALS, FrameDesignModel
     from physics.fea_3d import build_chair_3d_fea_model
+    from physics.frame_physics import FramePhysicsSolver
+    from reporting.academic_engine import AcademicAssignmentEngine
+    from reporting.frame_report import FrameReportGenerator
 
     out_path = Path(output_dir or "Project/chair")
     out_path.mkdir(parents=True, exist_ok=True)
@@ -236,34 +249,38 @@ def _handle_chair(prompt: str, p_lower: str, output_dir: Optional[str] = None) -
         model.geometry.has_backrest = False
 
     # Extract custom seat/platform load if present
-    seat_match = re.search(r'(\d+)\s*(?:n|newtons?)\s*(?:seat|table|vertical|load)?', p_lower)
+    seat_match = re.search(r"(\d+)\s*(?:n|newtons?)\s*(?:seat|table|vertical|load)?", p_lower)
     if seat_match:
         model.loads.seat_vertical_load_n = float(seat_match.group(1))
-    kg_match = re.search(r'(\d+)\s*kg', p_lower)
+    kg_match = re.search(r"(\d+)\s*kg", p_lower)
     if kg_match and not seat_match:
         model.loads.seat_vertical_load_n = float(kg_match.group(1)) * 9.81
 
     # Extract custom arm load
     if model.geometry.has_arms:
-        arm_match = re.search(r'(\d+)\s*(?:n|newtons?)\s*(?:arm|armrest)', p_lower)
+        arm_match = re.search(r"(\d+)\s*(?:n|newtons?)\s*(?:arm|armrest)", p_lower)
         if arm_match:
             val = float(arm_match.group(1))
             model.loads.left_arm_vertical_n = val
             model.loads.right_arm_vertical_n = val
 
     # Extract leg tube diameter
-    dia_match = re.search(r'(\d+(?:\.\d+)?)\s*mm\s*(?:leg|tube|dia)', p_lower)
+    dia_match = re.search(r"(\d+(?:\.\d+)?)\s*mm\s*(?:leg|tube|dia)", p_lower)
     if dia_match:
         model.geometry.leg_profile.outer_dimension_mm = float(dia_match.group(1))
 
-    console.print(f"[bold green][1/3] Calculating Structural Forces & Buckling ({model.material.name})...[/bold green]")
+    console.print(
+        f"[bold green][1/3] Calculating Structural Forces & Buckling ({model.material.name})...[/bold green]"
+    )
     result = FramePhysicsSolver.solve(model)
 
-    console.print(f"[bold green][2/3] Running Direct Stiffness 3D FEA (6 DOFs/Node)...[/bold green]")
+    console.print("[bold green][2/3] Running Direct Stiffness 3D FEA (6 DOFs/Node)...[/bold green]")
     fea_solver = build_chair_3d_fea_model(model)
     fea_res = fea_solver.solve()
 
-    console.print(f"[bold green][3/3] Generating Multi-Body CAD Solids (.STEP, .STL, .SCAD, .HTML)...[/bold green]")
+    console.print(
+        "[bold green][3/3] Generating Multi-Body CAD Solids (.STEP, .STL, .SCAD, .HTML)...[/bold green]"
+    )
 
     # Write deliverables
     scad_file = out_path / "chair.scad"
@@ -289,29 +306,43 @@ def _handle_chair(prompt: str, p_lower: str, output_dir: Optional[str] = None) -
     assignment_file = out_path / "academic_assignment_report.html"
     preview_path = out_path / "chair_preview.png"
     with open(assignment_file, "w", encoding="utf-8") as f:
-        f.write(AcademicAssignmentEngine.generate_assignment_report(
-            model, result,
-            fea_result=fea_res,
-            preview_image="chair_preview.png" if preview_path.exists() else None
-        ))
+        f.write(
+            AcademicAssignmentEngine.generate_assignment_report(
+                model,
+                result,
+                fea_result=fea_res,
+                preview_image="chair_preview.png" if preview_path.exists() else None,
+            )
+        )
 
     # Version 2 (Strictly tailored to match university student project report format without OOS content)
     assignment_v2_file = out_path / "academic_assignment_report_v2.html"
     with open(assignment_v2_file, "w", encoding="utf-8") as f:
-        f.write(AcademicAssignmentEngine.generate_assignment_report_v2(
-            model, result,
-            preview_image="chair_preview.png" if preview_path.exists() else None
-        ))
+        f.write(
+            AcademicAssignmentEngine.generate_assignment_report_v2(
+                model, result, preview_image="chair_preview.png" if preview_path.exists() else None
+            )
+        )
 
     # Generate Word (.docx) deliverables & Consolidate study materials via Learning Tools
+    from convert.solids import ConversionError
     from integrations.learning_tools import LearningToolsBridge
+
     bridge = LearningToolsBridge()
     assignment_docx = out_path / "academic_assignment_report.docx"
     assignment_v2_docx = out_path / "academic_assignment_report_v2.docx"
     chair_docx = out_path / "chair_report.docx"
-    bridge.convert_docx(assignment_file, assignment_docx)
-    bridge.convert_docx(assignment_v2_file, assignment_v2_docx)
-    bridge.convert_docx(report_file, chair_docx)
+    # DOCX is an optional extra format; a missing converter must not lose the
+    # HTML/CAD deliverables that were already written above.
+    for src, dst in (
+        (assignment_file, assignment_docx),
+        (assignment_v2_file, assignment_v2_docx),
+        (report_file, chair_docx),
+    ):
+        try:
+            bridge.convert_docx(src, dst)
+        except ConversionError as exc:
+            console.print(f"[yellow]DOCX skipped ({dst.name}): {exc}[/yellow]")
 
     # Auto-consolidate report into study guides, summaries & NotebookLM pack
     study_dir = out_path / "study_materials"
@@ -322,10 +353,10 @@ def _handle_chair(prompt: str, p_lower: str, output_dir: Optional[str] = None) -
             convert_docx=False,
             generate_summaries=True,
             generate_notebooklm=True,
-            enable_ai=False
+            enable_ai=False,
         )
     except Exception as e:
-        logger.warning(f"Auto-consolidation note: {e}")
+        console.print(f"[yellow]Auto-consolidation skipped: {e}[/yellow]")
 
     # Print Executive Physics Results Table
     table = Table(title=f"MDIE Physics & Structural Verification: {model.name}")
@@ -336,13 +367,17 @@ def _handle_chair(prompt: str, p_lower: str, output_dir: Optional[str] = None) -
     table.add_column("Verdict", style="bold")
 
     for leg in result.floor_reactions:
-        verdict = "[green]PASS[/green]" if (leg.buckling_passed and leg.yield_passed) else "[red]FAIL[/red]"
+        verdict = (
+            "[green]PASS[/green]"
+            if (leg.buckling_passed and leg.yield_passed)
+            else "[red]FAIL[/red]"
+        )
         table.add_row(
             f"{leg.leg_name} ({leg.leg_id})",
             f"Rz = {leg.axial_reaction_n:.1f} N, Rh = {leg.horizontal_shear_n:.1f} N",
-            f"Stress = {leg.combined_stress_mpa:.1f} MPa (P_cr = {leg.critical_buckling_load_n/1000:.2f} kN)",
+            f"Stress = {leg.combined_stress_mpa:.1f} MPa (P_cr = {leg.critical_buckling_load_n / 1000:.2f} kN)",
             f"Buckling SF: {leg.buckling_safety_factor:.2f}",
-            verdict
+            verdict,
         )
 
     for arm in result.armrests:
@@ -352,15 +387,15 @@ def _handle_chair(prompt: str, p_lower: str, output_dir: Optional[str] = None) -
             f"Fz = {arm.applied_vertical_n:.1f} N, Moment = {arm.overhang_moment_nm:.1f} N*m",
             f"Combined Stress = {arm.strut_combined_stress_mpa:.1f} MPa",
             f"Yield SF: {arm.arm_safety_factor:.2f}",
-            verdict
+            verdict,
         )
 
     table.add_row(
         "3D Space Frame (FEA)",
-        f"Active DOFs: {fea_res['num_nodes']*6}, Members: {fea_res['num_members']}",
+        f"Active DOFs: {fea_res['num_nodes'] * 6}, Members: {fea_res['num_members']}",
         f"Max Von Mises: {fea_res['max_von_mises_mpa']:.1f} MPa, Max Disp: {fea_res['max_displacement_mm']:.2f} mm",
         f"Min SF: {fea_res['min_safety_factor']:.2f}",
-        "[green]PASS[/green]" if fea_res['passed'] else "[red]FAIL[/red]"
+        "[green]PASS[/green]" if fea_res["passed"] else "[red]FAIL[/red]",
     )
 
     console.print(table)
@@ -369,36 +404,42 @@ def _handle_chair(prompt: str, p_lower: str, output_dir: Optional[str] = None) -
     deliv_text = (
         f"[bold green]Manufactured CAD, Physics & Study Deliverables Generated in '{out_path}':[/bold green]\n"
         f"  * [bold cyan]{step_file.name}[/bold cyan] -> ISO-10303 Multi-Body Solid Assembly (10 Named Part Bodies)\n"
-        f"  * [bold cyan]parts/[/bold cyan]      -> Discrete Part Solids ({len(part_files)//2} parts: .step + .stl each for fabrication)\n"
-        f"  * [bold cyan]{stl_file.name}[/bold cyan]  -> Watertight Sliced 3D Print Mesh ({len(stl_file.read_bytes())/1024:.1f} KB)\n"
+        f"  * [bold cyan]parts/[/bold cyan]      -> Discrete Part Solids ({len(part_files) // 2} parts: .step + .stl each for fabrication)\n"
+        f"  * [bold cyan]{stl_file.name}[/bold cyan]  -> Watertight Sliced 3D Print Mesh ({len(stl_file.read_bytes()) / 1024:.1f} KB)\n"
         f"  * [bold cyan]{scad_file.name}[/bold cyan] -> Parametric OpenSCAD Assembly & Exploded View Script\n"
         f"  * [bold cyan]{assignment_docx.name}[/bold cyan] -> Academic Word Document (.docx) (Course Grading Ready)\n"
         f"  * [bold cyan]{report_file.name}[/bold cyan] -> Core Engineering Calculation Sheet (Industry Audit)\n"
         f"  * [bold cyan]{assignment_file.name}[/bold cyan] -> Academic Assignment Dossier (HTML Viewer)\n"
         f"  * [bold cyan]study_materials/[/bold cyan] -> Consolidated Study Notes & NotebookLM Audio Overview Pack"
     )
-    console.print(Panel(deliv_text, title="[bold green]CAD & Force Calculation Complete[/bold green]", border_style="green"))
+    console.print(
+        Panel(
+            deliv_text,
+            title="[bold green]CAD & Force Calculation Complete[/bold green]",
+            border_style="green",
+        )
+    )
     return True
 
 
-def _handle_space_frame(prompt: str, p_lower: str, output_dir: Optional[str] = None) -> bool:
-    from physics.fea_3d import build_space_truss_tower_model, build_cantilever_space_frame_model
+def _handle_space_frame(prompt: str, p_lower: str, output_dir: str | None = None) -> bool:
     from cad.space_frame_cad import SpaceFrameCADEngine
+    from physics.fea_3d import build_cantilever_space_frame_model, build_space_truss_tower_model
 
     out_path = Path(output_dir or "Project/space_frame")
     out_path.mkdir(parents=True, exist_ok=True)
 
     # Extract load if present (e.g. "5 kN" or "5000 N")
     load_val = None
-    kn_match = re.search(r'(\d+(?:\.\d+)?)\s*kn', p_lower)
+    kn_match = re.search(r"(\d+(?:\.\d+)?)\s*kn", p_lower)
     if kn_match:
         load_val = float(kn_match.group(1)) * 1000.0
-    n_match = re.search(r'(\d+(?:\.\d+)?)\s*(?:n|newtons?)', p_lower)
+    n_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:n|newtons?)", p_lower)
     if n_match and not kn_match:
         load_val = float(n_match.group(1))
 
     # Extract height or length if present (e.g. "8 m" or "8 meters")
-    dim_match = re.search(r'(\d+(?:\.\d+)?)\s*(?:m|meters?)', p_lower)
+    dim_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:m|meters?)", p_lower)
     dim_val = float(dim_match.group(1)) if dim_match else None
 
     if "cantilever" in p_lower or "girder" in p_lower:
@@ -410,10 +451,14 @@ def _handle_space_frame(prompt: str, p_lower: str, output_dir: Optional[str] = N
         w_n = load_val or 3000.0
         solver = build_space_truss_tower_model(height_m=h_m, wind_load_n=w_n)
 
-    console.print(f"[bold green][1/3] Solving 3D Direct Stiffness FEA ({solver.name})...[/bold green]")
+    console.print(
+        f"[bold green][1/3] Solving 3D Direct Stiffness FEA ({solver.name})...[/bold green]"
+    )
     fea_res = solver.solve()
 
-    console.print(f"[bold green][2/3] Generating 3D CAD Solids (.STEP, .STL, .SCAD, .HTML)...[/bold green]")
+    console.print(
+        "[bold green][2/3] Generating 3D CAD Solids (.STEP, .STL, .SCAD, .HTML)...[/bold green]"
+    )
 
     scad_file = out_path / "space_frame.scad"
     with open(scad_file, "w", encoding="utf-8") as f:
@@ -428,18 +473,23 @@ def _handle_space_frame(prompt: str, p_lower: str, output_dir: Optional[str] = N
     with open(step_file, "w", encoding="utf-8") as f:
         f.write(SpaceFrameCADEngine.export_step_solid(solver))
 
-    console.print(f"[bold green][3/3] Generating Engineering Calculation Audit Sheet...[/bold green]")
+    console.print(
+        "[bold green][3/3] Generating Engineering Calculation Audit Sheet...[/bold green]"
+    )
     rep_path = out_path / "space_frame_report.html"
-    rows = "".join(f"<tr><td>{m['member_id']}</td><td>{m['axial_force_n']:.1f} N</td><td>{m['max_moment_nm']:.1f} N*m</td><td>{m['von_mises_mpa']:.1f} MPa</td><td>{m['safety_factor']:.2f}</td></tr>" for m in fea_res['members'][:20])
+    rows = "".join(
+        f"<tr><td>{m['member_id']}</td><td>{m['axial_force_n']:.1f} N</td><td>{m['max_moment_nm']:.1f} N*m</td><td>{m['von_mises_mpa']:.1f} MPa</td><td>{m['safety_factor']:.2f}</td></tr>"
+        for m in fea_res["members"][:20]
+    )
     html_content = f"""<!DOCTYPE html><html><head><meta charset="utf-8"><title>{solver.name} Report</title>
     <style>body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0b1120; color: #f8fafc; padding: 30px; }} table {{ width: 100%; border-collapse: collapse; margin-top: 15px; }} th, td {{ padding: 10px 14px; border: 1px solid #334155; text-align: left; }} th {{ background: #1e293b; color: #38bdf8; font-weight: 600; }} tr:nth-child(even) {{ background: #0f172a; }} .metric-card {{ background: #1e293b; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; display: inline-block; margin-right: 15px; border-left: 4px solid #38bdf8; }}</style>
     </head><body><h1>MDIE 3D Space Frame FEA Audit Report</h1><h2>Structure: {solver.name}</h2>
     <div>
-      <div class="metric-card"><div>Active DOFs</div><strong style="font-size:1.4em;color:#38bdf8;">{fea_res['num_nodes']*6}</strong></div>
-      <div class="metric-card"><div>Total Members</div><strong style="font-size:1.4em;color:#38bdf8;">{fea_res['num_members']}</strong></div>
-      <div class="metric-card"><div>Max Von Mises</div><strong style="font-size:1.4em;color:#38bdf8;">{fea_res['max_von_mises_mpa']:.1f} MPa</strong></div>
-      <div class="metric-card"><div>Min Safety Factor</div><strong style="font-size:1.4em;color:#4ade80;">{fea_res['min_safety_factor']:.2f}</strong></div>
-      <div class="metric-card"><div>Max Deflection</div><strong style="font-size:1.4em;color:#38bdf8;">{fea_res['max_displacement_mm']:.2f} mm</strong></div>
+      <div class="metric-card"><div>Active DOFs</div><strong style="font-size:1.4em;color:#38bdf8;">{fea_res["num_nodes"] * 6}</strong></div>
+      <div class="metric-card"><div>Total Members</div><strong style="font-size:1.4em;color:#38bdf8;">{fea_res["num_members"]}</strong></div>
+      <div class="metric-card"><div>Max Von Mises</div><strong style="font-size:1.4em;color:#38bdf8;">{fea_res["max_von_mises_mpa"]:.1f} MPa</strong></div>
+      <div class="metric-card"><div>Min Safety Factor</div><strong style="font-size:1.4em;color:#4ade80;">{fea_res["min_safety_factor"]:.2f}</strong></div>
+      <div class="metric-card"><div>Max Deflection</div><strong style="font-size:1.4em;color:#38bdf8;">{fea_res["max_displacement_mm"]:.2f} mm</strong></div>
     </div>
     <h3>Top Loaded Members (First 20)</h3>
     <table><tr><th>Member ID</th><th>Axial Force</th><th>Max Moment</th><th>Von Mises Stress</th><th>Safety Factor</th></tr>{rows}</table></body></html>"""
@@ -452,38 +502,66 @@ def _handle_space_frame(prompt: str, p_lower: str, output_dir: Optional[str] = N
     table.add_column("Calculated Value", style="bold")
     table.add_column("Compliance", style="bold")
 
-    table.add_row("Nodes & Active DOFs", f"{fea_res['num_nodes']} Nodes ({fea_res['num_nodes']*6} DOFs)", "[green]EQUILIBRIUM OK[/green]")
+    table.add_row(
+        "Nodes & Active DOFs",
+        f"{fea_res['num_nodes']} Nodes ({fea_res['num_nodes'] * 6} DOFs)",
+        "[green]EQUILIBRIUM OK[/green]",
+    )
     table.add_row("Total Frame Members", f"{fea_res['num_members']} Members", "[green]OK[/green]")
-    table.add_row("Max Von Mises Stress", f"{fea_res['max_von_mises_mpa']:.2f} MPa", "[green]PASS[/green]" if fea_res['passed'] else "[red]FAIL[/red]")
-    table.add_row("Min Member Safety Factor", f"{fea_res['min_safety_factor']:.2f}", "[green]PASS[/green]" if fea_res['min_safety_factor'] >= 2.0 else "[yellow]ADEQUATE[/yellow]")
-    table.add_row("Max 3D Elastic Deflection", f"{fea_res['max_displacement_mm']:.3f} mm", "[green]RIGID[/green]")
+    table.add_row(
+        "Max Von Mises Stress",
+        f"{fea_res['max_von_mises_mpa']:.2f} MPa",
+        "[green]PASS[/green]" if fea_res["passed"] else "[red]FAIL[/red]",
+    )
+    table.add_row(
+        "Min Member Safety Factor",
+        f"{fea_res['min_safety_factor']:.2f}",
+        "[green]PASS[/green]"
+        if fea_res["min_safety_factor"] >= 2.0
+        else "[yellow]ADEQUATE[/yellow]",
+    )
+    table.add_row(
+        "Max 3D Elastic Deflection",
+        f"{fea_res['max_displacement_mm']:.3f} mm",
+        "[green]RIGID[/green]",
+    )
 
     console.print(table)
 
     deliv_text = (
         f"[bold green]Manufactured CAD & Physics Deliverables Generated in '{out_path}':[/bold green]\n"
         f"  * [bold cyan]{step_file.name}[/bold cyan] -> ISO-10303 Solid Multi-Body Assembly (FreeCAD, SolidWorks)\n"
-        f"  * [bold cyan]{stl_file.name}[/bold cyan]  -> Watertight 3D Printable Mesh ({len(stl_bytes)/1024:.1f} KB)\n"
+        f"  * [bold cyan]{stl_file.name}[/bold cyan]  -> Watertight 3D Printable Mesh ({len(stl_bytes) / 1024:.1f} KB)\n"
         f"  * [bold cyan]{scad_file.name}[/bold cyan] -> Parametric OpenSCAD Script (with stress color gradient)\n"
         f"  * [bold cyan]{rep_path.name}[/bold cyan] -> Engineering Calculation Audit Sheet\n"
         f"  * [bold yellow]View in CAD:[/bold yellow] Run [cyan]python -m cli view {out_path.name}[/cyan] (OpenSCAD / FreeCAD)"
     )
-    console.print(Panel(deliv_text, title="[bold green]CAD & Force Calculation Complete[/bold green]", border_style="green"))
+    console.print(
+        Panel(
+            deliv_text,
+            title="[bold green]CAD & Force Calculation Complete[/bold green]",
+            border_style="green",
+        )
+    )
     return True
 
 
-def _handle_generative(prompt: str, p_lower: str, output_dir: Optional[str] = None) -> bool:
+def _handle_generative(prompt: str, p_lower: str, output_dir: str | None = None) -> bool:
     from ai.generative_agent import GenerativeEngineeringAgent
     from drafting.blueprint_2d import Blueprint2DGenerator
 
     # Extract clean project slug
-    words = [w for w in re.findall(r'[a-zA-Z0-9]+', p_lower) if w not in ["design", "a", "an", "the", "with", "and", "for", "in", "of", "to"]]
+    words = [
+        w
+        for w in re.findall(r"[a-zA-Z0-9]+", p_lower)
+        if w not in ["design", "a", "an", "the", "with", "and", "for", "in", "of", "to"]
+    ]
     slug = "_".join(words[:3]) if words else "generative_part"
 
     out_path = Path(output_dir or f"Project/{slug}")
     out_path.mkdir(parents=True, exist_ok=True)
 
-    console.print(f"[bold green][1/3] Synthesizing CAD & Solving Physics On The Fly...[/bold green]")
+    console.print("[bold green][1/3] Synthesizing CAD & Solving Physics On The Fly...[/bold green]")
     res = GenerativeEngineeringAgent.process(prompt, out_path)
 
     # 1. OpenSCAD script
@@ -498,15 +576,21 @@ def _handle_generative(prompt: str, p_lower: str, output_dir: Optional[str] = No
 
     bp_html_file = out_path / f"{slug}_blueprint.html"
     with open(bp_html_file, "w", encoding="utf-8") as f:
-        f.write(Blueprint2DGenerator.generate_html_blueprint_page(res.blueprint_svg, title=res.title))
+        f.write(
+            Blueprint2DGenerator.generate_html_blueprint_page(res.blueprint_svg, title=res.title)
+        )
 
     # 3. Calculation Report
     rep_file = out_path / f"{slug}_report.html"
     with open(rep_file, "w", encoding="utf-8") as f:
         f.write(res.report_html)
 
-    console.print(f"[bold green][2/3] Generating 2D Blueprint & Engineering Calculation Sheet...[/bold green]")
-    console.print(f"[bold green][3/3] Deterministic Verification Complete: {res.verdict}[/bold green]")
+    console.print(
+        "[bold green][2/3] Generating 2D Blueprint & Engineering Calculation Sheet...[/bold green]"
+    )
+    console.print(
+        f"[bold green][3/3] Deterministic Verification Complete: {res.verdict}[/bold green]"
+    )
 
     # Table
     table = Table(title=f"MDIE Generative Engineering Deliverables: {res.title}")
@@ -516,8 +600,14 @@ def _handle_generative(prompt: str, p_lower: str, output_dir: Optional[str] = No
 
     table.add_row("Component Category", res.category, "[green]VERIFIED[/green]")
     table.add_row("Material", res.material_name, f"Yield: {res.yield_strength_mpa:.0f} MPa")
-    table.add_row("Max Calculated Stress", f"{res.max_stress_mpa:.1f} MPa", "[green]DETERMINISTIC[/green]")
-    table.add_row("Minimum Safety Factor", f"{res.min_safety_factor:.2f}", "[green]PASS[/green]" if res.passed else "[red]FAIL[/red]")
+    table.add_row(
+        "Max Calculated Stress", f"{res.max_stress_mpa:.1f} MPa", "[green]DETERMINISTIC[/green]"
+    )
+    table.add_row(
+        "Minimum Safety Factor",
+        f"{res.min_safety_factor:.2f}",
+        "[green]PASS[/green]" if res.passed else "[red]FAIL[/red]",
+    )
     for k, v in list(res.key_metrics.items())[:3]:
         table.add_row(str(k), str(v), "[green]OK[/green]")
 
@@ -531,28 +621,37 @@ def _handle_generative(prompt: str, p_lower: str, output_dir: Optional[str] = No
         f"  * [bold cyan]{rep_file.name}[/bold cyan] -> Engineering Calculation Audit Sheet\n"
         f"  * [bold yellow]View in CAD:[/bold yellow] Run [cyan]python -m cli view {out_path.name}[/cyan]"
     )
-    console.print(Panel(deliv_text, title=f"[bold green]{res.title} Complete[/bold green]", border_style="green"))
+    console.print(
+        Panel(
+            deliv_text, title=f"[bold green]{res.title} Complete[/bold green]", border_style="green"
+        )
+    )
     return True
 
 
-def _handle_shaft(prompt: str, p_lower: str, output_dir: Optional[str] = None) -> bool:
+def _handle_shaft(prompt: str, p_lower: str, output_dir: str | None = None) -> bool:
     from ai.parser import NLParser
-    from physics.solver import PhysicsSolver
-    from cad.openscad import OpenSCADGenerator
-    from cad.stl_exporter import STLExporter
     from cad.step_exporter import STEPExporter
+    from cad.stl_exporter import STLExporter
+    from physics.solver import PhysicsSolver
     from reporting.generator import ReportGenerator
 
     out_path = Path(output_dir or "Project/shaft")
     out_path.mkdir(parents=True, exist_ok=True)
 
-    console.print("[bold green][1/3] Parsing Machine Geometry & Power Transmission Parameters...[/bold green]")
+    console.print(
+        "[bold green][1/3] Parsing Machine Geometry & Power Transmission Parameters...[/bold green]"
+    )
     model, logs = NLParser.parse(prompt)
 
-    console.print(f"[bold green][2/3] Solving Mechanics, Goodman Fatigue & Bearings ({model.name})...[/bold green]")
+    console.print(
+        f"[bold green][2/3] Solving Mechanics, Goodman Fatigue & Bearings ({model.name})...[/bold green]"
+    )
     result = PhysicsSolver.solve(model)
 
-    console.print("[bold green][3/3] Generating CAD Solids (.STEP, .STL, .SCAD, .HTML)...[/bold green]")
+    console.print(
+        "[bold green][3/3] Generating CAD Solids (.STEP, .STL, .SCAD, .HTML)...[/bold green]"
+    )
 
     scad_file = out_path / "shaft.scad"
     with open(scad_file, "w", encoding="utf-8") as f:
@@ -574,6 +673,7 @@ def _handle_shaft(prompt: str, p_lower: str, output_dir: Optional[str] = None) -
 
     # 2D Technical Drawing Blueprint
     from drafting.blueprint_2d import Blueprint2DGenerator
+
     bp_svg_file = out_path / "shaft_blueprint.svg"
     bp_svg = Blueprint2DGenerator.generate_shaft_blueprint_svg(model, result, theme="blueprint")
     with open(bp_svg_file, "w", encoding="utf-8") as f:
@@ -581,7 +681,11 @@ def _handle_shaft(prompt: str, p_lower: str, output_dir: Optional[str] = None) -
 
     bp_html_file = out_path / "shaft_blueprint.html"
     with open(bp_html_file, "w", encoding="utf-8") as f:
-        f.write(Blueprint2DGenerator.generate_html_blueprint_page(bp_svg, title=f"{model.name} Technical Drawing"))
+        f.write(
+            Blueprint2DGenerator.generate_html_blueprint_page(
+                bp_svg, title=f"{model.name} Technical Drawing"
+            )
+        )
 
     # Summary table
     table = Table(title=f"MDIE Verification Summary: {model.name}")
@@ -590,22 +694,45 @@ def _handle_shaft(prompt: str, p_lower: str, output_dir: Optional[str] = None) -
     table.add_column("Allowable Limit", style="yellow")
     table.add_column("Compliance", style="bold")
 
-    table.add_row("Transmitted Torque", f"{result.applied_torque_nm:.1f} N*m", "-", "[green]OK[/green]")
-    table.add_row("Yield Safety Factor", f"{result.min_yield_safety_factor:.2f}", f">= {model.constraints.min_yield_safety_factor:.2f}", "[green]PASS[/green]" if result.yield_passed else "[red]FAIL[/red]")
-    table.add_row("Fatigue SF (Goodman)", f"{result.min_fatigue_safety_factor:.2f}", f">= {model.constraints.min_fatigue_safety_factor:.2f}", "[green]PASS[/green]" if result.fatigue_passed else "[red]FAIL[/red]")
-    table.add_row("Max Shaft Deflection", f"{result.max_deflection_mm:.3f} mm", f"<= {model.constraints.max_deflection_mm:.3f} mm", "[green]PASS[/green]" if result.deflection_passed else "[red]FAIL[/red]")
+    table.add_row(
+        "Transmitted Torque", f"{result.applied_torque_nm:.1f} N*m", "-", "[green]OK[/green]"
+    )
+    table.add_row(
+        "Yield Safety Factor",
+        f"{result.min_yield_safety_factor:.2f}",
+        f">= {model.constraints.min_yield_safety_factor:.2f}",
+        "[green]PASS[/green]" if result.yield_passed else "[red]FAIL[/red]",
+    )
+    table.add_row(
+        "Fatigue SF (Goodman)",
+        f"{result.min_fatigue_safety_factor:.2f}",
+        f">= {model.constraints.min_fatigue_safety_factor:.2f}",
+        "[green]PASS[/green]" if result.fatigue_passed else "[red]FAIL[/red]",
+    )
+    table.add_row(
+        "Max Shaft Deflection",
+        f"{result.max_deflection_mm:.3f} mm",
+        f"<= {model.constraints.max_deflection_mm:.3f} mm",
+        "[green]PASS[/green]" if result.deflection_passed else "[red]FAIL[/red]",
+    )
     table.add_row("Total Mass", f"{result.total_mass_kg:.3f} kg", "-", "[green]OPTIMAL[/green]")
 
     console.print(table)
 
     deliv_text = (
         f"[bold green]Manufactured CAD & Physics Deliverables Generated in '{out_path}':[/bold green]\n"
-        f"  * [bold cyan]{step_file.name}[/bold cyan] -> ISO-10303 Solid CAD Model ({len(step_data)/1024:.1f} KB)\n"
-        f"  * [bold cyan]{stl_file.name}[/bold cyan]  -> Watertight 3D Printable STL ({len(stl_data)/1024:.1f} KB)\n"
+        f"  * [bold cyan]{step_file.name}[/bold cyan] -> ISO-10303 Solid CAD Model ({len(step_data) / 1024:.1f} KB)\n"
+        f"  * [bold cyan]{stl_file.name}[/bold cyan]  -> Watertight 3D Printable STL ({len(stl_data) / 1024:.1f} KB)\n"
         f"  * [bold cyan]{scad_file.name}[/bold cyan] -> Parametric OpenSCAD Script\n"
         f"  * [bold cyan]{bp_svg_file.name}[/bold cyan] -> 2D Technical Drawing Blueprint (ISO 128 / ANSI Y14.5)\n"
         f"  * [bold cyan]{bp_html_file.name}[/bold cyan] -> Printable Vector Blueprint Sheet\n"
         f"  * [bold cyan]{report_file.name}[/bold cyan] -> Full Engineering Calculation Audit Sheet"
     )
-    console.print(Panel(deliv_text, title="[bold green]CAD & Force Calculation Complete[/bold green]", border_style="green"))
+    console.print(
+        Panel(
+            deliv_text,
+            title="[bold green]CAD & Force Calculation Complete[/bold green]",
+            border_style="green",
+        )
+    )
     return True

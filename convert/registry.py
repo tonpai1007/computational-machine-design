@@ -9,7 +9,7 @@ unavailable rather than crashing when its dependency is missing -
 from __future__ import annotations
 
 import importlib
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 DOCUMENT = "document"
 SOLID = "solid"
@@ -30,34 +30,21 @@ class Format:
 
 
 FORMATS: dict[str, Format] = {
-    f.name: f for f in [
-        Format("html", DOCUMENT, (".html", ".htm"),
-               "Rich engineering report", ("Markdown",)),
-        Format("md", DOCUMENT, (".md", ".markdown"),
-               "Plain-text design report", ()),
-        Format("docx", DOCUMENT, (".docx",),
-               "Word document", ("docx", "bs4")),
-        Format("pdf", DOCUMENT, (".pdf",),
-               "Print-ready document", ("fitz",)),
+    f.name: f
+    for f in [
+        Format("html", DOCUMENT, (".html", ".htm"), "Rich engineering report", ("Markdown",)),
+        Format("md", DOCUMENT, (".md", ".markdown"), "Plain-text design report", ()),
+        Format("docx", DOCUMENT, (".docx",), "Word document", ("docx", "bs4")),
+        Format("pdf", DOCUMENT, (".pdf",), "Print-ready document", ("fitz",)),
         Format("txt", DOCUMENT, (".txt",), "Plain text", ()),
-
-        Format("step", SOLID, (".step", ".stp"),
-               "ISO 10303 AP214 solid", (), reads=True),
-        Format("stl", SOLID, (".stl",),
-               "Mesh for printing/visualisation", ("numpy",), reads=True),
-        Format("3mf", SOLID, (".3mf",),
-               "Compressed 3D Manufacturing mesh", ("numpy",), reads=True),
-        Format("obj", SOLID, (".obj",),
-               "Wavefront mesh interchange", (), reads=True),
-        Format("iges", SOLID, (".igs", ".iges"),
-               "Legacy surface exchange format", ()),
-        Format("scad", SOLID, (".scad",),
-               "OpenSCAD parametric source", ()),
-
-        Format("svg", SHEET, (".svg",),
-               "Vector drawing sheet", (), reads=True),
-        Format("png", SHEET, (".png",),
-               "Raster image of a sheet", ("fitz",)),
+        Format("step", SOLID, (".step", ".stp"), "ISO 10303 AP214 solid", (), reads=True),
+        Format("stl", SOLID, (".stl",), "Mesh for printing/visualisation", ("numpy",), reads=True),
+        Format("3mf", SOLID, (".3mf",), "Compressed 3D Manufacturing mesh", ("numpy",), reads=True),
+        Format("obj", SOLID, (".obj",), "Wavefront mesh interchange", (), reads=True),
+        Format("iges", SOLID, (".igs", ".iges"), "Legacy surface exchange format", ()),
+        Format("scad", SOLID, (".scad",), "OpenSCAD parametric source", ()),
+        Format("svg", SHEET, (".svg",), "Vector drawing sheet", (), reads=True),
+        Format("png", SHEET, (".png",), "Raster image of a sheet", ("fitz",)),
     ]
 }
 
@@ -104,15 +91,21 @@ def available_formats(category: str | None = None) -> list[str]:
 
 def missing_dependencies() -> dict[str, list[str]]:
     """Map each unavailable format to the packages it is waiting on."""
-    return {name: [p for p in f.requires if not has_dependency(p)]
-            for name, f in FORMATS.items()
-            if any(not has_dependency(p) for p in f.requires)}
+    return {
+        name: [p for p in f.requires if not has_dependency(p)]
+        for name, f in FORMATS.items()
+        if any(not has_dependency(p) for p in f.requires)
+    }
 
 
 def describe_formats() -> str:
     """Markdown summary of formats, grouped by category, for ``--list-formats``."""
     lines = ["# MDIE convertible formats", ""]
-    for category, title in ((DOCUMENT, "Documents"), (SOLID, "CAD solids"), (SHEET, "Drawing sheets")):
+    for category, title in (
+        (DOCUMENT, "Documents"),
+        (SOLID, "CAD solids"),
+        (SHEET, "Drawing sheets"),
+    ):
         lines += [f"## {title}", ""]
         for name, f in sorted(FORMATS.items()):
             if f.category != category:

@@ -3,8 +3,10 @@ Tests for Static Equilibrium & Reactions Solver
 """
 
 import pytest
-from core.models import EngineeringModel, Support, PointLoad, DistributedLoad, ShaftSegment
+
+from core.models import EngineeringModel, PointLoad, ShaftSegment, Support
 from physics.equilibrium import EquilibriumSolver
+
 
 def test_simply_supported_center_load():
     # Beam length 1.0m, supports at 0 and 1.0, point load 1000 N at center 0.5m
@@ -12,11 +14,8 @@ def test_simply_supported_center_load():
         name="Center Load Beam",
         total_length=1.0,
         segments=[ShaftSegment(start_pos=0.0, end_pos=1.0, outer_diameter=0.03)],
-        supports=[
-            Support(name="A", position=0.0),
-            Support(name="B", position=1.0)
-        ],
-        point_loads=[PointLoad(position=0.5, magnitude=1000.0)]
+        supports=[Support(name="A", position=0.0), Support(name="B", position=1.0)],
+        point_loads=[PointLoad(position=0.5, magnitude=1000.0)],
     )
     reactions, logs = EquilibriumSolver.solve_reactions(model)
     assert len(reactions) == 2
@@ -29,6 +28,7 @@ def test_simply_supported_center_load():
     assert pytest.approx(dist["max_bending_moment"], 0.5) == 250.0
     assert pytest.approx(dist["max_shear_force"], 0.1) == 500.0
 
+
 def test_cantilever_point_load():
     # Cantilever 2m length, fixed at x=0, point load 500 N at tip x=2m
     model = EngineeringModel(
@@ -36,7 +36,7 @@ def test_cantilever_point_load():
         total_length=2.0,
         segments=[ShaftSegment(start_pos=0.0, end_pos=2.0, outer_diameter=0.04)],
         supports=[Support(name="Fixed Root", support_type="fixed", position=0.0)],
-        point_loads=[PointLoad(position=2.0, magnitude=500.0)]
+        point_loads=[PointLoad(position=2.0, magnitude=500.0)],
     )
     reactions, logs = EquilibriumSolver.solve_reactions(model)
     assert len(reactions) == 1

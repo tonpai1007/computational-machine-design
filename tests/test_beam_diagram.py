@@ -5,8 +5,8 @@ import re
 import pytest
 
 from core.frame_model import FrameDesignModel
-from physics.frame_physics import FramePhysicsSolver
 from drafting.beam_diagram import SimplySupportedRail, build_blocks
+from physics.frame_physics import FramePhysicsSolver
 
 
 @pytest.fixture
@@ -107,10 +107,10 @@ def test_shear_series_magnitude_within_plot_range():
     """Shear ordinates must sit inside the declared y-axis window."""
     v_block, _, _, _ = build_blocks(8)
     body = v_block.split("xychart-beta\n", 1)[1]
-    values = [float(v) for v in
-              re.search(r"^\s*line \[([^\]]*)\]$", body, re.M).group(1).split(",")]
-    yaxis = re.search(r"^\s*y-axis \"[^\"]*\" (-?[\d.]+) --> (-?[\d.]+)$",
-                      body, re.M)
+    values = [
+        float(v) for v in re.search(r"^\s*line \[([^\]]*)\]$", body, re.M).group(1).split(",")
+    ]
+    yaxis = re.search(r"^\s*y-axis \"[^\"]*\" (-?[\d.]+) --> (-?[\d.]+)$", body, re.M)
     lo, hi = float(yaxis.group(1)), float(yaxis.group(2))
     assert lo < 0 < hi
     assert all(lo <= v <= hi for v in values)
@@ -121,8 +121,9 @@ def test_shear_series_magnitude_within_plot_range():
 def test_moment_series_starts_and_ends_at_zero():
     _, m_block, _, _ = build_blocks(8)
     body = m_block.split("xychart-beta\n", 1)[1]
-    values = [float(v) for v in
-              re.search(r"^\s*line \[([^\]]*)\]$", body, re.M).group(1).split(",")]
+    values = [
+        float(v) for v in re.search(r"^\s*line \[([^\]]*)\]$", body, re.M).group(1).split(",")
+    ]
     assert values[0] == pytest.approx(0.0)
     assert values[-1] == pytest.approx(0.0)
     assert max(values) == pytest.approx(78000.0)

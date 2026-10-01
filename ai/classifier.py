@@ -8,33 +8,71 @@ Accurately categorizes user engineering prompts into specific machine design dom
 - 'unsupported': Recognizes out-of-scope concepts explicitly rather than falling back silently.
 """
 
-import re
-from typing import Tuple, Dict, Any, Optional
+from typing import Any
 
 
 class DomainClassifier:
     """Classifies natural language mechanical requests into supported MDIE domains."""
 
     BRACKET_KEYWORDS = [
-        "bracket", "mount", "mounting", "motor mount", "l-bracket", "l bracket",
-        "flange plate", "faceplate", "adapter plate", "motor plate", "bolt hole",
-        "bolt pattern", "stiffener plate"
+        "bracket",
+        "mount",
+        "mounting",
+        "motor mount",
+        "l-bracket",
+        "l bracket",
+        "flange plate",
+        "faceplate",
+        "adapter plate",
+        "motor plate",
+        "bolt hole",
+        "bolt pattern",
+        "stiffener plate",
     ]
 
     SPACE_FRAME_KEYWORDS = [
-        "tower", "truss", "space frame", "girder", "spatial frame", "lattice",
-        "cantilever truss", "transmission tower", "mast"
+        "tower",
+        "truss",
+        "space frame",
+        "girder",
+        "spatial frame",
+        "lattice",
+        "cantilever truss",
+        "transmission tower",
+        "mast",
     ]
 
     FRAME_KEYWORDS = [
-        "chair", "armchair", "furniture", "stool", "table", "desk", "bench",
-        "workbench", "tripod", "3 leg", "three leg", "4 leg", "four leg",
-        "armrest", "seating", "stand"
+        "chair",
+        "armchair",
+        "furniture",
+        "stool",
+        "table",
+        "desk",
+        "bench",
+        "workbench",
+        "tripod",
+        "3 leg",
+        "three leg",
+        "4 leg",
+        "four leg",
+        "armrest",
+        "seating",
+        "stand",
     ]
 
     SHAFT_KEYWORDS = [
-        "shaft", "axle", "stepped shaft", "spindle", "rotor", "bearing journal",
-        "keyway", "torque", "rpm", "transmission shaft", "drive shaft"
+        "shaft",
+        "axle",
+        "stepped shaft",
+        "spindle",
+        "rotor",
+        "bearing journal",
+        "keyway",
+        "torque",
+        "rpm",
+        "transmission shaft",
+        "drive shaft",
     ]
 
     UNSUPPORTED_DOMAINS = {
@@ -47,11 +85,11 @@ class DomainClassifier:
         "belt": "V-Belt & Timing Belt Drives",
         "chain": "Roller Chain Drives",
         "fastener": "Threaded Fasteners & Bolted Joint Analysis",
-        "weld": "Welded Structural Joints (AWS Standards)"
+        "weld": "Welded Structural Joints (AWS Standards)",
     }
 
     @classmethod
-    def classify(cls, prompt: str) -> Tuple[str, Dict[str, Any]]:
+    def classify(cls, prompt: str) -> tuple[str, dict[str, Any]]:
         """
         Classify prompt into domain.
         Returns (domain_key, metadata).
@@ -80,7 +118,7 @@ class DomainClassifier:
                 return "unsupported", {
                     "unsupported_domain": domain_name,
                     "keyword": kw,
-                    "message": f"MDIE currently supports: 1) Rotating Shafts, 2) Frames/Furniture, 3) 3D Space Trusses, and 4) Mounting Brackets."
+                    "message": "MDIE currently supports: 1) Rotating Shafts, 2) Frames/Furniture, 3) 3D Space Trusses, and 4) Mounting Brackets.",
                 }
 
         # 6. Fallback based on physics cues

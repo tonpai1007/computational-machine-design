@@ -71,7 +71,8 @@ class _UnavailableConverter:
         raise LearningToolsUnavailable(
             "The learning-tools DOCX converter is not installed. Set "
             "LEARNING_TOOLS_PATH to its checkout, or convert without the AI "
-            "pass to use MDIE's built-in renderer.")
+            "pass to use MDIE's built-in renderer."
+        )
 
 
 #: The real converter when present, otherwise an in-repo stand-in.

@@ -8,10 +8,10 @@ Converts arbitrary 3D FEA frame models (nodes and members) into:
 
 import math
 import struct
-from typing import List, Tuple, Dict, Any, Optional
-from physics.fea_3d import FEA3DSolver, FEAMember, FEANode
+
 from cad.assembly import MeshPrimitives, Point3D, Triangle
 from cad.step_assembly import MultiBodySTEPExporter, SolidPart
+from physics.fea_3d import FEA3DSolver, FEAMember
 
 
 class SpaceFrameCADEngine:
@@ -21,11 +21,11 @@ class SpaceFrameCADEngine:
     def generate_openscad(solver: FEA3DSolver, color_by_stress: bool = True) -> str:
         """Generates OpenSCAD source code for the 3D frame assembly."""
         lines = [
-            f"// ==================================================================",
-            f"// MDIE PARAMETRIC 3D SPACE FRAME CAD",
+            "// ==================================================================",
+            "// MDIE PARAMETRIC 3D SPACE FRAME CAD",
             f"// Structure: {solver.name}",
             f"// Nodes: {len(solver.nodes)}, Members: {len(solver.members)}",
-            f"// ==================================================================",
+            "// ==================================================================",
             "$fn = 24;",
             "",
             "// Helper: Beam cylinder connecting two 3D points",
@@ -61,11 +61,15 @@ class SpaceFrameCADEngine:
                 r = round(ratio, 2)
                 g = round(max(0.0, 0.8 - ratio * 0.6), 2)
                 b = round(max(0.0, 1.0 - ratio), 2)
-                lines.append(f"    color([{r}, {g}, {b}]) // {m.id} ({m.von_mises_stress_mpa:.1f} MPa)")
+                lines.append(
+                    f"    color([{r}, {g}, {b}]) // {m.id} ({m.von_mises_stress_mpa:.1f} MPa)"
+                )
             else:
                 lines.append(f"    color([0.35, 0.45, 0.55]) // {m.id}")
 
-            lines.append(f"        beam([{p1[0]}, {p1[1]}, {p1[2]}], [{p2[0]}, {p2[1]}, {p2[2]}], {dia});")
+            lines.append(
+                f"        beam([{p1[0]}, {p1[1]}, {p1[2]}], [{p2[0]}, {p2[1]}, {p2[2]}], {dia});"
+            )
 
         lines.append("}")
         lines.append("")
@@ -73,7 +77,7 @@ class SpaceFrameCADEngine:
         return "\n".join(lines)
 
     @classmethod
-    def generate_member_triangles(cls, member: FEAMember) -> List[Triangle]:
+    def generate_member_triangles(cls, member: FEAMember) -> list[Triangle]:
         """Generate closed watertight triangular mesh for a single beam member."""
         p1: Point3D = (member.n1.x * 1000.0, member.n1.y * 1000.0, member.n1.z * 1000.0)
         p2: Point3D = (member.n2.x * 1000.0, member.n2.y * 1000.0, member.n2.z * 1000.0)
@@ -83,48 +87,58 @@ class SpaceFrameCADEngine:
     @classmethod
     def export_binary_stl(cls, solver: FEA3DSolver) -> bytes:
         """Exports complete watertight binary STL mesh of the space frame."""
-        all_triangles: List[Triangle] = []
+        all_triangles: list[Triangle] = []
         for m in solver.members:
             all_triangles.extend(cls.generate_member_triangles(m))
 
-        header = f"MDIE 3D Space Frame STL: {solver.name}".encode('ascii')[:80].ljust(80, b'\0')
+        header = f"MDIE 3D Space Frame STL: {solver.name}".encode("ascii")[:80].ljust(80, b"\0")
         count = len(all_triangles)
         body = bytearray()
         body.extend(header)
-        body.extend(struct.pack('<I', count))
+        body.extend(struct.pack("<I", count))
 
         for v1, v2, v3 in all_triangles:
             # Normal calculation
-            ux = v2[0] - v1[0]; uy = v2[1] - v1[1]; uz = v2[2] - v1[2]
-            vx = v3[0] - v1[0]; vy = v3[1] - v1[1]; vz = v3[2] - v1[2]
+            ux = v2[0] - v1[0]
+            uy = v2[1] - v1[1]
+            uz = v2[2] - v1[2]
+            vx = v3[0] - v1[0]
+            vy = v3[1] - v1[1]
+            vz = v3[2] - v1[2]
             nx = uy * vz - uz * vy
             ny = uz * vx - ux * vz
             nz = ux * vy - uy * vx
             mag = math.sqrt(nx**2 + ny**2 + nz**2)
             if mag > 1e-9:
-                nx /= mag; ny /= mag; nz /= mag
+                nx /= mag
+                ny /= mag
+                nz /= mag
             else:
-                nx = 0.0; ny = 0.0; nz = 1.0
+                nx = 0.0
+                ny = 0.0
+                nz = 1.0
 
-            body.extend(struct.pack('<3f', nx, ny, nz))
-            body.extend(struct.pack('<3f', v1[0], v1[1], v1[2]))
-            body.extend(struct.pack('<3f', v2[0], v2[1], v2[2]))
-            body.extend(struct.pack('<3f', v3[0], v3[1], v3[2]))
-            body.extend(struct.pack('<H', 0))
+            body.extend(struct.pack("<3f", nx, ny, nz))
+            body.extend(struct.pack("<3f", v1[0], v1[1], v1[2]))
+            body.extend(struct.pack("<3f", v2[0], v2[1], v2[2]))
+            body.extend(struct.pack("<3f", v3[0], v3[1], v3[2]))
+            body.extend(struct.pack("<H", 0))
 
         return bytes(body)
 
     @classmethod
     def export_step_solid(cls, solver: FEA3DSolver) -> str:
         """Exports multi-body ISO-10303 STEP solid file with each member as a distinct solid part."""
-        parts: List[SolidPart] = []
+        parts: list[SolidPart] = []
         max_vm = max((m.von_mises_stress_mpa for m in solver.members), default=1.0)
         max_vm = max(max_vm, 1e-3)
 
         for m in solver.members:
             tris = cls.generate_member_triangles(m)
             if tris:
-                ratio = min(1.0, m.von_mises_stress_mpa / max_vm) if m.von_mises_stress_mpa > 0 else 0.2
+                ratio = (
+                    min(1.0, m.von_mises_stress_mpa / max_vm) if m.von_mises_stress_mpa > 0 else 0.2
+                )
                 color = (ratio, max(0.0, 0.8 - ratio * 0.6), max(0.0, 1.0 - ratio))
                 parts.append(SolidPart(name=m.id, triangles=tris, color_rgb=color))
 
