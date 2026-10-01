@@ -21,6 +21,7 @@ import matplotlib
 matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
+from matplotlib.axes import Axes
 from matplotlib.patches import Circle, Polygon, Rectangle
 
 from drafting.beam_diagram import SimplySupportedRail
@@ -39,7 +40,7 @@ plt.rcParams["font.family"] = ["Tahoma", "DejaVu Sans", "sans-serif"]
 plt.rcParams["axes.unicode_minus"] = False
 
 
-def _support_pinned(ax: plt.Axes, x: float, y: float, size: float, label: str) -> None:
+def _support_pinned(ax: Axes, x: float, y: float, size: float, label: str) -> None:
     """Pinned support: triangle on a hatched ground line."""
     tri = [
         (x, y),
@@ -82,7 +83,7 @@ def _support_roller(ax: plt.Axes, x: float, y: float, size: float, label: str) -
     for k in (-0.6, 0.0, 0.6):
         cx = x + k * size
         ax.add_patch(
-            plt.Circle(
+            Circle(
                 (cx, base - size * 0.22),
                 size * 0.20,
                 facecolor="white",
