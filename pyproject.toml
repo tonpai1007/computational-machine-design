@@ -35,6 +35,7 @@ dev = [
 ]
 
 [project.scripts]
+mdie = "cli:main"
 computational-machine-design = "cli:main"
 
 [tool.setuptools.packages.find]

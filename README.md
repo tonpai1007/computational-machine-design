@@ -177,14 +177,35 @@ mdie "solve a 3D space frame tower under 3 kN wind load"
 * Direct Stiffness Method (12x12 element stiffness, 3D direction cosines, Von Mises stresses).
 * Generates `Project/space_frame/space_frame_report.html`.
 
-### 4.2 Interactive Terminal Mode
-Simply run without arguments to enter an interactive prompt:
+### 4.2 🧭 Interactive Wizard Menu (สำหรับคนไม่อยากจำคำสั่ง)
+
+Simply run `mdie` (or `mdie menu` / double-click `mdie.bat` on Windows) without arguments to open the interactive guided menu:
+
 ```bash
 mdie
-# MDIE > design a chair with 4 legs and two arms
-# MDIE > stepped shaft 600 mm long, 40 mm bearing seats
-# MDIE > spur gear pair 20 teeth module 3 with 50 mm face width
 ```
+
+```text
+╭───────────────── MACHINE DESIGN INTELLIGENCE ENGINE (MDIE) ─────────────────╮
+│ 🧭 เมนูนำทางแบบโต้ตอบ — AI Proposes CAD Geometry • Physics Solves Forces     │
+╰─────────────────────────────────────────────────────────────────────────────╯
+Available Engineering Workflows:
+  [1] 🪑 Armchair Frame       ออกแบบเก้าอี้พักผ่อน (3D CAD, FEA, Academic Report)
+  [2] ⚙️ Transmission Shaft   ออกแบบเพลาส่งกำลัง (ASME B106.1M, Fatigue, Keyways)
+  [3] 🔩 Motor Bracket        ออกแบบแป้นยึดมอเตอร์ / L-Bracket (Bending & Bolts)
+  [4] 🏗️ 3D Space Frame       คำนวณโครงข้อหมุน 3 มิติ (Direct Stiffness FEA)
+  [5] 🔍 Physics Trace & Audit ตรวจสอบที่มาของสูตรและตัวเลข (Derivation Chain)
+  [6] 🔄 Universal Converter  แปลงไฟล์เอกสาร & CAD (Word, PDF, STEP, STL, SCAD)
+  [7] 📐 Engineering Drawings สร้างแบบร่างวิศวกรรม (ISO 128 / ANSI Drawings)
+  [8] 📊 Consolidate Reports  รวบรวมรายงานผลวิศวกรรม (Dossier & Study Notes)
+  [9] 👓 3D CAD Viewer        เปิดดูโมเดล 3D ใน FreeCAD หรือ OpenSCAD
+ [10] ℹ️ System Diagnostics   ตรวจสอบระบบและเครื่องมือที่ติดตั้ง
+  [0] 💬 Natural Language     สั่งงานด้วยภาษาพูด (Free-form English / Thai Prompt)
+  [q] 🚪 Exit / Quit          ออกจากโปรแกรม
+```
+
+Each menu item provides guided step-by-step prompts (with smart engineering defaults), and you can also type any natural language prompt or direct CLI command directly into the prompt without leaving the menu!
+
 
 ### 4.3 File Converter
 
@@ -223,6 +244,31 @@ open a window or block on a dialog. Drawing sheets are rendered with PyMuPDF,
 so no headless Chrome or ImageMagick is needed.
 
 Python API: `from convert import convert_file`.
+
+### 4.4 Physics Trace & Audit (`mdie trace`)
+
+Audit how every engineering number is derived from closed-form solvers:
+
+```bash
+mdie trace                                  # Show pipeline agreement and verification verdict
+mdie trace --member leg                     # Step-by-step mechanics derivation for columns
+mdie trace --member bracket                 # Bracket plate bending & axial derivation
+mdie trace --member rail                    # Seat rail singularity function & deflection
+mdie trace --steps                          # Live calculation log directly from the solver
+mdie trace --values                         # Full provenance table mapping every number to source
+```
+
+### 4.5 Spec Files as Design Prompts
+
+Instead of only typing short phrases in the terminal, you can feed an entire specification document directly into MDIE:
+
+```bash
+mdie spec.docx                              # Reads Word document requirements
+mdie requirements.pdf                       # Extracts requirements from PDF spec
+mdie Project/chair/chair_real_data.md       # Verifies design model from verified datasheet
+```
+
+Supported document formats: `.docx`, `.pdf`, `.md`, `.html`, `.txt`.
 
 ---
 

@@ -34,6 +34,15 @@ from cli.designers import (
 )
 from cli.viewers import find_cad_tools, launch_cad_viewer
 
+if sys.platform == "win32":
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 console = Console()
 
 SUBCOMMANDS = {
@@ -41,6 +50,7 @@ SUBCOMMANDS = {
     "chair",
     "bracket",
     "shaft",
+    "space_frame",
     "solve",
     "optimize",
     "view",
@@ -54,11 +64,16 @@ SUBCOMMANDS = {
     "study",
     "info",
     "help",
+    "trace",
+    "menu",
+    "interactive",
 }
 
 CANNED = {
     "chair": ("Design a chair with two arms and four splayed legs", "Project/chair"),
     "bracket": ("motor mounting bracket with 4 bolt holes, 10 kg, steel", "Project/bracket"),
+    "shaft": ("Design a stepped transmission shaft 500 mm long, 40 mm diameter", "Project/shaft"),
+    "space_frame": ("transmission tower 3D space frame 5 kN load", "Project/space_frame"),
 }
 
 
@@ -168,31 +183,10 @@ def process_prompt(prompt: str, output_dir: str | None = None, auto_open: bool =
 
 
 def interactive_repl() -> None:
-    """Interactive terminal prompt where the user can type anything."""
-    console.print(
-        Panel(
-            "[bold cyan]MACHINE DESIGN INTELLIGENCE ENGINE (MDIE)[/bold cyan]\n"
-            "AI Proposes CAD Solid Geometry. Physics Solves Forces & Stresses.\n"
-            "[italic]Type what you want in plain words (e.g. 'design a chair with 4 legs and two arms', "
-            "'shaft with keyway', or 'exit')[/italic]",
-            border_style="cyan",
-        )
-    )
+    """Interactive terminal prompt with guided numbered menu and natural language REPL."""
+    from cli.interactive import run_interactive_menu
 
-    while True:
-        try:
-            prompt = console.input("\n[bold yellow]MDIE > [/bold yellow]").strip()
-            if not prompt:
-                continue
-            if prompt.lower() in ["exit", "quit", "q"]:
-                console.print("[cyan]Exiting MDIE CLI. Goodbye![/cyan]")
-                break
-            process_prompt(prompt)
-        except (KeyboardInterrupt, EOFError):
-            console.print("\n[cyan]Session ended.[/cyan]")
-            break
-        except Exception as e:
-            console.print(f"[bold red]Error: {str(e)}[/bold red]")
+    run_interactive_menu(main, console)
 
 
 def _show_help() -> None:
@@ -236,7 +230,7 @@ def _show_help() -> None:
             "[bold]Other:[/bold]\n"
             "  mdie info                                 detected tools and providers\n"
             "  mdie trace [--steps|--values|--member NAME]  how the physics numbers are made\n"
-            "  mdie                                      interactive prompt\n\n"
+            "  mdie [menu]                               interactive numbered wizard menu\n\n"
             f"[bold cyan]Convertible formats:[/bold cyan] {conv}\n\n"
             f"[bold cyan]Local CAD tools:[/bold cyan]\n"
             + "\n".join(f"  * {n}: {s}" for n, s in rows)
@@ -483,6 +477,9 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_report(argv[1:])
     if head in ("docx", "convert-docx", "word"):
         return _cmd_convert(["--to", "docx"] + argv[1:])
+    if head in ("menu", "interactive"):
+        interactive_repl()
+        return 0
 
     if head in CANNED:
         prompt, default_dir = CANNED[head]

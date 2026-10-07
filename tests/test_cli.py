@@ -5,9 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from rich.console import Console
 
 from cli import main
 from cli.app import SUBCOMMANDS, _design_flags, _resolve_target
+from cli.interactive import render_header, render_menu_table, run_interactive_menu
 from cli.viewers import find_cad_tools, launch_cad_viewer
 
 MD_SAMPLE = "# Sheet\n\nbody\n"
@@ -156,3 +158,64 @@ def test_find_cad_tools_returns_a_mapping():
 
 def test_launching_a_viewer_for_a_missing_file_returns_false(tmp_path):
     assert launch_cad_viewer(tmp_path / "nope.step") is False
+
+
+def test_menu_and_interactive_subcommands(monkeypatch):
+    called = []
+    monkeypatch.setattr("cli.app.interactive_repl", lambda: called.append(True))
+    assert main(["menu"]) == 0
+    assert main(["interactive"]) == 0
+    assert len(called) == 2
+
+
+def test_render_menu_table_and_header():
+    hdr = render_header()
+    assert hdr is not None
+
+    tbl = render_menu_table()
+    assert tbl is not None
+    assert len(tbl.columns) == 4
+
+
+def test_interactive_menu_exit_on_q():
+    test_console = Console()
+    commands: list[list[str]] = []
+    inputs = iter(["q"])
+    test_console.input = lambda prompt="": next(inputs)  # type: ignore[assignment]
+
+    run_interactive_menu(lambda cmd: commands.append(cmd) or 0, test_console)
+    assert commands == []
+
+
+def test_interactive_menu_direct_command_dispatch():
+    test_console = Console()
+    commands: list[list[str]] = []
+    inputs = iter(["info", "", "q"])
+    test_console.input = lambda prompt="": next(inputs)  # type: ignore[assignment]
+
+    run_interactive_menu(lambda cmd: commands.append(cmd) or 0, test_console)
+    assert commands == [["info"]]
+
+
+def test_interactive_menu_chair_flow():
+    test_console = Console()
+    commands: list[list[str]] = []
+    # Choice 1 (chair), Option 1 (standard), 'n' for CAD viewer, '' for Enter to return, 'q' to exit
+    inputs = iter(["1", "1", "n", "", "q"])
+    test_console.input = lambda prompt="": next(inputs)  # type: ignore[assignment]
+
+    run_interactive_menu(lambda cmd: commands.append(cmd) or 0, test_console)
+    assert commands == [["chair"]]
+
+
+def test_interactive_menu_trace_flow():
+    test_console = Console()
+    commands: list[list[str]] = []
+    # Choice 5 (trace), Option 1 (overview), Enter to continue, 'b' to back, Enter to return, 'q' to exit
+    inputs = iter(["5", "1", "", "b", "", "q"])
+    test_console.input = lambda prompt="": next(inputs)  # type: ignore[assignment]
+
+    run_interactive_menu(lambda cmd: commands.append(cmd) or 0, test_console)
+    assert commands == [["trace"]]
+
+
