@@ -21,9 +21,18 @@ dependencies = [
 draw = ["matplotlib>=3.8.0,<4"]
 convert = ["python-docx>=1.1.0", "Markdown>=3.5", "PyMuPDF>=1.24.0", "Pillow>=10.0.0"]
 ai = ["google-genai>=1.0.0"]
-# python-docx backs the DOCX converter tests; matplotlib backs the drawing
-# regression tests. Both are needed for a full `python -m pytest` run.
-dev = ["pytest>=8.0.0,<10", "python-docx>=1.1.0", "matplotlib>=3.8.0,<4"]
+# Everything the test suite imports. CI installs only `.[dev]`, so any package
+# a test needs must appear here or the suite fails on ImportError in CI while
+# passing on a developer machine that happens to have it installed:
+#   python-docx -> DOCX converter tests
+#   matplotlib  -> drawing regression tests
+#   PyMuPDF     -> PDF converter tests (imports as `fitz`)
+dev = [
+    "pytest>=8.0.0,<10",
+    "python-docx>=1.1.0",
+    "matplotlib>=3.8.0,<4",
+    "PyMuPDF>=1.24.0",
+]
 
 [project.scripts]
 computational-machine-design = "cli:main"

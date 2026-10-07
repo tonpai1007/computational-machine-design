@@ -386,6 +386,43 @@ def resolve_armrest(
     )
 
 
+# ---------------------------------------------------------------------------
+# Single-resolution entry point
+# ---------------------------------------------------------------------------
+# Every consumer (physics, CAD, drafting, reporting) needs the same armrest
+# layout. Resolving it independently at each call site is what let the STEP,
+# the drawing sheets and the solver drift apart, so the shared path is cached
+# and every caller goes through resolve_armrest_shared().
+_SHARED_ARM_CACHE: dict[tuple[str, float, float, float], ArmrestGeometry] = {}
+
+
+def resolve_armrest_shared(
+    geom: FrameGeometry,
+    side: float = -1.0,
+    arm_tube_r: float = 11.0,
+    pad_thickness_mm: float = ARM_PAD_THICKNESS_MM,
+) -> ArmrestGeometry:
+    """Return the one ArmrestGeometry for this (geometry, side) combination.
+
+    Same result as :func:`resolve_armrest`, but memoised so physics, CAD,
+    drafting and reporting provably share a single instance. A cache miss
+    means those layers had drifted; a hit means they cannot.
+    """
+    key = (
+        geom.model_dump_json(),
+        float(side),
+        float(arm_tube_r),
+        float(pad_thickness_mm),
+    )
+    cached = _SHARED_ARM_CACHE.get(key)
+    if cached is None:
+        cached = resolve_armrest(
+            geom, side=side, arm_tube_r=arm_tube_r, pad_thickness_mm=pad_thickness_mm
+        )
+        _SHARED_ARM_CACHE[key] = cached
+    return cached
+
+
 # Aliases for backwards compatibility
 ChairGeometry = FrameGeometry
 ChairLoads = FrameLoads

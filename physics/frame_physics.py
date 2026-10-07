@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from core.frame_model import (
     ARM_PAD_THICKNESS_MM,
     FrameDesignModel,
-    resolve_armrest,
+    resolve_armrest_shared,
 )
 from physics.buckling import ColumnBuckling
 
@@ -51,6 +51,28 @@ class UpperStrutAnalysisResult(BaseModel):
     passed: bool
 
 
+class ArmBracketAnalysisResult(BaseModel):
+    """Mounting bracket plate bonded to a single arm post.
+
+    Each post has exactly one plate, so the plate carries that post's own
+    axial share (lever rule) and the base moment that post resists. The
+    force is normal to the bending cross-section, so the axial term uses the
+    bW x bH section area -- not the gross bL x bW x bH plate volume.
+    """
+
+    arm_id: str  # 'left', 'right'
+    post_axial_n: float  # Lever-rule share carried by the governing post
+    post_base_moment_nm: float  # M_base the post resists (whole arm pair)
+    section_area_mm2: float  # bW * bH
+    section_inertia_mm4: float  # bW * bH^3 / 12 about Y
+    section_modulus_mm3: float  # I / c
+    axial_stress_mpa: float  # F / A
+    bending_stress_mpa: float  # (M_base / 2) / Z
+    combined_stress_mpa: float  # Superposition of the two
+    bracket_safety_factor: float  # S_y / combined
+    passed: bool
+
+
 class FrameRailAnalysisResult(BaseModel):
     seat_load_n: float
     rail_bending_moment_nm: float
@@ -80,6 +102,9 @@ class FrameSolverResult(BaseModel):
     # Upper members / Struts
     armrests: list[UpperStrutAnalysisResult]
 
+    # Arm mounting brackets, one per post
+    arm_brackets: list[ArmBracketAnalysisResult] = Field(default_factory=list)
+
     # Frame rails
     seat_frame: FrameRailAnalysisResult
 
@@ -87,6 +112,7 @@ class FrameSolverResult(BaseModel):
     min_leg_buckling_sf: float
     min_leg_yield_sf: float
     min_arm_sf: float
+    min_arm_bracket_sf: float = 99.0
     seat_deflection_mm: float
     all_safety_criteria_passed: bool
 
@@ -199,13 +225,13 @@ class FramePhysicsSolver:
         f_arm_r_x = loads.right_arm_lateral_n if geom.has_arms else 0.0
         f_arm_r_y = loads.right_arm_foreaft_n if geom.has_arms else 0.0
 
-        ag_l = resolve_armrest(
+        ag_l = resolve_armrest_shared(
             geom,
             side=-1.0,
             arm_tube_r=geom.arm_profile.outer_dimension_mm / 2.0,
             pad_thickness_mm=ARM_PAD_THICKNESS_MM,
         )
-        ag_r = resolve_armrest(
+        ag_r = resolve_armrest_shared(
             geom,
             side=1.0,
             arm_tube_r=geom.arm_profile.outer_dimension_mm / 2.0,
@@ -331,8 +357,27 @@ class FramePhysicsSolver:
                 )
             )
 
+        if leg_results:
+            worst_buck = min(leg_results, key=lambda c: c.buckling_safety_factor)
+            worst_yield = min(leg_results, key=lambda c: c.yield_safety_factor)
+            calc_log.append(
+                f"Columns: governing buckling is {worst_buck.leg_id} at "
+                f"P_cr = {worst_buck.critical_buckling_load_n / 1000:.2f} kN vs "
+                f"P = {worst_buck.axial_reaction_n:.1f} N "
+                f"-> n_buckling = {worst_buck.buckling_safety_factor:.2f} "
+                f"(floor_reactions[{worst_buck.leg_id}].buckling_safety_factor)."
+            )
+            calc_log.append(
+                f"Columns: governing yield is {worst_yield.leg_id} at "
+                f"sigma = {worst_yield.combined_stress_mpa:.2f} MPa vs "
+                f"Sy = {mat.yield_strength_mpa:.1f} MPa "
+                f"-> n_yield = {worst_yield.yield_safety_factor:.2f} "
+                f"(floor_reactions[{worst_yield.leg_id}].yield_safety_factor)."
+            )
+
         # 5. Upper Struts Analysis
         arm_results: list[UpperStrutAnalysisResult] = []
+        bracket_results: list[ArmBracketAnalysisResult] = []
         if geom.has_arms:
             arm_prof = geom.arm_profile
             arm_h_m = geom.armrest_height_above_seat_mm / 1000.0
@@ -341,6 +386,22 @@ class FramePhysicsSolver:
             # cantilever and the post spacing here are the ones actually drawn.
             # Post spacing is side-independent, so one resolution serves both.
             ag = ag_l
+
+            calc_log.append(
+                f"Arm geometry (resolve_armrest_shared): front post y = {ag.front_post_y_mm:.2f} mm, "
+                f"rear post y = {ag.rear_post_y_mm:.2f} mm, span = {ag.post_span_mm:.2f} mm, "
+                f"pad front y = {ag.pad_front_y_mm:.2f} mm, "
+                f"forward cantilever = {ag.cantilever_front_mm:.2f} mm "
+                "(cad + drafting read this same instance)."
+            )
+
+            # Bracket plate section: flat plate bent about its weak axis.
+            b_w = geom.armrest_bracket_thickness_mm
+            b_h = geom.armrest_bracket_height_mm
+            brk_area_mm2 = b_w * b_h
+            brk_i_mm4 = b_w * b_h**3 / 12.0
+            brk_c_mm = b_h / 2.0
+            brk_z_mm3 = brk_i_mm4 / brk_c_mm
 
             for arm_id, f_v, f_lat, f_fa, load_y in [
                 (
@@ -377,6 +438,24 @@ class FramePhysicsSolver:
                 # the rest of the report's member checks use.
                 sigma_tot = sigma_axial + sigma_bend
 
+                calc_log.append(
+                    f"Arm {arm_id}: load {f_v:.1f} N at y = {load_y:.2f} mm splits by lever rule "
+                    f"-> front {w_front:.4f} / rear {w_rear:.4f}; governing post carries "
+                    f"{governing_axial_n:.1f} N."
+                )
+                calc_log.append(
+                    f"Arm {arm_id}: M_cantilever = F_v x {ag.cantilever_front_mm:.2f} mm "
+                    f"= {m_cantilever:.3f} N·m; M_base = hypot(F_lat x h, F_fa x h, M_cant) "
+                    f"= {m_strut_base:.3f} N·m "
+                    f"(armrests.{arm_id}.strut_base_moment_nm)."
+                )
+                calc_log.append(
+                    f"Arm {arm_id}: sigma = {sigma_axial:.3f} + {sigma_bend:.3f} "
+                    f"= {sigma_tot:.3f} MPa -> n = {mat.yield_strength_mpa:.0f}/{sigma_tot:.3f} "
+                    f"= {mat.yield_strength_mpa / max(sigma_tot, 0.01):.2f} "
+                    f"(armrests.{arm_id}.arm_safety_factor)."
+                )
+
                 sf_arm = mat.yield_strength_mpa / max(sigma_tot, 0.01)
                 arm_results.append(
                     UpperStrutAnalysisResult(
@@ -391,6 +470,37 @@ class FramePhysicsSolver:
                         strut_combined_stress_mpa=sigma_tot,
                         arm_safety_factor=sf_arm,
                         passed=(sf_arm >= 2.0),
+                    )
+                )
+
+                # Bracket plate: the plate is bonded to this post alone, so it
+                # transfers the same axial share and the same base moment the
+                # post itself resists. It is downstream of the post, so it
+                # cannot carry more moment than the post does.
+                brk_axial_mpa = governing_axial_n / max(brk_area_mm2, 1e-9)
+                brk_bend_mpa = (m_strut_base / 2.0) * 1e3 / max(brk_z_mm3, 1e-9)
+                brk_tot_mpa = brk_axial_mpa + brk_bend_mpa
+                sf_brk = mat.yield_strength_mpa / max(brk_tot_mpa, 0.01)
+
+                calc_log.append(
+                    f"Arm bracket {arm_id}: A = {b_w:.0f} x {b_h:.0f} = {brk_area_mm2:.2f} mm², "
+                    f"Z = {brk_z_mm3:.2f} mm³; sigma = {brk_axial_mpa:.3f} + {brk_bend_mpa:.3f} "
+                    f"= {brk_tot_mpa:.3f} MPa -> n = {mat.yield_strength_mpa:.0f}/{brk_tot_mpa:.3f} "
+                    f"= {sf_brk:.2f} (arm_brackets.{arm_id}.bracket_safety_factor)."
+                )
+                bracket_results.append(
+                    ArmBracketAnalysisResult(
+                        arm_id=arm_id,
+                        post_axial_n=governing_axial_n,
+                        post_base_moment_nm=m_strut_base,
+                        section_area_mm2=brk_area_mm2,
+                        section_inertia_mm4=brk_i_mm4,
+                        section_modulus_mm3=brk_z_mm3,
+                        axial_stress_mpa=brk_axial_mpa,
+                        bending_stress_mpa=brk_bend_mpa,
+                        combined_stress_mpa=brk_tot_mpa,
+                        bracket_safety_factor=sf_brk,
+                        passed=(sf_brk >= 2.0),
                     )
                 )
 
@@ -417,6 +527,12 @@ class FramePhysicsSolver:
             passed=(sf_rail >= 2.0 and delta_mm < (geom.seat_width_mm / 250.0)),
         )
 
+        calc_log.append(
+            f"Seat-frame rail: M = {m_rail_max:.2f} N·m -> sigma = M/Z = {sigma_rail_bend:.3f} MPa, "
+            f"deflection = {delta_mm:.4f} mm vs limit L/250 = {geom.seat_width_mm / 250.0:.4f} mm "
+            f"-> n = {sf_rail:.2f} (seat_frame.rail_safety_factor)."
+        )
+
         # 7. Tipping Safety Margins
         lever_fwd = d_floor_m / 2.0
         lever_rear = d_floor_m / 2.0
@@ -438,6 +554,9 @@ class FramePhysicsSolver:
         min_leg_buck = min(col.buckling_safety_factor for col in leg_results)
         min_leg_yld = min(col.yield_safety_factor for col in leg_results)
         min_arm_sf = min((a.arm_safety_factor for a in arm_results), default=99.0)
+        min_bracket_sf = min(
+            (b.bracket_safety_factor for b in bracket_results), default=99.0
+        )
 
         # A None lateral margin means "no lateral tipping case exists" and must not
         # be folded into the pass/fail minimum.
@@ -452,8 +571,19 @@ class FramePhysicsSolver:
             is_stable
             and all(col.buckling_passed and col.yield_passed for col in leg_results)
             and all(a.passed for a in arm_results)
+            and all(b.passed for b in bracket_results)
             and rail_result.passed
             and min_tip_sf >= 1.5
+        )
+
+        calc_log.append(
+            f"Governing safety factors: leg buckling {min_leg_buck:.2f}, leg yield {min_leg_yld:.2f}, "
+            f"arm post {min_arm_sf:.2f}, arm bracket {min_bracket_sf:.2f}, "
+            f"tipping {min_tip_sf:.2f}."
+        )
+        calc_log.append(
+            f"Verification verdict: {'PASS' if all_passed else 'FAIL'} "
+            "(all_safety_criteria_passed)."
         )
 
         return FrameSolverResult(
@@ -468,10 +598,12 @@ class FramePhysicsSolver:
             tipping_safety_factor_lat=sf_tip_lat,
             is_statically_stable=is_stable,
             armrests=arm_results,
+            arm_brackets=bracket_results,
             seat_frame=rail_result,
             min_leg_buckling_sf=min_leg_buck,
             min_leg_yield_sf=min_leg_yld,
             min_arm_sf=min_arm_sf,
+            min_arm_bracket_sf=min_bracket_sf,
             seat_deflection_mm=delta_mm,
             all_safety_criteria_passed=all_passed,
             calculation_log=calc_log,

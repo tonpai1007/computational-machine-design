@@ -515,24 +515,39 @@ def build_chair_3d_fea_model(chair_model: Any) -> FEA3DSolver:
 
     # 5. Armrests (if enabled)
     if g.has_arms:
-        arm_h = g.armrest_height_above_seat_mm / 1000.0
-        arm_x_l = -(w / 2 + 0.025)
-        arm_x_r = +(w / 2 + 0.025)
-        # Match OpenSCAD: front arm post at y=+40mm, rear at y=-seat_d/3=-160mm
-        arm_y_front = 40 / 1000.0  # +40 mm (front)
-        arm_y_rear = -d / 3.0  # -160 mm (rear, matches seat_d/3)
+        from core.frame_model import ARM_PAD_THICKNESS_MM, resolve_armrest_shared
+
+        ag_l = resolve_armrest_shared(
+            g,
+            side=-1.0,
+            arm_tube_r=g.arm_profile.outer_dimension_mm / 2.0,
+            pad_thickness_mm=ARM_PAD_THICKNESS_MM,
+        )
+        ag_r = resolve_armrest_shared(
+            g,
+            side=1.0,
+            arm_tube_r=g.arm_profile.outer_dimension_mm / 2.0,
+            pad_thickness_mm=ARM_PAD_THICKNESS_MM,
+        )
+
+        arm_x_l = ag_l.post_x_mm / 1000.0
+        arm_x_r = ag_r.post_x_mm / 1000.0
+        arm_y_front = ag_l.front_post_y_mm / 1000.0
+        arm_y_rear = ag_l.rear_post_y_mm / 1000.0
+        arm_z_base = ag_l.post_base_z_mm / 1000.0
+        arm_z_top = ag_l.post_top_z_mm / 1000.0
 
         # Left side arm posts (front + rear)
-        n_arm_l_front_top = solver.add_node(arm_x_l, arm_y_front, h + arm_h, "Arm_Left_Front_Top")
-        n_arm_l_front_base = solver.add_node(arm_x_l, arm_y_front, h, "Arm_Left_Front_Base")
-        n_arm_l_rear_top = solver.add_node(arm_x_l, arm_y_rear, h + arm_h, "Arm_Left_Rear_Top")
-        n_arm_l_rear_base = solver.add_node(arm_x_l, arm_y_rear, h, "Arm_Left_Rear_Base")
+        n_arm_l_front_top = solver.add_node(arm_x_l, arm_y_front, arm_z_top, "Arm_Left_Front_Top")
+        n_arm_l_front_base = solver.add_node(arm_x_l, arm_y_front, arm_z_base, "Arm_Left_Front_Base")
+        n_arm_l_rear_top = solver.add_node(arm_x_l, arm_y_rear, arm_z_top, "Arm_Left_Rear_Top")
+        n_arm_l_rear_base = solver.add_node(arm_x_l, arm_y_rear, arm_z_base, "Arm_Left_Rear_Base")
 
         # Right side arm posts (front + rear)
-        n_arm_r_front_top = solver.add_node(arm_x_r, arm_y_front, h + arm_h, "Arm_Right_Front_Top")
-        n_arm_r_front_base = solver.add_node(arm_x_r, arm_y_front, h, "Arm_Right_Front_Base")
-        n_arm_r_rear_top = solver.add_node(arm_x_r, arm_y_rear, h + arm_h, "Arm_Right_Rear_Top")
-        n_arm_r_rear_base = solver.add_node(arm_x_r, arm_y_rear, h, "Arm_Right_Rear_Base")
+        n_arm_r_front_top = solver.add_node(arm_x_r, arm_y_front, arm_z_top, "Arm_Right_Front_Top")
+        n_arm_r_front_base = solver.add_node(arm_x_r, arm_y_front, arm_z_base, "Arm_Right_Front_Base")
+        n_arm_r_rear_top = solver.add_node(arm_x_r, arm_y_rear, arm_z_top, "Arm_Right_Rear_Top")
+        n_arm_r_rear_base = solver.add_node(arm_x_r, arm_y_rear, arm_z_base, "Arm_Right_Rear_Base")
 
         ap = g.arm_profile
         # Vertical arm posts (front and rear, per side)
@@ -698,13 +713,40 @@ def build_chair_3d_fea_model(chair_model: Any) -> FEA3DSolver:
             Sy,
         )
 
-        # Split arm loads between front and rear posts (50/50 split)
-        left_force = loads.left_arm_vertical_n / 2.0
-        solver.add_nodal_load(n_arm_l_front_top, fz=-left_force, fy=loads.left_arm_lateral_n)
-        solver.add_nodal_load(n_arm_l_rear_top, fz=-left_force, fy=loads.left_arm_lateral_n)
-        right_force = loads.right_arm_vertical_n / 2.0
-        solver.add_nodal_load(n_arm_r_front_top, fz=-right_force, fy=loads.right_arm_lateral_n)
-        solver.add_nodal_load(n_arm_r_rear_top, fz=-right_force, fy=loads.right_arm_lateral_n)
+        # Split arm loads between front and rear posts using lever rule
+        w_front_l, w_rear_l = ag_l.post_reaction_fractions(loads.left_arm_load_y_mm)
+        w_front_r, w_rear_r = ag_r.post_reaction_fractions(loads.right_arm_load_y_mm)
+
+        left_force_front = loads.left_arm_vertical_n * w_front_l
+        left_force_rear = loads.left_arm_vertical_n * w_rear_l
+        right_force_front = loads.right_arm_vertical_n * w_front_r
+        right_force_rear = loads.right_arm_vertical_n * w_rear_r
+
+        # Lateral force acts along X (lateral axis). In FEA: fx is lateral, fy is fore/aft, fz is vertical.
+        solver.add_nodal_load(
+            n_arm_l_front_top,
+            fz=-left_force_front,
+            fx=loads.left_arm_lateral_n * w_front_l,
+            fy=loads.left_arm_foreaft_n * w_front_l,
+        )
+        solver.add_nodal_load(
+            n_arm_l_rear_top,
+            fz=-left_force_rear,
+            fx=loads.left_arm_lateral_n * w_rear_l,
+            fy=loads.left_arm_foreaft_n * w_rear_l,
+        )
+        solver.add_nodal_load(
+            n_arm_r_front_top,
+            fz=-right_force_front,
+            fx=loads.right_arm_lateral_n * w_front_r,
+            fy=loads.right_arm_foreaft_n * w_front_r,
+        )
+        solver.add_nodal_load(
+            n_arm_r_rear_top,
+            fz=-right_force_rear,
+            fx=loads.right_arm_lateral_n * w_rear_r,
+            fy=loads.right_arm_foreaft_n * w_rear_r,
+        )
 
     # 6. Backrest (if enabled)
     if g.has_backrest:

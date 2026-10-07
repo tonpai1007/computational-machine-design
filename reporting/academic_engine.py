@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from ai.narrative_synthesizer import synthesize_academic_narrative
-from core.frame_model import FrameDesignModel, resolve_armrest
+from core.frame_model import FrameDesignModel, resolve_armrest_shared
 from physics.frame_physics import FrameSolverResult
 
 logger = logging.getLogger("reporting.academic_engine")
@@ -1405,18 +1405,24 @@ class AcademicAssignmentEngine:
 
         sigma_f_prime = 1.5 * Sut  # Shigley: sigma_f' = 1.5 Sut (Sut <= 1400 MPa)
         Se_prime = 0.5 * Sut
-        ka = 4.51 * (Sut**-0.265)
+
+        # Marin factors come from physics/fatigue.py -- the single source of
+        # truth. Do not re-derive them here; a second copy is how the arm
+        # bracket values drifted apart between this engine and the data sheet.
+        from physics.fatigue import MarinFactors
+
+        ka = MarinFactors.surface_factor(Sut, "machined")
         kd = 1.0
-        ke = 0.897  # Shigley Table 6-6, 90% reliability
+        ke = MarinFactors.reliability_factor(0.90)  # 90% reliability
         kf = 1.0
 
         # Marin load factor: bending 1.0, axial 0.85, torsion 0.59 (Shigley Table 6-2)
-        KC_BENDING = 1.0
-        KC_AXIAL = 0.85
+        KC_BENDING = MarinFactors.load_factor("bending")
+        KC_AXIAL = MarinFactors.load_factor("axial")
 
         def kb_size(d_mm: float) -> float:
-            """Shigley size factor for 2.79 <= d <= 51 mm."""
-            return float(1.24 * (d_mm**-0.107))
+            """Shigley size factor via the physics engine."""
+            return MarinFactors.size_factor(d_mm / 1000.0)
 
         components_html = []
         summary_rows = []
@@ -1801,6 +1807,7 @@ class AcademicAssignmentEngine:
         # -------------------------------------------------------------
         if g.has_arms and result.armrests:
             ares = result.armrests[0]
+            arm_brackets = result.arm_brackets
             arm_prof = g.arm_profile
             arm_Do_m = arm_prof.outer_dimension_mm / 1000.0
             arm_t_m = arm_prof.wall_thickness_mm / 1000.0
@@ -1819,7 +1826,7 @@ class AcademicAssignmentEngine:
             arm_c_m = arm_Do_m / 2.0
             arm_Z_m3 = arm_I_m4 / arm_c_m
 
-            arm_ag = resolve_armrest(g)
+            arm_ag = resolve_armrest_shared(g)
             front_frac, rear_frac = arm_ag.post_reaction_fractions(loads.left_arm_load_y_mm)
             arm_v_load_N = loads.left_arm_vertical_n
             arm_lat_load_N = abs(loads.left_arm_lateral_n)
@@ -1904,21 +1911,19 @@ class AcademicAssignmentEngine:
 
             # -------------------------------------------------------------
             # Part 5: Arm Mounting Bracket — the governing arm member.
-            # Each arm post carries one bracket plate, so the plate bonded to
-            # the governing post carries that post's full axial share (lever
-            # rule) and the base moment that post actually resists (M_base/2).
+            # Every stress below is read from FrameSolverResult.arm_brackets;
+            # nothing in this engine recomputes it.
             # -------------------------------------------------------------
+            brk = arm_brackets[0]
             bW_mm = g.armrest_bracket_thickness_mm
             bH_mm = g.armrest_bracket_height_mm
             bL_mm = arm_ag.bracket_len_mm
-            brk_I_mm4 = bW_mm * bH_mm**3 / 12.0
+            brk_I_mm4 = brk.section_inertia_mm4
             brk_c_mm = bH_mm / 2.0
-            brk_Z_mm3 = brk_I_mm4 / brk_c_mm
-            brk_A_cross_mm2 = bW_mm * bH_mm
-            brk_sigma_mpa = (arm_F_gov_N / brk_A_cross_mm2) + (
-                arm_M_base_Nm / 2.0
-            ) * 1e3 / brk_Z_mm3
-            brk_sf = Sy / max(0.1, brk_sigma_mpa)
+            brk_Z_mm3 = brk.section_modulus_mm3
+            brk_A_cross_mm2 = brk.section_area_mm2
+            brk_sigma_mpa = brk.combined_stress_mpa
+            brk_sf = brk.bracket_safety_factor
             brk_kb = kb_size(bL_mm)
             brk_Se = ka * brk_kb * KC_BENDING * kd * ke * kf * Se_prime
 
@@ -1942,10 +1947,12 @@ class AcademicAssignmentEngine:
 
   <h3 class="step-title">Step 2 : หาความเค้นรวม (แผ่นยึดของเสาวิกฤต)</h3>
   <div class="math-block">
-    แรงตั้งที่แผ่นยึดรับ = แรงตั้งของเสาวิกฤต (แบ่งตามหลักการคาน) = F<sub>v</sub> &times; {front_frac:.4f} = {arm_F_gov_N:.1f} N<br>
-    &sigma;axial = F<sub>gov</sub> / A = {arm_F_gov_N:.1f} / {brk_A_cross_mm2:.1f} = {(arm_F_gov_N / brk_A_cross_mm2):.3f} MPa<br>
-    &sigma;bending = (M<sub>base</sub> / 2) / Z = ({arm_M_base_Nm:.3f} / 2) &times; 1e3 / {brk_Z_mm3:.2f} = {((arm_M_base_Nm / 2.0) * 1e3 / brk_Z_mm3):.3f} MPa<br>
-    &sigma;total = {(arm_F_gov_N / brk_A_cross_mm2):.3f} + {((arm_M_base_Nm / 2.0) * 1e3 / brk_Z_mm3):.3f} = {brk_sigma_mpa:.3f} MPa
+    อ่านค่าจาก <code>FrameSolverResult.arm_brackets[0]</code>
+    (<code>physics/frame_physics.py::ArmBracketAnalysisResult</code>)<br>
+    แรงตั้งที่แผ่นยึดรับ <code>post_axial_n</code> = แรงตั้งของเสาวิกฤต (แบ่งตามหลักการคาน) = {brk.post_axial_n:.1f} N<br>
+    &sigma;axial <code>axial_stress_mpa</code> = F<sub>gov</sub> / A = {brk.post_axial_n:.1f} / {brk_A_cross_mm2:.1f} = {brk.axial_stress_mpa:.3f} MPa<br>
+    &sigma;bending <code>bending_stress_mpa</code> = (M<sub>base</sub> / 2) / Z = ({brk.post_base_moment_nm:.3f} / 2) &times; 1e3 / {brk_Z_mm3:.2f} = {brk.bending_stress_mpa:.3f} MPa<br>
+    &sigma;total <code>combined_stress_mpa</code> = {brk.axial_stress_mpa:.3f} + {brk.bending_stress_mpa:.3f} = {brk_sigma_mpa:.3f} MPa
   </div>
 
   <h3 class="step-title">Step 3 : หา Actual endurance limit ( Se )</h3>

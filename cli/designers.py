@@ -303,6 +303,12 @@ def _handle_chair(prompt: str, p_lower: str, output_dir: str | None = None) -> b
     with open(report_file, "w", encoding="utf-8") as f:
         f.write(FrameReportGenerator.generate_html_report(model, result))
 
+    # Provenance manifest: records which solver field every reported number
+    # came from, so a stale hand-typed value is detectable downstream.
+    from physics.provenance import write_manifest
+
+    write_manifest(out_path, model)
+
     assignment_file = out_path / "academic_assignment_report.html"
     preview_path = out_path / "chair_preview.png"
     with open(assignment_file, "w", encoding="utf-8") as f:

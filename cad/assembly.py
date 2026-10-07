@@ -16,7 +16,7 @@ from core.frame_model import (
     ARM_PAD_THICKNESS_MM,
     ArmrestGeometry,
     FrameDesignModel,
-    resolve_armrest,
+    resolve_armrest_shared,
 )
 
 Primitive = dict[str, Any]
@@ -360,7 +360,7 @@ def assembly_primitives(model: FrameDesignModel) -> list[tuple[str, list[Primiti
                 (
                     name,
                     armrest_primitives(
-                        resolve_armrest(
+                        resolve_armrest_shared(
                             g,
                             side=side,
                             arm_tube_r=g.arm_profile.outer_dimension_mm / 2.0,
@@ -405,7 +405,7 @@ class FrameCADEngine:
     def generate_openscad(model: FrameDesignModel) -> str:
         g = model.geometry
         m = model.material
-        _ag_l = resolve_armrest(
+        _ag_l = resolve_armrest_shared(
             g,
             side=-1.0,
             arm_tube_r=g.arm_profile.outer_dimension_mm / 2.0,
@@ -752,7 +752,7 @@ module backrest_assembly() {{
         # 5. Upper Arms
         if g.has_arms:
             for side in (-1.0, 1.0):
-                ag = resolve_armrest(
+                ag = resolve_armrest_shared(
                     g,
                     side=side,
                     arm_tube_r=g.arm_profile.outer_dimension_mm / 2.0,
@@ -954,7 +954,7 @@ module backrest_assembly() {{
         if g.has_arms:
             for side, name in [(-1.0, "Armrest_Left"), (1.0, "Armrest_Right")]:
                 prims = armrest_primitives(
-                    resolve_armrest(
+                    resolve_armrest_shared(
                         g,
                         side=side,
                         arm_tube_r=g.arm_profile.outer_dimension_mm / 2.0,

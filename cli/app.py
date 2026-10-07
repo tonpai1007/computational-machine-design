@@ -9,12 +9,14 @@ Usage shapes
 ``mdie drawings --pdf``                 regenerate chair drawing sheets
 ``mdie report chair --ai``              consolidate an engineering report
 ``mdie info``                           show detected tools and LLM providers
+``mdie trace``                          how every engineering number is produced
 """
 
 from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -87,6 +89,7 @@ def _report_unsupported(meta: dict[str, Any]) -> None:
 
 def process_prompt(prompt: str, output_dir: str | None = None, auto_open: bool = False) -> bool:
     """Classify a plain-English prompt and run the matching design pipeline."""
+    prompt = _maybe_read_file_prompt(prompt)
     p_lower = prompt.lower().strip()
     if not p_lower:
         return False
@@ -226,11 +229,13 @@ def _show_help() -> None:
             "  mdie shaft [--d 40 --l 500]               rotating shaft\n\n"
             "[bold]Files:[/bold]\n"
             "  mdie convert <input> --to <fmt> [-o OUT]  convert a file (see formats below)\n"
+            "  mdie <spec.docx|md|html|pdf>            read a spec file as a design prompt\n"
             "  mdie drawings [--outdir DIR] [--pdf]      regenerate chair drawing sheets\n"
             "  mdie report <project> [--ai]              consolidate an engineering report\n"
             "  mdie view <project|file> [--freecad]     open in a CAD viewer\n\n"
             "[bold]Other:[/bold]\n"
             "  mdie info                                 detected tools and providers\n"
+            "  mdie trace [--steps|--values|--member NAME]  how the physics numbers are made\n"
             "  mdie                                      interactive prompt\n\n"
             f"[bold cyan]Convertible formats:[/bold cyan] {conv}\n\n"
             f"[bold cyan]Local CAD tools:[/bold cyan]\n"
@@ -428,6 +433,30 @@ def _build_parser() -> argparse.ArgumentParser:
     return ap
 
 
+def _cmd_trace(argv: list[str]) -> int:
+    """Show how MDIE reaches its engineering numbers."""
+    import argparse
+
+    from core.frame_model import FrameDesignModel
+    from reporting.trace_view import render
+
+    ap = argparse.ArgumentParser(
+        prog="mdie trace",
+        description="Show the physics source-of-truth chain and how each number is produced.",
+    )
+    ap.add_argument(
+        "--member",
+        metavar="NAME",
+        help="annotated derivation for one member: leg | rail | arm | bracket | tipping",
+    )
+    ap.add_argument("--steps", action="store_true", help="replay the solver's calculation log")
+    ap.add_argument("--values", action="store_true", help="provenance table of every value")
+    args = ap.parse_args(argv)
+
+    render(args, FrameDesignModel())
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
 
@@ -442,6 +471,8 @@ def main(argv: list[str] | None = None) -> int:
     if head == "info":
         _show_info()
         return 0
+    if head == "trace":
+        return _cmd_trace(argv[1:])
     if head in ("view",):
         return _cmd_view(argv[1:])
     if head == "convert":
@@ -473,6 +504,59 @@ def main(argv: list[str] | None = None) -> int:
     out_dir, auto_open = _design_flags(argv)
     prompt = " ".join(a for a in argv if not a.startswith("-"))
     return 0 if process_prompt(prompt, output_dir=out_dir, auto_open=auto_open) else 1
+
+
+_DOCUMENT_EXTS = {".docx", ".md", ".markdown", ".html", ".htm", ".txt", ".pdf"}
+
+
+def _blocks_to_plain(blocks: Iterable[Any]) -> str:
+    """Flatten the block model into a single string for use as a prompt."""
+    lines: list[str] = []
+    for block in blocks:
+        kind = block[0]
+        if kind == "table":
+            for row in block[1]:
+                lines.append(" | ".join(str(c) for c in row))
+        else:
+            lines.append(str(block[-1]))
+    return "\n".join(lines).strip()
+
+
+def _read_document_prompt(path: Path) -> str | None:
+    """Extract text from a document file, or ``None`` if it is not readable."""
+    ext = path.suffix.lower()
+    if ext not in _DOCUMENT_EXTS:
+        return None
+    try:
+        if ext == ".docx":
+            from convert.documents import blocks_from_docx
+
+            return _blocks_to_plain(blocks_from_docx(path))
+        if ext in (".html", ".htm"):
+            from convert.documents import blocks_from_html
+
+            return _blocks_to_plain(blocks_from_html(path.read_text(encoding="utf-8", errors="replace")))
+        if ext == ".pdf":
+            from convert.documents import blocks_from_pdf
+
+            return _blocks_to_plain(blocks_from_pdf(path))
+        return path.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return None
+
+
+def _maybe_read_file_prompt(prompt: str) -> str:
+    """If the prompt is a path to a readable document, return its extracted text.
+
+    Lets the agent read a design spec written in Word, Markdown, HTML or PDF
+    instead of only accepting a typed sentence. A prompt that is not a file, or
+    a file it cannot read, is returned unchanged.
+    """
+    candidate = Path(prompt.strip().strip('"').strip("'"))
+    if not candidate.exists() or not candidate.is_file():
+        return prompt
+    text = _read_document_prompt(candidate)
+    return text if text else prompt
 
 
 def _design_flags(args: list[str]) -> tuple[str | None, bool]:

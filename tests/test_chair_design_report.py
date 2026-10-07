@@ -12,7 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from core.frame_model import FrameDesignModel
+from core.frame_model import FrameDesignModel, resolve_armrest_shared
+from physics.fatigue import FatigueSolver, MarinFactors
 from physics.frame_physics import FramePhysicsSolver
 
 REPORT = Path(__file__).resolve().parents[1] / "Project" / "chair" / "chair_design_report.md"
@@ -146,14 +147,11 @@ def test_every_summary_row_clears_design_factor(sol):
     K = 0.85
 
     arm = sol.armrests[0]
-    # bracket: per-post share, CAD section 25 (length) x bracket_h x bracket_t.
-    # Read the plate size from the model rather than re-deriving it from the
-    # post radius; the coupling it replaced is what let the plate drift.
-    bL = 25.0
-    bW, bH = g.armrest_bracket_thickness_mm, g.armrest_bracket_height_mm
-    bZ = bW * bH**2 / 6.0
-    bA = bL * bW * bH
-    n_bracket = SY / (arm.applied_vertical_n / 2 / bA + (arm.strut_base_moment_nm / 2) * 1e3 / bZ)
+    # bracket: read straight from the solver. An earlier version of this test
+    # recomputed it from the gross plate volume (25x12x11) and a 50/50 axial
+    # split -- both of which the solver had already abandoned -- and so agreed
+    # with the solver only to within 0.09 n while checking the wrong mechanics.
+    n_bracket = sol.arm_brackets[0].bracket_safety_factor
 
     # stretcher: CAD uses splay offset at stretcher height
     sp = g.stretcher_profile
@@ -172,13 +170,27 @@ def test_every_summary_row_clears_design_factor(sol):
     lZ = lI / (lp.outer_dimension_mm / 2.0)
     dz = g.backrest_height_above_seat_mm * math.cos(math.radians(g.backrest_angle_deg - 90.0))
     Fb = ld.backrest_force_n / 2.0
-    n_backrest = SY / (Fb * dz / 1e3 / lZ + Fb / lA)
+    n_backrest = SY / (Fb * dz / lZ + Fb / lA)
 
-    # endurance limit
-    ka = 4.51 * mat.ultimate_strength_mpa**-0.265
-    kb = (lp.outer_dimension_mm / 7.5) ** -0.107
-    Se = ka * kb * 1.0 * 1.0 * 0.897 * 1.0 * (0.5 * mat.ultimate_strength_mpa)
-    n_fatigue = Se / (Fb * dz / 1e3 / lZ + Fb / lA)
+    # endurance limit -- governing member is the arm bracket (highest combined
+    # stress). Marin factors and the criterion both come from physics/fatigue.py.
+    brk = sol.arm_brackets[0]
+    ka = MarinFactors.surface_factor(mat.ultimate_strength_mpa, "machined")
+    kb = MarinFactors.size_factor(resolve_armrest_shared(
+        g, side=-1.0, arm_tube_r=g.arm_profile.outer_dimension_mm / 2.0
+    ).bracket_len_mm / 1000.0)
+    kc = MarinFactors.load_factor("bending")
+    ke = MarinFactors.reliability_factor(0.90)
+    Se = ka * kb * kc * 1.0 * ke * 1.0 * (0.5 * mat.ultimate_strength_mpa)
+    # The arm is a repeated pulsating load (R = 0), not a rotating shaft, so
+    # Se/sigma_max would wrongly judge it as fully reversed.
+    n_fatigue = FatigueSolver.repeated_load_fatigue(
+        sigma_max_mpa=brk.combined_stress_mpa,
+        s_ut_mpa=mat.ultimate_strength_mpa,
+        s_y_mpa=mat.yield_strength_mpa,
+        s_e_mpa=Se,
+        stress_ratio_r=0.0,
+    ).governing_nf
 
     rows = {
         "column buckling": min(c.buckling_safety_factor for c in sol.floor_reactions),

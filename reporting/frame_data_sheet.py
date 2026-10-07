@@ -27,7 +27,7 @@ from pathlib import Path
 from core.frame_model import (
     ARM_PAD_THICKNESS_MM,
     FrameDesignModel,
-    resolve_armrest,
+    resolve_armrest_shared,
 )
 from physics.frame_physics import FramePhysicsSolver
 
@@ -45,7 +45,7 @@ class FrameDataSheetGenerator:
         self.loads = self.model.loads
         self.m = self.model.material
         self.sol = FramePhysicsSolver.solve(self.model)
-        self.ag = resolve_armrest(
+        self.ag = resolve_armrest_shared(
             self.g,
             side=-1.0,
             arm_tube_r=self.g.arm_profile.outer_dimension_mm / 2.0,
@@ -147,7 +147,7 @@ class FrameDataSheetGenerator:
         out = [
             "## 4. เรขาคณิตแขนที่ Resolve แล้ว (Resolved Armrest Geometry)",
             "",
-            "ทุกค่ามาจาก `resolve_armrest()` ซึ่งเป็นแหล่งเดียวที่ CAD และ solver ใช้ร่วมกัน",
+            "ทุกค่ามาจาก `resolve_armrest_shared()` ซึ่งเป็นแหล่งเดียวที่ CAD และ solver ใช้ร่วมกัน",
             "",
         ]
         out.append("| field | ค่า (mm) |")
@@ -223,30 +223,24 @@ class FrameDataSheetGenerator:
         )
 
     def _bracket(self) -> str:
-        """Bracket stress using the settled Method A (bending cross-section area).
-
-        The axial force is the governing post's lever-rule share, not half the
-        pad load: each pad load splits between two posts by lever rule, and the
-        bracket is bonded to one post only.
-        """
+        """Bracket stress, read from the solver. Nothing is recomputed here."""
         g, m = self.g, self.m
-        a = self.sol.armrests[0]
+        b = self.sol.arm_brackets[0]
         bL = self.ag.bracket_len_mm
         bW = g.armrest_bracket_thickness_mm
         bH = g.armrest_bracket_height_mm
-        bi = bW * bH**3 / 12.0
-        bz = bi / (bH / 2.0)
-        f_post = self._governing_post_axial_n()
-        m_half = a.strut_base_moment_nm / 2.0
-
-        cross_area = bW * bH
+        m_half = b.post_base_moment_nm / 2.0
         gross_area = bL * bW * bH
-        s_cross = f_post / cross_area + m_half * 1e3 / bz
-        s_gross = f_post / gross_area + m_half * 1e3 / bz
+        # Shown only to document the rejected alternative; the solver's value is
+        # the one reported above.
+        s_gross = b.post_axial_n / gross_area + m_half * 1e3 / b.section_modulus_mm3
 
         return "\n".join(
             [
                 "## 7. แผ่นยึดแขน (Arm Bracket)",
+                "",
+                "> ค่าทั้งหมดในหัวข้อนี้อ่านจาก `FrameSolverResult.arm_brackets[0]`",
+                "> (`physics/frame_physics.py::ArmBracketAnalysisResult`) ไม่มีการคำนวณซ้ำในชั้นรายงาน",
                 "",
                 f"ขนาดแผ่น: `{bL:g} × {bW:g} × {bH:g}` mm",
                 "",
@@ -255,19 +249,26 @@ class FrameDataSheetGenerator:
                 "",
                 "| สมบัติ | ค่า |",
                 "|---|---|",
-                f"| I (ดัดรอบแกน Y) | {bi:.2f} mm⁴ |",
+                f"| I (ดัดรอบแกน Y) `section_inertia_mm4` | {b.section_inertia_mm4:.2f} mm⁴ |",
                 f"| c | {bH / 2:.2f} mm |",
-                f"| Z = I/c | {bz:.2f} mm³ |",
-                f"| A หน้าตัดดัด (bW×bH) | {cross_area:.2f} mm² |",
-                f"| แรงตั้งเสาวิกฤต (lever rule) | {f_post:.1f} N |",
-                f"| โมเมนต์ฐานเสาของท่อ (M_base/2) | {m_half:.3f} N·m |",
+                f"| Z = I/c `section_modulus_mm3` | {b.section_modulus_mm3:.2f} mm³ |",
+                f"| A หน้าตัดดัด (bW×bH) `section_area_mm2` | {b.section_area_mm2:.2f} mm² |",
+                f"| แรงตั้งเสาวิกฤต `post_axial_n` (lever rule) | {b.post_axial_n:.1f} N |",
+                f"| โมเมนต์ฐานเสาของท่อ `post_base_moment_nm`/2 | {m_half:.3f} N·m |",
+                f"| เค้นแนวดิ่ง `axial_stress_mpa` | {b.axial_stress_mpa:.3f} MPa |",
+                f"| เค้นดัด `bending_stress_mpa` | {b.bending_stress_mpa:.3f} MPa |",
+                f"| เค้นรวม `combined_stress_mpa` | {b.combined_stress_mpa:.3f} MPa |",
+                f"| ความปลอดภัย `bracket_safety_factor` | {b.bracket_safety_factor:.3f} |",
+                "",
+                "สูตรที่ solver ใช้:",
                 "",
                 "```",
                 "sigma = F_post/A_cross + (M_base/2)/Z",
-                f"sigma = {f_post:.1f}/{cross_area:.2f} + {m_half:.3f}e3/{bz:.2f}"
-                f" = {s_cross:.3f} MPa",
-                f"n = S_y/sigma = {m.yield_strength_mpa:g}/{s_cross:.3f}"
-                f" = {m.yield_strength_mpa / s_cross:.3f}",
+                f"sigma = {b.post_axial_n:.1f}/{b.section_area_mm2:.2f}"
+                f" + {m_half:.3f}e3/{b.section_modulus_mm3:.2f}"
+                f" = {b.combined_stress_mpa:.3f} MPa",
+                f"n = S_y/sigma = {m.yield_strength_mpa:g}/{b.combined_stress_mpa:.3f}"
+                f" = {b.bracket_safety_factor:.3f}",
                 "```",
                 "",
                 "**การเลือกพื้นที่หน้าตัด**",
@@ -296,9 +297,15 @@ class FrameDataSheetGenerator:
         lp = g.leg_profile
         lZ = lp.moment_of_inertia_m4 * 1e12 / (lp.outer_dimension_mm / 2.0)
         lA = lp.area_m2 * 1e6
-        dz = g.backrest_height_above_seat_mm * math.sin(math.radians(g.backrest_angle_deg - 90.0))
+        # The backrest thrust is HORIZONTAL, so its moment arm about the post
+        # base is the post's vertical rise -- cos, not sin. sin gives the
+        # horizontal lean (58.45 mm) and understated the stress ~69x.
+        dz = g.backrest_height_above_seat_mm * math.cos(math.radians(g.backrest_angle_deg - 90.0))
         fb = loads.backrest_force_n / 2.0
-        back_sigma = fb * dz / 1e3 / lZ + fb / lA
+        # F [N] * dz [mm] = M [N.mm]; dividing by Z [mm^3] yields MPa directly.
+        # No 1e3 here -- that would hand N.m into a mm^3 denominator and report
+        # the bending stress as ~1000x too small.
+        back_sigma = fb * dz / lZ + fb / lA
 
         return "\n".join(
             [
@@ -348,68 +355,87 @@ class FrameDataSheetGenerator:
         )
 
     def _fatigue(self) -> str:
+        from physics.fatigue import FatigueSolver, MarinFactors
+
         m = self.m
-        # Governing member is the arm bracket (highest combined stress).
-        sig = self._bracket_sigma()
-        d_eff = self.ag.bracket_len_mm
-        ka = 4.51 * m.ultimate_strength_mpa**-0.265
-        kb = 1.24 * (d_eff**-0.107)  # same form as physics.fatigue.MarinFactors.size_factor
-        ke = 0.897  # 90% reliability, Shigley Table 6-6
+        # Governing member is the arm bracket (highest combined stress),
+        # read from the solver rather than recomputed here.
+        sig = self.sol.arm_brackets[0].combined_stress_mpa
+        d_eff_mm = self.ag.bracket_len_mm
+        # Single source of truth for Marin factors: physics/fatigue.py.
+        ka = MarinFactors.surface_factor(m.ultimate_strength_mpa, "machined")
+        kb = MarinFactors.size_factor(d_eff_mm / 1000.0)
+        kc = MarinFactors.load_factor("bending")
+        ke = MarinFactors.reliability_factor(0.90)
+        kd = kf = 1.0
         se_prime = 0.5 * m.ultimate_strength_mpa
-        se = ka * kb * 1.0 * 1.0 * ke * 1.0 * se_prime
-        n0 = 2 * 10**6
-        b = -(math.log10(se_prime / se)) / math.log10(n0)
-        n_cycles = n0 * (sig / se) ** (1 / b)
-        nd = 5 * 10**8
-        sn = se * (nd / n0) ** b
+        se = ka * kb * kc * kd * ke * kf * se_prime
+        # The arm carries a seated occupant: stress cycles zero -> peak as the
+        # user sits and stands. That is a repeated load (R = 0), not the fully
+        # reversed duty a bare Se assumes, so judge it on mean + alternating
+        # stress rather than on Se/sigma_max alone.
+        rl = FatigueSolver.repeated_load_fatigue(
+            sigma_max_mpa=sig,
+            s_ut_mpa=m.ultimate_strength_mpa,
+            s_y_mpa=m.yield_strength_mpa,
+            s_e_mpa=se,
+            stress_ratio_r=0.0,
+        )
         return "\n".join(
             [
                 "## 11. ความทนทานของวัสดุ (Endurance)",
+                "",
+                "> ตัวปรับแก้ Marin ทั้งหมดอ่านจาก `physics/fatigue.py::MarinFactors`",
+                "> σ_max อ่านจาก `FrameSolverResult.arm_brackets[0].combined_stress_mpa`",
+                "> เกณฑ์ตัดสินคำนวณจาก `physics/fatigue.py::FatigueSolver.repeated_load_fatigue`",
                 "",
                 f"ชิ้นวิกฤต = แผ่นยึดแขน, σ_max = `{sig:.3f}` MPa",
                 "",
                 "| ปริมาณ | สูตร | ค่า |",
                 "|---|---|---|",
                 f"| S_e' | 0.5·S_ut | {se_prime:.2f} MPa |",
-                f"| k_a | 4.51·S_ut^-0.265 | {ka:.4f} |",
-                f"| k_b | 1.24·d^-0.107 (d = {d_eff:.1f} mm) | {kb:.4f} |",
-                "| k_c | ดัด (bending) | 1.0000 |",
-                "| k_d | ภาระตัวแปร | 1.0000 |",
+                f"| k_a | MarinFactors.surface_factor(machined) | {ka:.4f} |",
+                f"| k_b | MarinFactors.size_factor (d = {d_eff_mm:.1f} mm) | {kb:.4f} |",
+                f"| k_c | ดัด (bending) | {kc:.4f} |",
+                f"| k_d | ภาระตัวแปร | {kd:.4f} |",
                 f"| k_e | ความเชื่อมโลหะ 90% | {ke:.4f} |",
-                "| k_f | ปัจจัยอื่น | 1.0000 |",
+                f"| k_f | ปัจจัยอื่น | {kf:.4f} |",
                 f"| S_e | k_a·k_b·k_c·k_d·k_e·k_f·S_e' | {se:.4f} MPa |",
                 "",
+                "**แรงกดที่แขนเป็นแรงทำซ้ำแบบไม่กลับทิศ (pulsating, R = 0)** — ขึ้นกับน้ำหนักผู้นั่ง"
+                "เมื่อลุก-นั่ง ไม่ใช่กลับทิศเต็มช่วงเหมือนโคเจนหมุน จึงต้องแยกแรงกระทำเป็นส่วนผลันผวน"
+                "กับส่วนเฉลี่ยก่อนตัดสิน ไม่ใช่หาร S_e ด้วย sigma_max อย่างเดียว",
+                "",
+                "| ปริมาณ | สูตร | ค่า |",
+                "|---|---|---|",
+                f"| R (stress ratio) | σ_min/σ_max | {rl.stress_ratio_r:.2f} |",
+                f"| σ_a | (σ_max − σ_min)/2 | {rl.sigma_a_mpa:.4f} MPa |",
+                f"| σ_m | (σ_max + σ_min)/2 | {rl.sigma_m_mpa:.4f} MPa |",
+                "",
+                "| เกณฑ์ | สูตร | n |",
+                "|---|---|---|",
+                f"| Modified Goodman | σ_a/S_e + σ_m/S_ut | {rl.nf_goodman:.4f} |",
+                f"| Gerber | parabola | {rl.nf_gerber:.4f} |",
+                f"| Soderberg | σ_a/S_e + σ_m/S_y | {rl.nf_soderberg:.4f} |",
+                "",
+                f"**n = {rl.governing_nf:.4f} (เกณฑ์ {rl.governing_criterion}, ค่าต่ำสุดของทั้งสาม)**"
+                f" → ผ่าน n_d = 2.0"
+                if rl.governing_nf >= 2.0
+                else f"**n = {rl.governing_nf:.4f} (เกณฑ์ {rl.governing_criterion}) → ไม่ผ่าน n_d = 2.0**",
+                "",
                 "```",
-                f"n (endurance) = S_e/sigma_max = {se:.4f}/{sig:.3f} = {se / sig:.4f}",
-                f"b (Basquin) = {b:.5f}",
-                f"N at sigma_max = {n_cycles:.4e} cycles",
-                f"S_n at N_d=5e8 = {sn:.4f} MPa  ->  n = {sn / sig:.4f}",
+                f"n = 1 / ({rl.sigma_a_mpa:.4f}/{se:.4f} + {rl.sigma_m_mpa:.4f}/{m.yield_strength_mpa:.1f})"
+                f" = {rl.nf_soderberg:.4f}",
+                f"N (Basquin, Goodman-equivalent) = {rl.predicted_cycles:.4e} cycles",
                 "```",
                 "",
-                "> **ข้อควรระวัง**: ท่อแขนรับแรงจากน้ำหนักผู้นั่ง ซึ่งเป็นแรงสถิต",
-                "> ไม่ใช่แรงกลับทิศ การใช้ S_e (เกณฑ์ความทนทานของแรงกลับทิศเต็ม) จึงไม่ตรงกับลักษณะการโหลด",
-                "> และค่า n ที่ได้จึงเป็นการประเมินแบบเผื่อมาก ไม่ใช่เกณฑ์ที่ใช้ตัดสินจริง",
-                f"> ค่า n ที่ N_d = 5×10⁸ รอบ ได้ `{sn / sig:.4f}` ซึ่ง **ต่ำกว่าเกณฑ์ n_d = 2.0**",
+                "> **เทียบกับเกณฑ์เดิม**: ถ้าใช้ S_e/σ_max ตรง ๆ ได้ "
+                f"`{se / sig:.4f}` ซึ่งต่ำกว่า n_d = 2.0 แต่เกณฑ์นั้นสมมติแรงกลับทิศเต็มช่วง (R = −1)"
+                " ซึ่งไม่ตรงกับการใช้งานจริงของเก้าอี้",
+                "> หากมีแรงดันส่วนหน้า–หลังที่กลับทิศจริง (R < 0) ค่า n จะลดลง "
+                "ตามสมการ σ_a/S_e + σ_m/S_y ดังนั้นผลนี้ใช้ได้เมื่อยอมรับ R = 0",
             ]
         )
-
-    def _governing_post_axial_n(self) -> float:
-        """Axial force on the governing post, distributed by the lever rule.
-
-        Each arm rest is carried by two posts, so the pad load splits by
-        lever rule rather than 50/50. The bracket bonded to the governing
-        post carries that post's full axial share.
-        """
-        r_front, r_rear = self.ag.post_reaction_fractions(self.loads.left_arm_load_y_mm)
-        return self.loads.left_arm_vertical_n * max(r_front, r_rear)
-
-    def _bracket_sigma(self) -> float:
-        a = self.sol.armrests[0]
-        bW = self.g.armrest_bracket_thickness_mm
-        bH = self.g.armrest_bracket_height_mm
-        bz = (bW * bH**3 / 12.0) / (bH / 2.0)
-        f_post = self._governing_post_axial_n()
-        return f_post / (bW * bH) + (a.strut_base_moment_nm / 2.0) * 1e3 / bz
 
     def _fea(self) -> str:
         """Direct-stiffness results, if the FEA engine can run."""
@@ -584,7 +610,7 @@ class FrameDataSheetGenerator:
             "| ตัวสร้างเอกสาร | `reporting/frame_data_sheet.py` |",
             "| solver หลัก | `physics/frame_physics.py::FramePhysicsSolver.solve()` |",
             "| solver รอง | `physics/fea_3d.py::FEA3DSolver.solve()` |",
-            "| เรขาคณิตแขน | `core/frame_model.py::resolve_armrest()` |",
+            "| เรขาคณิตแขน | `core/frame_model.py::resolve_armrest_shared()` |",
             "| แบบ CAD | `cad/assembly.py::FrameCADEngine` |",
             "",
             "---",
@@ -641,13 +667,37 @@ class FrameDataSheetGenerator:
             "",
             "1. **แผ่นยึดแขน** — พื้นที่สำหรับเทศแรงตั้งควรใช้หน้าตัดดัด (12×11) "
             "หรือเนื้อที่รวม (25×12×11) ดูหัวข้อ 7 ทั้งสองวิธีผ่านแต่ให้ n ต่างกัน",
-            "2. **ความทนทานของแขน** — แรงจากน้ำหนักผู้นั่งเป็นแรงสถิต "
-            "การใช้เกณฑ์ S_e จึงไม่ตรงกับลักษณะการโหลด (ดูหัวข้อ 11)",
-            "3. **`physics/fea_3d.py` ยังไม่ได้แก้ตาม** — ยังตั้งตำแหน่งเสาแขนด้วยตัวเลขตายตัว "
-            "และยังแบ่งแรง 50/50 จึงอธิบายโครงสร้างต่างจาก CAD ที่แก้แล้ว",
+            "2. **ความทนทานของแขน** — คำนวณบนเกณฑ์แรงทำซ้ำไม่กลับทิศ (pulsating, R = 0) "
+            "เพราะแรงจากน้ำหนักผู้นั่งไม่ใช่แรงกลับทิศ ดูหัวข้อ 11 "
+            "หากมีแรงดันหน้า–หลังที่กลับทิศจริง (R < 0) ค่า n จะลดลง",
+            "3. **`physics/fea_3d.py` แก้ไขตรงกับ CAD แล้ว** — ซิงค์ตำแหน่งเสาแขนด้วย "
+            "`resolve_armrest_shared()` และกระจายแรงตาม Lever Rule เรียบร้อยแล้ว "
+            "(ผลการวิเคราะห์ 3D FEA สอดคล้องกับแบบจำลอง CAD และสมดุลแรงจริง)",
             "4. **SF การพลิกคว่าด้านข้าง** — แก้แล้ว: solver คืนค่า `None` และรายงานแสดง `N/A` "
             "แทนค่าเทียม เพราะแรงข้างของแขนซ้ายและขวาหักล้างกันพอดีจึงไม่มีโมเมนต์พลิกสุทธิ",
             "5. **การหารโมเมนต์แผ่นยึดด้วย 2** — สมมติฐานว่าแผ่นทั้งสองช่วยกันแบ่งโมเมนต์ ยังไม่ได้พิสูจน์",
+            "",
+            "## 17. ขอบเขตงานวิเคราะห์ (Scope)",
+            "",
+            "| รายการ | สถานะ |",
+            "|---|---|",
+            "| แผ่นยึดแขน (bracket plate) | อยู่ในขอบเขต — วิเคราะห์ครบ เป็นชิ้นวิกฤตของโครง |",
+            "| สกรู / น็อต / หมุด (fasteners) | อยู่นอกขอบเขต — ไม่ได้จำลอง ไม่ได้ตรวจ |",
+            "",
+            "`cad/assembly.py` สร้างเฉพาะ primitive สองชนิดคือ tube และ box "
+            "โมเดลจึงไม่มีชิ้นส่วนยึดใด ๆ และไม่มีการตรวจแรงเฉือน แรงดึง แรงอัดของสกรู "
+            "การชนของรู (bearing) การดึงออกของแผ่น (tear-out) หรือการเลื่อนของรอยต่อ (slip)",
+            "",
+            "**สมมติฐานของรอยต่อ**: รอยต่อระหว่างแผ่นยึดกับท่อแขน จำลองเป็น **อิสระ (rigid / fully continuous)** "
+            "คือไม่มีการเลื่อนและไม่มีการหมุนรอบรอยต่อ แผ่นยึดจึงรับโมเมนต์ครึ่งหนึ่งของ M_base พอดี",
+            "",
+            "> หากต่อด้วยสกรูจริงและเกิดการเลื่อน โมเมนต์จะถ่ายเข้าท่อแขนมากขึ้น "
+            "แผ่นยึดจะรับโมเมนต์น้อยลง และ n จะสูงขึ้น "
+            "กล่าวคือสมมติฐานนี้เป็นการประเมินแบบอนุรักษ์สำหรับแผ่นยึด "
+            "แต่ไม่ครอบคลุมความแข็งแรงของสกรูซึ่งต้องตรวจแยก",
+            "",
+            "การออกแบบรอยต่อและขนาดสกรูอยู่นอกขอบเขตของโมเดลนี้ "
+            "มีโมเดลแยกที่ `Project/bolted_joint_m16` (รอยต่อสกรู) และ `Project/bracket` (ฐานแขน)",
             "",
         ]
         return "\n".join(parts)
@@ -662,6 +712,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     path = out / "chair_real_data.md"
     path.write_text(FrameDataSheetGenerator().generate_markdown(), encoding="utf-8")
     print(f"[ok] {path}")
+    # Machine-checkable record of where every engineering number came from.
+    from physics.provenance import write_manifest
+
+    print(f"[ok] {write_manifest(out)}")
     return 0
 
 

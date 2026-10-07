@@ -75,10 +75,32 @@ def test_design_flags_are_extracted_in_any_order():
     assert _design_flags([]) == (None, False)
 
 
-def test_resolve_target_falls_back_to_the_project_folder():
-    resolved = _resolve_target("chair")
-    assert isinstance(resolved, Path)
-    assert resolved.exists()
+def test_resolve_target_falls_back_to_the_project_folder(tmp_path, monkeypatch):
+    """A bare project name resolves to Project/<name> when that folder exists.
+
+    Built in a temp tree rather than against the real Project/chair, which is
+    gitignored and therefore absent on a fresh CI checkout.
+    """
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "Project" / "widget").mkdir(parents=True)
+
+    assert _resolve_target("widget") == Path("Project") / "widget"
+
+
+def test_resolve_target_returns_a_direct_file_path(tmp_path, monkeypatch):
+    """A path that already exists is returned unchanged, with no fallback."""
+    monkeypatch.chdir(tmp_path)
+    part = tmp_path / "bracket.step"
+    part.write_text("ISO-10303-21;", encoding="utf-8")
+
+    assert _resolve_target("bracket.step") == Path("bracket.step")
+
+
+def test_resolve_target_returns_the_input_when_nothing_exists(tmp_path, monkeypatch):
+    """An unresolvable name comes back as-is so callers can report it."""
+    monkeypatch.chdir(tmp_path)
+
+    assert _resolve_target("nonexistent") == Path("nonexistent")
 
 
 def test_known_subcommands_are_declared():
@@ -89,6 +111,41 @@ def test_known_subcommands_are_declared():
 def test_legacy_subcommand_aliases_are_preserved():
     for alias in ("docx", "word", "convert-docx", "consolidate", "study", "solve", "optimize"):
         assert alias in SUBCOMMANDS
+
+
+def test_process_prompt_reads_a_docx_spec_file(tmp_path):
+    """A .docx path is extracted into text by the prompt reader."""
+    import docx
+
+    from cli.app import _maybe_read_file_prompt
+
+    doc = docx.Document()
+    doc.add_heading("Spec", level=1)
+    doc.add_paragraph("Design a shaft 500 mm long with a keyway")
+    spec = tmp_path / "spec.docx"
+    doc.save(str(spec))
+
+    text = _maybe_read_file_prompt(str(spec))
+    assert "Design a shaft 500 mm long with a keyway" in text
+    assert "Spec" in text
+
+
+def test_process_prompt_reads_an_md_spec_file(tmp_path):
+    from cli.app import _maybe_read_file_prompt
+
+    spec = tmp_path / "spec.md"
+    spec.write_text("# Bracket\nmotor mount, 4 bolt holes, 10 kg", encoding="utf-8")
+
+    text = _maybe_read_file_prompt(str(spec))
+    assert "motor mount" in text
+    assert "4 bolt holes" in text
+
+
+def test_process_prompt_passes_through_a_non_file_prompt():
+    """A plain sentence is not treated as a document to read."""
+    from cli.app import _maybe_read_file_prompt
+
+    assert _maybe_read_file_prompt("design a chair") == "design a chair"
 
 
 def test_find_cad_tools_returns_a_mapping():

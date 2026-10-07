@@ -35,7 +35,7 @@ from core.frame_model import (
     FrameDesignModel,
     FrameGeometry,
     TubeProfile,
-    resolve_armrest,
+    resolve_armrest_shared,
 )
 
 DEFAULT_OUTDIR = Path("Project/chair/drawings")
@@ -370,7 +370,7 @@ def build_parts(model: FrameDesignModel) -> list[PartDrawing]:
     arm_pad_thick = ARM_PAD_THICKNESS_MM
     # Same primitives the STEP is meshed from, so the views show the real
     # posts, cross beams and pad rather than a bounding box.
-    arm_ag = resolve_armrest(
+    arm_ag = resolve_armrest_shared(
         g, side=-1.0, arm_tube_r=arm_tube_d / 2.0, pad_thickness_mm=arm_pad_thick
     )
     arm_prims = armrest_primitives(arm_ag)
