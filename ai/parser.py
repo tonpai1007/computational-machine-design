@@ -10,6 +10,13 @@ import re
 from typing import Any
 
 from ai.assumptions import AssumptionManager
+from core.frame_model import (
+    FrameDesignModel,
+    FrameGeometry,
+    FrameLoads,
+    TubeProfile,
+    STRUCTURAL_MATERIALS,
+)
 from core.models import (
     DistributedLoad,
     EngineeringConstraints,
@@ -536,4 +543,324 @@ class NLParser:
         )
 
         model.assumptions = AssumptionManager.audit_model(model)
+        return model, logs
+
+
+class FrameNLParser:
+    """Parse natural language into FrameDesignModel for frames/furniture/structures."""
+
+    @staticmethod
+    def parse(prompt: str) -> tuple[FrameDesignModel, list[str]]:
+        logs = []
+
+        from ai.llm_router import LLMRouter
+
+        if LLMRouter.get_configured_providers():
+            try:
+                model, llm_logs = FrameNLParser._parse_with_llm(prompt)
+                if model:
+                    logs.extend(llm_logs)
+                    return model, logs
+                logs.extend(llm_logs)
+            except Exception as e:
+                logs.append(f"LLM parse notice: {str(e)}. Falling back to deterministic NLP engine.")
+
+        model, nlp_logs = FrameNLParser._parse_deterministic(prompt)
+        logs.extend(nlp_logs)
+        return model, logs
+
+    @staticmethod
+    def _parse_with_llm(prompt: str) -> tuple[FrameDesignModel | None, list[str]]:
+        from ai.llm_router import LLMRouter
+
+        system_instruction = (
+            "You are an expert mechanical engineering parser for MDIE frame/furniture designs.\n"
+            "Extract structured parameters from the user's natural language request into a valid JSON object.\n"
+            "Return ONLY raw JSON with the following schema:\n"
+            "{\n"
+            '  "name": "Frame Name",\n'
+            '  "topology_type": "chair" | "stool" | "table" | "bench" | "tripod",\n'
+            '  "material_id": "STEEL_1018" | "AL_6061_T6" | "WHITE_OAK" | "STAINLESS_304",\n'
+            '  "num_legs": 3 | 4 | 6,\n'
+            '  "has_arms": true | false,\n'
+            '  "has_backrest": true | false,\n'
+            '  "has_seat_plate": true | false,\n'
+            '  "has_stretchers": true | false,\n'
+            '  "seat_height_mm": float,\n'
+            '  "seat_width_mm": float,\n'
+            '  "seat_depth_mm": float,\n'
+            '  "seat_thickness_mm": float,\n'
+            '  "leg_splay_angle_deg": float,\n'
+            '  "stretcher_height_mm": float,\n'
+            '  "armrest_height_above_seat_mm": float,\n'
+            '  "armrest_length_mm": float,\n'
+            '  "armrest_width_mm": float,\n'
+            '  "armrest_overhang_front_mm": float,\n'
+            '  "armrest_front_post_y_mm": float,\n'
+            '  "armrest_rear_post_y_over_depth": float,\n'
+            '  "armrest_has_diagonal_brace": true | false,\n'
+            '  "armrest_bracket_thickness_mm": float,\n'
+            '  "armrest_bracket_height_mm": float,\n'
+            '  "backrest_height_above_seat_mm": float,\n'
+            '  "backrest_angle_deg": float,\n'
+            '  "leg_profile": {"profile_type": "round_tube", "outer_dimension_mm": float, "wall_thickness_mm": float},\n'
+            '  "frame_profile": {"profile_type": "square_tube", "outer_dimension_mm": float, "wall_thickness_mm": float},\n'
+            '  "arm_profile": {"profile_type": "round_tube", "outer_dimension_mm": float, "wall_thickness_mm": float},\n'
+            '  "stretcher_profile": {"profile_type": "round_tube", "outer_dimension_mm": float, "wall_thickness_mm": float},\n'
+            '  "seat_vertical_load_n": float,\n'
+            '  "seat_load_center_x_mm": float,\n'
+            '  "seat_load_center_y_mm": float,\n'
+            '  "left_arm_vertical_n": float,\n'
+            '  "left_arm_lateral_n": float,\n'
+            '  "left_arm_foreaft_n": float,\n'
+            '  "left_arm_load_y_mm": float,\n'
+            '  "right_arm_vertical_n": float,\n'
+            '  "right_arm_lateral_n": float,\n'
+            '  "right_arm_foreaft_n": float,\n'
+            '  "right_arm_load_y_mm": float,\n'
+            '  "backrest_force_n": float\n'
+            "}\n"
+            "All dimensions in mm, forces in N. Use defaults from FrameDesignModel if not specified.\n"
+            "Convert kg to N (×9.81). Infer topology from keywords: chair/armchair→chair with arms+back, stool→no arms/back, table→table height, bench→long seat."
+        )
+
+        raw_text, provider, logs = LLMRouter.call_chat_completion(
+            system_prompt=system_instruction, user_prompt=prompt, response_format_json=True
+        )
+
+        if not raw_text:
+            return None, logs
+
+        import re
+        clean_json_str = raw_text.strip()
+        if clean_json_str.startswith("```"):
+            clean_json_str = re.sub(r"^```(?:json)?\s*", "", clean_json_str)
+            clean_json_str = re.sub(r"\s*```$", "", clean_json_str)
+
+        data = json.loads(clean_json_str)
+        model = FrameNLParser._build_model_from_json(data, provider_name=provider or "llm")
+        return model, logs
+
+    @staticmethod
+    def _build_model_from_json(data: dict[str, Any], provider_name: str = "llm") -> FrameDesignModel:
+        """Construct validated FrameDesignModel from structured JSON data."""
+
+        # Material
+        mat_id = data.get("material_id", "STEEL_1018")
+        material = STRUCTURAL_MATERIALS.get(mat_id, STRUCTURAL_MATERIALS["STEEL_1018"])
+
+        # Geometry
+        geom_data = data
+        geom = FrameGeometry(
+            topology_type=geom_data.get("topology_type", "chair"),
+            num_legs=int(geom_data.get("num_legs", 4)),
+            has_arms=bool(geom_data.get("has_arms", True)),
+            has_backrest=bool(geom_data.get("has_backrest", True)),
+            has_seat_plate=bool(geom_data.get("has_seat_plate", True)),
+            has_stretchers=bool(geom_data.get("has_stretchers", True)),
+            seat_height_mm=float(geom_data.get("seat_height_mm", 450.0)),
+            seat_width_mm=float(geom_data.get("seat_width_mm", 480.0)),
+            seat_depth_mm=float(geom_data.get("seat_depth_mm", 460.0)),
+            seat_thickness_mm=float(geom_data.get("seat_thickness_mm", 22.0)),
+            leg_splay_angle_deg=float(geom_data.get("leg_splay_angle_deg", 3.5)),
+            stretcher_height_mm=float(geom_data.get("stretcher_height_mm", 150.0)),
+            armrest_height_above_seat_mm=float(geom_data.get("armrest_height_above_seat_mm", 210.0)),
+            armrest_length_mm=float(geom_data.get("armrest_length_mm", 320.0)),
+            armrest_width_mm=float(geom_data.get("armrest_width_mm", 45.0)),
+            armrest_overhang_front_mm=float(geom_data.get("armrest_overhang_front_mm", 60.0)),
+            armrest_front_post_y_mm=float(geom_data.get("armrest_front_post_y_mm", 110.0)),
+            armrest_rear_post_y_over_depth=float(geom_data.get("armrest_rear_post_y_over_depth", -1.0 / 3.0)),
+            armrest_has_diagonal_brace=bool(geom_data.get("armrest_has_diagonal_brace", True)),
+            armrest_bracket_thickness_mm=float(geom_data.get("armrest_bracket_thickness_mm", 12.0)),
+            armrest_bracket_height_mm=float(geom_data.get("armrest_bracket_height_mm", 11.0)),
+            backrest_height_above_seat_mm=float(geom_data.get("backrest_height_above_seat_mm", 420.0)),
+            backrest_angle_deg=float(geom_data.get("backrest_angle_deg", 98.0)),
+            leg_profile=TubeProfile(**(geom_data.get("leg_profile", {"profile_type": "round_tube", "outer_dimension_mm": 28.0, "wall_thickness_mm": 2.0}))),
+            frame_profile=TubeProfile(**(geom_data.get("frame_profile", {"profile_type": "square_tube", "outer_dimension_mm": 25.0, "wall_thickness_mm": 2.0}))),
+            arm_profile=TubeProfile(**(geom_data.get("arm_profile", {"profile_type": "round_tube", "outer_dimension_mm": 22.0, "wall_thickness_mm": 1.8}))),
+            stretcher_profile=TubeProfile(**(geom_data.get("stretcher_profile", {"profile_type": "round_tube", "outer_dimension_mm": 19.0, "wall_thickness_mm": 1.5}))),
+        )
+
+        # Loads
+        loads = FrameLoads(
+            seat_vertical_load_n=float(geom_data.get("seat_vertical_load_n", 1300.0)),
+            seat_load_center_x_mm=float(geom_data.get("seat_load_center_x_mm", 0.0)),
+            seat_load_center_y_mm=float(geom_data.get("seat_load_center_y_mm", -25.0)),
+            left_arm_vertical_n=float(geom_data.get("left_arm_vertical_n", 450.0)),
+            left_arm_lateral_n=float(geom_data.get("left_arm_lateral_n", -150.0)),
+            left_arm_foreaft_n=float(geom_data.get("left_arm_foreaft_n", 0.0)),
+            left_arm_load_y_mm=float(geom_data.get("left_arm_load_y_mm", 0.0)),
+            right_arm_vertical_n=float(geom_data.get("right_arm_vertical_n", 450.0)),
+            right_arm_lateral_n=float(geom_data.get("right_arm_lateral_n", 150.0)),
+            right_arm_foreaft_n=float(geom_data.get("right_arm_foreaft_n", 0.0)),
+            right_arm_load_y_mm=float(geom_data.get("right_arm_load_y_mm", 0.0)),
+            backrest_force_n=float(geom_data.get("backrest_force_n", 300.0)),
+        )
+
+        model = FrameDesignModel(
+            name=data.get("name", "MDIE Frame Design"),
+            geometry=geom,
+            loads=loads,
+            material=material,
+            metadata={"source": provider_name},
+        )
+
+        # FrameDesignModel doesn't use AssumptionManager.audit_model (that's for shafts)
+        return model
+
+    @staticmethod
+    def _parse_deterministic(text: str) -> tuple[FrameDesignModel, list[str]]:
+        """Robust rule-based regex parser for frame/furniture requests."""
+        logs = ["Using MDIE deterministic frame NLP parser."]
+        t = text.lower().strip()
+
+        # Topology detection
+        topology = "chair"
+        num_legs = 4
+        has_arms = True
+        has_backrest = True
+        has_seat_plate = True
+        has_stretchers = True
+
+        if any(w in t for w in ["3 leg", "three leg", "tripod"]):
+            topology = "stool"
+            num_legs = 3
+            has_arms = False
+            has_backrest = False
+        elif "stool" in t:
+            topology = "stool"
+            has_arms = False
+            has_backrest = False
+        elif any(w in t for w in ["table", "desk", "workbench"]):
+            topology = "table"
+            has_arms = False
+            has_backrest = False
+            has_seat_plate = True
+        elif "bench" in t:
+            topology = "bench"
+            has_arms = False
+            has_backrest = False
+        elif any(w in t for w in ["no arm", "armless", "without arm"]):
+            has_arms = False
+        elif any(w in t for w in ["no back", "backless", "without back"]):
+            has_backrest = False
+
+        # Dimension extraction helpers
+        def extract_mm(pattern: str, default: float, label: str) -> float:
+            m = re.search(pattern, t)
+            if m:
+                # Handle multiple capture groups - find the first non-None group
+                val = None
+                for g in m.groups():
+                    if g is not None:
+                        val = float(g)
+                        break
+                if val is not None:
+                    logs.append(f"Extracted {label}: {val} mm")
+                    return val
+            return default
+
+        def extract_kg_to_n(pattern: str, default: float, label: str) -> float:
+            m = re.search(pattern, t)
+            if m:
+                val = float(m.group(1)) * 9.81
+                logs.append(f"Extracted {label}: {m.group(1)} kg = {val:.1f} N")
+                return val
+            return default
+
+        # Main dimensions
+        # More flexible patterns: match "500mm height", "height 500mm", "500 mm seat height", etc.
+        seat_height = extract_mm(r"(?:seat|platform|table)\s*(?:height|tall)\s*(\d+(?:\.\d+)?)\s*(?:mm|millimeter)?|(\d+(?:\.\d+)?)\s*(?:mm|millimeter)?\s*(?:seat|platform|table)\s*(?:height|tall)", 450.0, "seat height")
+        seat_width = extract_mm(r"(?:seat|platform|table)\s*(?:width|wide)\s*(\d+(?:\.\d+)?)\s*(?:mm|millimeter)?|(\d+(?:\.\d+)?)\s*(?:mm|millimeter)?\s*(?:seat|platform|table)\s*(?:width|wide)", 480.0, "seat width")
+        seat_depth = extract_mm(r"(?:seat|platform|table)\s*(?:depth|deep)\s*(\d+(?:\.\d+)?)\s*(?:mm|millimeter)?|(\d+(?:\.\d+)?)\s*(?:mm|millimeter)?\s*(?:seat|platform|table)\s*(?:depth|deep)", 460.0, "seat depth")
+        seat_thickness = extract_mm(r"(?:seat|pan|top)\s*(?:thickness|thick)\s*(\d+(?:\.\d+)?)\s*(?:mm|millimeter)?|(\d+(?:\.\d+)?)\s*(?:mm|millimeter)?\s*(?:seat|pan|top)\s*(?:thickness|thick)", 22.0, "seat thickness")
+
+        # Leg splay - look for degree symbol or explicit "degree" or "splay"
+        splay = extract_mm(r"(\d+(?:\.\d+)?)\s*(?:deg|degree|°)\s*(?:splay|flare|angle)|splay\s*(\d+(?:\.\d+)?)\s*(?:deg|degree|°)?", 3.5, "leg splay angle")
+
+        # Stretcher
+        stretcher_h = extract_mm(r"(?:stretcher|cross)\s*(?:height|high)\s*(\d+(?:\.\d+)?)\s*(?:mm|millimeter)?|(\d+(?:\.\d+)?)\s*(?:mm|millimeter)?\s*(?:stretcher|cross)\s*(?:height|high)", 150.0, "stretcher height")
+
+        # Armrest
+        arm_height = extract_mm(r"(?:arm|armrest)\s*(?:height|tall)\s*(\d+(?:\.\d+)?)\s*(?:mm|millimeter)?|(\d+(?:\.\d+)?)\s*(?:mm|millimeter)?\s*(?:arm|armrest)\s*(?:height|tall)", 210.0, "armrest height")
+        arm_length = extract_mm(r"(?:arm|armrest)\s*(?:length|long)\s*(\d+(?:\.\d+)?)\s*(?:mm|millimeter)?|(\d+(?:\.\d+)?)\s*(?:mm|millimeter)?\s*(?:arm|armrest)\s*(?:length|long)", 320.0, "armrest length")
+        arm_width = extract_mm(r"(?:arm|armrest)\s*(?:width|wide)\s*(\d+(?:\.\d+)?)\s*(?:mm|millimeter)?|(\d+(?:\.\d+)?)\s*(?:mm|millimeter)?\s*(?:arm|armrest)\s*(?:width|wide)", 45.0, "armrest width")
+        arm_overhang = extract_mm(r"(?:overhang|cantilever)\s*(\d+(?:\.\d+)?)\s*(?:mm|millimeter)?|(\d+(?:\.\d+)?)\s*(?:mm|millimeter)?\s*(?:overhang|cantilever)", 60.0, "armrest overhang")
+
+        # Backrest
+        back_height = extract_mm(r"(?:back|backrest)\s*(?:height|tall)\s*(\d+(?:\.\d+)?)\s*(?:mm|millimeter)?|(\d+(?:\.\d+)?)\s*(?:mm|millimeter)?\s*(?:back|backrest)\s*(?:height|tall)", 420.0, "backrest height")
+        back_angle = extract_mm(r"(?:back|backrest)\s*(?:angle|recline)\s*(\d+(?:\.\d+)?)\s*(?:deg|degree|°)?|(\d+(?:\.\d+)?)\s*(?:deg|degree|°)?\s*(?:back|backrest)\s*(?:angle|recline)", 98.0, "backrest angle")
+
+        # Loads
+        seat_load = extract_kg_to_n(r"(\d+(?:\.\d+)?)\s*kg\s*(?:seat|person|user|load|weight)?", 1300.0, "seat load")
+        if seat_load == 1300.0:
+            seat_load = extract_mm(r"(\d+(?:\.\d+)?)\s*(?:n|newtons?)\s*(?:seat|vertical)?", 1300.0, "seat load")
+
+        arm_load_kg = re.search(r"(\d+(?:\.\d+)?)\s*kg\s*(?:arm|armrest)", t)
+        arm_load = float(arm_load_kg.group(1)) * 9.81 if arm_load_kg else 450.0
+        if arm_load == 450.0:
+            arm_load = extract_mm(r"(\d+(?:\.\d+)?)\s*(?:n|newtons?)\s*(?:arm|armrest)", 450.0, "arm load")
+
+        # Material
+        mat_id = "STEEL_1018"
+        if "4140" in t:
+            mat_id = "AISI_4140_QT"
+        elif "4340" in t:
+            mat_id = "AISI_4340_QT"
+        elif "1018" in t:
+            mat_id = "STEEL_1018"
+        elif "aluminum" in t or "6061" in t:
+            mat_id = "AL_6061_T6"
+        elif "7075" in t:
+            mat_id = "AL_7075_T6"
+        elif "oak" in t or "wood" in t:
+            mat_id = "WHITE_OAK"
+        elif "stainless" in t or "304" in t:
+            mat_id = "STAINLESS_304"
+        logs.append(f"Selected material: {mat_id}")
+
+        # Tube profiles
+        leg_dia = extract_mm(r"(\d+(?:\.\d+)?)\s*(?:mm|millimeter)?\s*(?:leg|tube|dia)", 28.0, "leg tube OD")
+        leg_wall = extract_mm(r"(\d+(?:\.\d+)?)\s*(?:mm|millimeter)?\s*(?:wall|thick)\s*(?:leg|tube)", 2.0, "leg wall thickness")
+
+        # Build model
+        geom = FrameGeometry(
+            topology_type=topology,
+            num_legs=num_legs,
+            has_arms=has_arms,
+            has_backrest=has_backrest,
+            has_seat_plate=has_seat_plate,
+            has_stretchers=has_stretchers,
+            seat_height_mm=seat_height,
+            seat_width_mm=seat_width,
+            seat_depth_mm=seat_depth,
+            seat_thickness_mm=seat_thickness,
+            leg_splay_angle_deg=splay,
+            stretcher_height_mm=stretcher_h,
+            armrest_height_above_seat_mm=arm_height,
+            armrest_length_mm=arm_length,
+            armrest_width_mm=arm_width,
+            armrest_overhang_front_mm=arm_overhang,
+            backrest_height_above_seat_mm=back_height,
+            backrest_angle_deg=back_angle,
+            leg_profile=TubeProfile(profile_type="round_tube", outer_dimension_mm=leg_dia, wall_thickness_mm=leg_wall),
+        )
+
+        loads = FrameLoads(
+            seat_vertical_load_n=seat_load,
+            left_arm_vertical_n=arm_load,
+            right_arm_vertical_n=arm_load,
+        )
+
+        material = STRUCTURAL_MATERIALS.get(mat_id, STRUCTURAL_MATERIALS["STEEL_1018"])
+
+        model = FrameDesignModel(
+            name="MDIE Frame Design",
+            geometry=geom,
+            loads=loads,
+            material=material,
+            metadata={"source": "deterministic_nlp"},
+        )
+
+        # FrameDesignModel doesn't use AssumptionManager.audit_model (that's for shafts)
         return model, logs

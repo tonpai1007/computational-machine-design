@@ -223,6 +223,9 @@ mdie convert Project/chair/chair.stl --to 3mf
 mdie convert Project/chair/chair.stl --to obj
 mdie convert Project/chair/chair.step --to stl        # FreeCAD console binary
 mdie convert Project/chair/chair.scad --to stl        # OpenSCAD
+mdie convert Project/chair/chair.step --to dxf        # 2D first-angle + overall dims for AutoCAD [--no-dims]
+mdie convert Project/chair/chair.dxf --to pdf         # vector PDF of a DXF sheet
+mdie convert Project/chair/diagrams --to pdf          # merges every part sheet
 
 # drawing sheets - no headless Chrome required
 mdie convert Project/chair/drawings/Chair_Assembly.svg --to png --dpi 300
@@ -236,7 +239,7 @@ mdie convert Project/chair/drawings --to pdf          # merges all 10 sheets
 | CAD solids | `stl` `obj` `3mf` | none - pure Python |
 | CAD solids | `step` `stp` `iges` `igs` | FreeCAD, driven through its **console** binary `FreeCADCmd` |
 | CAD solids | `scad` | OpenSCAD CLI |
-| Sheets | `svg` `pdf` `png` | PyMuPDF |
+| Sheets | `svg` `dxf` `pdf` `png` | PyMuPDF |
 
 External CAD tools are invoked headlessly, under a timeout, and never through
 a GUI executable - only `FreeCADCmd` is considered, so a conversion can never

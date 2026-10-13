@@ -193,8 +193,8 @@ def _handle_bracket(prompt: str, p_lower: str, output_dir: str | None = None) ->
 
 
 def _handle_chair(prompt: str, p_lower: str, output_dir: str | None = None) -> bool:
+    from ai.parser import FrameNLParser
     from cad.assembly import FrameCADEngine
-    from core.frame_model import STRUCTURAL_MATERIALS, FrameDesignModel
     from physics.fea_3d import build_chair_3d_fea_model
     from physics.frame_physics import FramePhysicsSolver
     from reporting.academic_engine import AcademicAssignmentEngine
@@ -203,74 +203,15 @@ def _handle_chair(prompt: str, p_lower: str, output_dir: str | None = None) -> b
     out_path = Path(output_dir or "Project/chair")
     out_path.mkdir(parents=True, exist_ok=True)
 
-    # Material selection
-    mat = STRUCTURAL_MATERIALS["STEEL_1018"]
-    if "aluminum" in p_lower or "6061" in p_lower:
-        mat = STRUCTURAL_MATERIALS["AL_6061_T6"]
-    elif "oak" in p_lower or "wood" in p_lower:
-        mat = STRUCTURAL_MATERIALS["WHITE_OAK"]
-    elif "stainless" in p_lower or "304" in p_lower:
-        mat = STRUCTURAL_MATERIALS["STAINLESS_304"]
-
-    model = FrameDesignModel(name="MDIE Structural Frame", material=mat)
-
-    # Topology & Member Detection
-    if any(w in p_lower for w in ["3 leg", "three leg", "tripod"]):
-        model.geometry.num_legs = 3
-        model.geometry.has_arms = False
-        model.geometry.has_backrest = False
-        model.geometry.topology_type = "stool"
-        model.name = "MDIE 3-Legged Tripod Stool"
-    elif "stool" in p_lower:
-        model.geometry.has_arms = False
-        model.geometry.has_backrest = False
-        model.geometry.topology_type = "stool"
-        model.name = "MDIE 4-Legged Stool"
-    elif any(w in p_lower for w in ["table", "desk", "workbench"]):
-        model.geometry.has_arms = False
-        model.geometry.has_backrest = False
-        model.geometry.topology_type = "table"
-        model.geometry.seat_height_mm = 750.0
-        model.geometry.seat_width_mm = 1200.0
-        model.geometry.seat_depth_mm = 700.0
-        model.name = "MDIE Structural Table Frame"
-    elif "bench" in p_lower:
-        model.geometry.has_arms = False
-        model.geometry.has_backrest = False
-        model.geometry.topology_type = "bench"
-        model.geometry.seat_width_mm = 1100.0
-        model.name = "MDIE Structural Bench"
-    else:
-        model.name = "MDIE Ergonomic Armchair"
-
-    if any(w in p_lower for w in ["no arm", "armless", "without arm"]):
-        model.geometry.has_arms = False
-    if any(w in p_lower for w in ["no back", "backless", "without back"]):
-        model.geometry.has_backrest = False
-
-    # Extract custom seat/platform load if present
-    seat_match = re.search(r"(\d+)\s*(?:n|newtons?)\s*(?:seat|table|vertical|load)?", p_lower)
-    if seat_match:
-        model.loads.seat_vertical_load_n = float(seat_match.group(1))
-    kg_match = re.search(r"(\d+)\s*kg", p_lower)
-    if kg_match and not seat_match:
-        model.loads.seat_vertical_load_n = float(kg_match.group(1)) * 9.81
-
-    # Extract custom arm load
-    if model.geometry.has_arms:
-        arm_match = re.search(r"(\d+)\s*(?:n|newtons?)\s*(?:arm|armrest)", p_lower)
-        if arm_match:
-            val = float(arm_match.group(1))
-            model.loads.left_arm_vertical_n = val
-            model.loads.right_arm_vertical_n = val
-
-    # Extract leg tube diameter
-    dia_match = re.search(r"(\d+(?:\.\d+)?)\s*mm\s*(?:leg|tube|dia)", p_lower)
-    if dia_match:
-        model.geometry.leg_profile.outer_dimension_mm = float(dia_match.group(1))
+    console.print(
+        "[bold green][1/3] Parsing Frame Geometry & Loads from Natural Language...[/bold green]"
+    )
+    model, logs = FrameNLParser.parse(prompt)
+    for log in logs:
+        console.print(f"[dim]{log}[/dim]")
 
     console.print(
-        f"[bold green][1/3] Calculating Structural Forces & Buckling ({model.material.name})...[/bold green]"
+        f"[bold green][2/3] Calculating Structural Forces & Buckling ({model.material.name})...[/bold green]"
     )
     result = FramePhysicsSolver.solve(model)
 

@@ -46,6 +46,15 @@ FORMATS: dict[str, Format] = {
         Format("scad", SOLID, (".scad",), "OpenSCAD parametric source", ()),
         Format("svg", SHEET, (".svg",), "Vector drawing sheet", (), reads=True),
         Format("png", SHEET, (".png",), "Raster image of a sheet", ("fitz",)),
+        Format("dxf", SHEET, (".dxf",), "2D projection of a solid for AutoCAD", (), reads=True),
+        Format(
+            "dxf-parts",
+            SHEET,
+            (),
+            "one dimensioned 2D DXF per part STEP in a folder",
+            (),
+            reads=False,
+        ),
     ]
 }
 

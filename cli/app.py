@@ -33,6 +33,7 @@ from cli.designers import (
     _handle_space_frame,
 )
 from cli.viewers import find_cad_tools, launch_cad_viewer
+from ai.docgen_workflow import generate_docx_report
 
 if sys.platform == "win32":
     try:
@@ -296,12 +297,18 @@ def _cmd_convert(argv: list[str]) -> int:
         "--to",
         "-t",
         dest="to",
-        help="target format (docx, pdf, html, md, stl, step, scad, 3mf, iges, obj, png)",
+        help="target format (docx, pdf, html, md, stl, step, scad, 3mf, iges, obj, dxf, dxf-parts, png)",
     )
     ap.add_argument("-o", "--output", dest="output", help="output path")
     ap.add_argument("--list-formats", action="store_true", help="show supported conversions")
     ap.add_argument("--ai", action="store_true", help="AI pass on document output (docx/html)")
     ap.add_argument("--dpi", type=int, default=200, help="raster DPI for png output")
+    ap.add_argument(
+        "--no-dims",
+        dest="dimensions",
+        action="store_false",
+        help="omit auto-dimensions from STEP -> DXF output",
+    )
     args = ap.parse_args(argv)
 
     if args.list_formats:
@@ -315,11 +322,23 @@ def _cmd_convert(argv: list[str]) -> int:
 
     try:
         result = convert_file(
-            args.input, target_format=args.to, output_path=args.output, use_ai=args.ai, dpi=args.dpi
+            args.input,
+            target_format=args.to,
+            output_path=args.output,
+            use_ai=args.ai,
+            dpi=args.dpi,
+            dimensions=args.dimensions,
         )
     except Exception as exc:
         console.print(f"[bold red]Conversion failed:[/bold red] {exc}")
         return 1
+
+    if result.is_dir():
+        count = len(list(result.glob("*.dxf")))
+        console.print(
+            f"[bold green]>> Wrote[/bold green] [bold cyan]{count} DXF files[/bold cyan] to {result}"
+        )
+        return 0
 
     size = result.stat().st_size / 1024
     console.print(
@@ -451,6 +470,143 @@ def _cmd_trace(argv: list[str]) -> int:
     return 0
 
 
+def _load_project_model(target_name: str):
+    """Load or create the appropriate engineering model for a project type."""
+    from core.models import (
+        EngineeringModel,
+        ShaftSegment,
+        Support,
+        EngineeringConstraints,
+        TorqueLoad,
+        PointLoad,
+        DistributedLoad,
+    )
+    from physics.solver import PhysicsSolver
+    from physics.bracket_physics import BracketPhysicsSolver
+    from physics.frame_physics import FramePhysicsSolver
+    from physics.fea_3d import FEA3DSolver, build_chair_3d_fea_model
+    from core.bracket_model import BracketGeometry, BracketLoads, BracketModel
+    from core.frame_model import FrameGeometry, FrameLoads, FrameDesignModel, STRUCTURAL_MATERIALS
+    
+    if target_name == "shaft":
+        model = EngineeringModel(
+            name="Stepped Transmission Shaft",
+            component_type="shaft",
+            total_length=0.5,
+            power_watts=10000.0,
+            speed_rpm=1500.0,
+            material_id="AISI_1045_CD",
+            segments=[
+                ShaftSegment(start_pos=0.0, end_pos=0.1, outer_diameter=0.040, inner_diameter=0.0, feature_type="bearing_seat"),
+                ShaftSegment(start_pos=0.1, end_pos=0.25, outer_diameter=0.030, inner_diameter=0.0, feature_type="smooth"),
+                ShaftSegment(start_pos=0.25, end_pos=0.4, outer_diameter=0.050, inner_diameter=0.0, feature_type="gear_mount"),
+                ShaftSegment(start_pos=0.4, end_pos=0.5, outer_diameter=0.035, inner_diameter=0.0, feature_type="bearing_seat"),
+            ],
+            supports=[
+                Support(name="Left Bearing", support_type="bearing", position=0.05),
+                Support(name="Right Bearing", support_type="bearing", position=0.45),
+            ],
+            point_loads=[],
+            torques=[
+                TorqueLoad(name="Input Torque", position=0.15, magnitude=63.66),
+                TorqueLoad(name="Output Torque", position=0.35, magnitude=-63.66),
+            ],
+            constraints=EngineeringConstraints(max_mass_kg=5.0),
+        )
+        solver = PhysicsSolver()
+        return model, solver
+    
+    elif target_name == "bracket":
+        geom = BracketGeometry()
+        loads = BracketLoads()
+        material = STRUCTURAL_MATERIALS["STEEL_1018"]
+        model = BracketModel(name="Motor Mounting Bracket", geometry=geom, loads=loads, material=material)
+        solver = BracketPhysicsSolver()
+        return model, solver
+    
+    elif target_name == "chair":
+        geom = FrameGeometry()
+        loads = FrameLoads()
+        material = STRUCTURAL_MATERIALS["STEEL_1018"]
+        model = FrameDesignModel(name="Structural Frame Assembly", geometry=geom, loads=loads, material=material)
+        solver = FramePhysicsSolver()
+        return model, solver
+    
+    elif target_name == "space_frame":
+        from core.frame_model import FrameDesignModel, FrameGeometry, FrameLoads, STRUCTURAL_MATERIALS
+        # Space frame uses 3D FEA
+        geom = FrameGeometry(topology_type="space_frame")
+        loads = FrameLoads()
+        material = STRUCTURAL_MATERIALS["STEEL_1018"]
+        model = FrameDesignModel(name="3D Space Frame", geometry=geom, loads=loads, material=material)
+        # Use frame solver for space frame
+        solver = FramePhysicsSolver()
+        return model, solver
+    
+    else:
+        # Default to shaft model
+        console.print(f"[yellow]Unknown target '{target_name}', defaulting to shaft model[/yellow]")
+        return _load_project_model("shaft")
+
+
+def _cmd_docx_report(argv: list[str]) -> int:
+    """Generate a DOCX engineering report using the multi-agent LangGraph workflow."""
+    import argparse
+    
+    ap = argparse.ArgumentParser(
+        prog="mdie docx-report",
+        description="Generate a professional DOCX engineering calculation sheet from solver results.",
+    )
+    ap.add_argument("target", nargs="?", default="shaft", help="project name (shaft, chair, bracket, space_frame)")
+    ap.add_argument("--output", "-o", dest="output", help="output file path (default: Project/<name>/report.docx)")
+    args = ap.parse_args(argv)
+
+    target_name = args.target
+    
+    # Load appropriate model and solver
+    model, solver = _load_project_model(target_name)
+
+    console.print(f"[bold cyan]>> Generating DOCX report for:[/bold cyan] {target_name}")
+    console.print(f"[bold cyan]>> Model:[/bold cyan] {model.name}")
+    
+    result = solver.solve(model)
+    
+    console.print(f"[bold cyan]>> Solver result:[/bold cyan] {'PASS' if getattr(result, 'all_constraints_passed', getattr(result, 'passed', False)) else 'FAIL'}")
+    if hasattr(result, 'min_yield_safety_factor'):
+        console.print(f"   Yield SF: {result.min_yield_safety_factor:.2f}")
+    if hasattr(result, 'min_fatigue_safety_factor'):
+        console.print(f"   Fatigue SF: {result.min_fatigue_safety_factor:.2f}")
+    if hasattr(result, 'max_deflection_mm'):
+        console.print(f"   Max Deflection: {result.max_deflection_mm:.3f} mm")
+    if hasattr(result, 'plate_yield_safety_factor'):
+        console.print(f"   Plate Yield SF: {result.plate_yield_safety_factor:.2f}")
+    if hasattr(result, 'bolt_safety_factor'):
+        console.print(f"   Bolt SF: {result.bolt_safety_factor:.2f}")
+    
+    # Check if the model is a frame model - we need to convert to EngineeringModel format
+    # for the docgen workflow. For now, only shaft models work with the current workflow.
+    # TODO: Implement frame/bracket model to EngineeringModel conversion
+    if target_name in ("chair", "bracket", "space_frame"):
+        console.print("[yellow]Note:[/yellow] Frame/bracket models not yet fully supported in DOCX workflow - using shaft model")
+        # Fall back to shaft model
+        model, solver = _load_project_model("shaft")
+        result = solver.solve(model)
+    
+    output_path, errors = generate_docx_report(model, result)
+    
+    if errors:
+        for err in errors:
+            console.print(f"[bold red]Error:[/bold red] {err}")
+        return 1
+    
+    if output_path:
+        console.print(f"[bold green]>> Report written:[/bold green] {output_path}")
+        return 0
+    else:
+        console.print("[bold red]>> Report generation failed[/bold red]")
+        return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
 
@@ -475,6 +631,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_drawings(argv[1:])
     if head in ("report", "consolidate", "study"):
         return _cmd_report(argv[1:])
+    if head in ("docx-report", "word-report"):
+        return _cmd_docx_report(argv[1:])
     if head in ("docx", "convert-docx", "word"):
         return _cmd_convert(["--to", "docx"] + argv[1:])
     if head in ("menu", "interactive"):

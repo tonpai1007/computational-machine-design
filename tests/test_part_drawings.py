@@ -831,7 +831,9 @@ def test_sheet_carries_required_engineering_content(parts, model):
     for p in parts:
         s = render_part_svg(p, model)
         assert "ISO 128" in s, p.key
-        assert "THIRD ANGLE" in s, p.key
+        # The top-corner projection symbol + "THIRD ANGLE" label were removed;
+        # guard that they never creep back into the sheets.
+        assert "THIRD ANGLE" not in s, p.key
         assert "NOTES" in s, p.key
         assert f"{p.length_mm:g}" in s, p.key
         assert model.material.name in s, p.key

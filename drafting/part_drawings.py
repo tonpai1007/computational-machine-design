@@ -1309,8 +1309,6 @@ def render_three_view_svg(part: PartDrawing, model: FrameDesignModel) -> str:
     _notes_block(svg, 108.0, 38.0, notes)
 
     _title_block(svg, W - 10 - 108, H - 10 - 52, 108, 52, part, model, scale_text)
-    _projection_symbol(svg, W - 20, 24, 6.0, third_angle=True)
-    _text(svg, W - 32, 24, "THIRD ANGLE", size=TXT_SMALL, color=INK, anchor="end", halo=False)
 
     svg.append("</svg>")
     return "\n".join(svg)
@@ -1633,8 +1631,6 @@ def render_elevation_svg(part: PartDrawing, model: FrameDesignModel) -> str:
     _notes_block(svg, 104.0, 38.0, notes)
 
     _title_block(svg, W - 10 - 104, H - 10 - 52, 104, 52, part, model, scale_text)
-    _projection_symbol(svg, W - 20, 24, 6.0, third_angle=True)
-    _text(svg, W - 32, 24, "THIRD ANGLE", size=TXT_SMALL, color=INK, anchor="end", halo=False)
 
     svg.append("</svg>")
     return "\n".join(svg)

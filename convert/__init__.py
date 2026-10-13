@@ -13,6 +13,11 @@ drawing sheets::
 Documents (Markdown/HTML/DOCX/PDF/TXT) are translated through a common block
 model, so any source/target pair works. Mesh formats (STL/OBJ/3MF) convert in
 pure Python. B-rep formats (STEP/IGES) need FreeCAD - see :mod:`convert.solids`.
+A STEP/IGES solid can also be projected to a 2D DXF for AutoCAD via FreeCAD's
+TechDraw - see :mod:`convert.dxf` - and a DXF sheet prints as a vector PDF::
+
+    mdie convert part.step     --to dxf
+    mdie convert part.dxf      --to pdf
 """
 
 from __future__ import annotations
@@ -41,7 +46,7 @@ from convert.registry import (
     format_for_extension,
     missing_dependencies,
 )
-from convert.sheets import sheets_to_pdf, sheets_to_png, svg_to_pdf, svg_to_png
+from convert.sheets import merge_pdfs, sheets_to_pdf, sheets_to_png, svg_to_pdf, svg_to_png
 from convert.solids import (
     ConversionError,
     convert_mesh,
@@ -49,6 +54,7 @@ from convert.solids import (
     describe_mesh,
     find_kernel,
 )
+from convert.dxf import dxf_to_pdf, dxfs_to_pdf, step_to_dxf, step_parts_to_dxf
 
 __all__ = [
     "convert_file",
@@ -60,6 +66,10 @@ __all__ = [
     "SHEET",
     "describe_mesh",
     "find_kernel",
+    "step_to_dxf",
+    "step_parts_to_dxf",
+    "dxf_to_pdf",
+    "dxfs_to_pdf",
 ]
 
 # Only the renderers that take blocks and return text. The DOCX and PDF
@@ -79,6 +89,7 @@ def convert_file(
     use_ai: bool = False,
     dpi: int = 200,
     timeout: int = 300,
+    dimensions: bool = True,
 ) -> Path:
     """Convert ``source`` into ``target_format`` and return the written path.
 
@@ -89,6 +100,14 @@ def convert_file(
     src = Path(source)
     if not src.exists():
         raise ConversionError(f"input not found: {src}")
+
+    pre_fmt = (target_format or "").lower().lstrip(".")
+    # One dimensioned DXF per part STEP inside a folder (e.g. Project parts/).
+    # The output may be an explicit directory, or omitted for the default
+    # ``diagrams/`` sibling of the parts folder. Returns the output folder.
+    if pre_fmt == "dxf-parts" and src.is_dir():
+        out_dir = Path(output_path) if output_path else src.parent / "diagrams"
+        return step_parts_to_dxf(src, out_dir, timeout=timeout, dimensions=dimensions)[0].parent
 
     if src.is_dir():
         return _convert_sheets(src, target_format, output_path, dpi)
@@ -121,8 +140,19 @@ def convert_file(
             return svg_to_png(src, dst, dpi=dpi)
         raise ConversionError(f"cannot convert an SVG sheet to '{fmt}'")
 
+    # A dimensioned DXF sheet prints as a vector PDF.
+    if src_format == "dxf":
+        if fmt == "pdf":
+            return dxf_to_pdf(src, dst)
+        raise ConversionError(f"cannot convert a DXF sheet to '{fmt}'")
+
     if FORMATS[fmt].category == DOCUMENT:
         return _convert_document(src, src_format, fmt, dst, use_ai)
+
+    # A STEP solid -> 2D DXF is a solid-to-sheet projection (FreeCAD TechDraw),
+    # not a mesh conversion, so it gets its own branch before the solid path.
+    if fmt == "dxf" and src_format in ("step", "iges"):
+        return step_to_dxf(src, dst, timeout=timeout, dimensions=dimensions)
 
     if FORMATS[src_format].category == SOLID and FORMATS[fmt].category == SOLID:
         return _convert_solid(src, src_format, dst, fmt, timeout)
@@ -179,20 +209,40 @@ def _convert_sheets(
     folder: Path, target_format: str | None, output_path: str | Path | None, dpi: int
 ) -> Path:
     sheets = sorted([*folder.glob("*.svg"), *folder.glob("*.html")])
-    if not sheets:
+    dxfs = sorted(folder.glob("*.dxf"))
+    if not sheets and not dxfs:
         raise ConversionError(f"no drawing sheets found in {folder}")
 
     fmt = (target_format or format_for_extension(Path(output_path or "")) or "pdf").lower()
     dst = Path(output_path) if output_path else folder / f"{folder.name}.{fmt}"
 
     if fmt == "pdf":
-        if len(sheets) == 1:
-            return (
-                svg_to_pdf(sheets[0], dst)
-                if sheets[0].suffix == ".svg"
-                else blocks_to_pdf(blocks_from_source(sheets[0], "html"), dst, title=folder.name)
-            )
-        return sheets_to_pdf([s for s in sheets if s.suffix == ".svg"], dst)
+        if sheets and not dxfs:
+            if len(sheets) == 1:
+                return (
+                    svg_to_pdf(sheets[0], dst)
+                    if sheets[0].suffix == ".svg"
+                    else blocks_to_pdf(blocks_from_source(sheets[0], "html"), dst, title=folder.name)
+                )
+            return sheets_to_pdf([s for s in sheets if s.suffix == ".svg"], dst)
+        # DXF sheets - pure or mixed with SVG/HTML - each render to
+        # a PDF page, then merge into one document.
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            pages: list[Path] = []
+            for s in sheets:
+                page = Path(tmp) / f"{s.stem}.pdf"
+                if s.suffix == ".svg":
+                    svg_to_pdf(s, page)
+                else:
+                    blocks_to_pdf(blocks_from_source(s, "html"), page, title=s.stem)
+                pages.append(page)
+            for d in dxfs:
+                page = Path(tmp) / f"{d.stem}.pdf"
+                dxf_to_pdf(d, page)
+                pages.append(page)
+            return merge_pdfs(pages, dst)
 
     if fmt == "png":
         return sheets_to_png(sheets, dst.parent, dpi=dpi)[0]

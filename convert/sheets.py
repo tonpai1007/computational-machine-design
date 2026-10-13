@@ -59,6 +59,27 @@ def sheets_to_pdf(srcs: Iterable[Path], dst: Path, sort: bool = True) -> Path:
     return dst
 
 
+def merge_pdfs(srcs: Iterable[Path], dst: Path) -> Path:
+    """Merge already-rendered PDF pages into one document.
+
+    Each source lands on its own page at its own native size, so
+    A3 and A4 sheets coexist in the same document.
+    """
+    import fitz
+
+    paths = [Path(s) for s in srcs]
+    if not paths:
+        raise ValueError("no pages to merge")
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    out = fitz.open()
+    for path in paths:
+        with fitz.open(str(path)) as page_doc:
+            out.insert_pdf(page_doc)
+    out.save(str(dst), deflate=True)
+    out.close()
+    return dst
+
+
 def sheets_to_png(srcs: Iterable[Path], out_dir: Path, dpi: int = 200) -> list[Path]:
     """Rasterise many sheets into ``out_dir``, returning the written PNGs."""
     written: list[Path] = []

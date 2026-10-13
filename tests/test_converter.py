@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from convert import convert_file
+from convert.dxf import assemble_dxf, calib_to_mapping, step_to_dxf
 from convert.documents import (
     blocks_from_docx,
     blocks_from_html,
@@ -317,6 +318,89 @@ def test_3mf_roundtrips_triangles_and_is_a_valid_package(tmp_path):
     with zipfile.ZipFile(path) as zf:
         assert "3D/3dmodel.model" in zf.namelist()
     assert len(read_3mf(path)) == 2
+
+
+# ----------------------------------------------------------------------- dxf
+#
+# A STEP -> DXF conversion needs FreeCAD, which is optional. The layout maths
+# is pure Python, so it is exercised directly here with a synthetic entity
+# block; only the end-to-end projection test is gated on FreeCAD.
+
+#: A two-line DXF entity block, the shape TechDraw.projectToDXF emits.
+_SAMPLE_ENTITIES = (
+    "0\nLINE\n8\nsheet_layer\n100\nAcDbEntity\n100\nAcDbLine\n"
+    "10\n0\n20\n0\n30\n0\n11\n100\n21\n50\n31\n0\n"
+    "0\nLINE\n8\nsheet_layer\n100\nAcDbEntity\n100\nAcDbLine\n"
+    "10\n100\n20\n50\n30\n0\n11\n200\n21\n0\n31\n0\n"
+)
+
+
+def test_calib_mapping_recovers_drawing_axes_from_probes():
+    mapping = calib_to_mapping({"X": [0.0, 10.0], "Y": None, "Z": [-10.0, 0.0]})
+    assert mapping == {"X": ("Y", 1.0), "Z": ("X", -1.0)}
+
+
+def test_assemble_dxf_builds_a_standalone_document():
+    doc = assemble_dxf(
+        {"front": _SAMPLE_ENTITIES, "top": _SAMPLE_ENTITIES},
+        {
+            "front": {"X": [10.0, 0.0], "Y": None, "Z": [0.0, 10.0]},
+            "top": {"X": [10.0, 0.0], "Y": [0.0, 10.0], "Z": None},
+        },
+        gap=40.0,
+    )
+    for token in ("$ACADVER", "AC1009", "$INSUNITS", "TABLES", "LAYER", "ENTITIES", "EOF"):
+        assert token in doc
+    # Each view gets its own named layer and its own two lines.
+    assert doc.count("2\nfront\n") == 1
+    assert doc.count("2\ntop\n") == 1
+    assert doc.count("AcDbLine") == 4
+
+
+def test_assemble_dxf_lays_out_first_angle_without_overlap():
+    doc = assemble_dxf(
+        {"front": _SAMPLE_ENTITIES, "top": _SAMPLE_ENTITIES},
+        {
+            "front": {"X": [10.0, 0.0], "Y": None, "Z": [0.0, 10.0]},
+            "top": {"X": [10.0, 0.0], "Y": [0.0, 10.0], "Z": None},
+        },
+        gap=40.0,
+    )
+    # front spans x in [0, 200], y in [0, 50]; the top view
+    # shares the width axis and sits below by height + gap, so
+    # the smallest Y must clear front's bottom edge.
+    lines = doc.splitlines()
+    ys = [float(lines[i + 1]) for i in range(len(lines) - 1) if lines[i].strip() in ("20", "21")]
+    assert min(ys) <= -(50.0 + 40.0)
+
+
+def test_step_to_dxf_requires_freecad_or_reports_cleanly(tmp_path):
+    from convert.solids import find_kernel
+
+    src = tmp_path / "part.step"
+    src.write_text("ISO-10303-21;\nENDSEC;\n", encoding="utf-8")
+    if find_kernel() is None:
+        with pytest.raises(ConversionError, match="geometry kernel"):
+            step_to_dxf(src, tmp_path / "part.dxf")
+    else:  # pragma: no cover - only when FreeCAD is installed
+        pytest.skip("FreeCAD present; covered by the integration test below")
+
+
+def test_step_to_dxf_end_to_end_when_freecad_present(tmp_path):
+    from convert.solids import find_kernel
+
+    step = Path(__file__).resolve().parents[1] / "Project" / "chair" / "chair.step"
+    if find_kernel() is None or not step.exists():
+        pytest.skip("needs FreeCAD and the chair STEP fixture")
+
+    out = convert_file(step, "dxf", tmp_path / "chair.dxf")
+    assert out.exists() and out.stat().st_size > 0
+    text = out.read_text(encoding="utf-8")
+    assert text.rstrip().endswith("EOF")
+    # All three orthographic views are present as named layers with geometry.
+    for view in ("front", "top", "side"):
+        assert f"2\n{view}\n" in text
+    assert text.count("AcDbLine") >= 3
 
 
 @pytest.mark.parametrize("dst_format", ["stl", "obj", "3mf"])
