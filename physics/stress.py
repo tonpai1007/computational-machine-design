@@ -212,7 +212,7 @@ class StressSolver:
         p1 = (sig_x / 2.0) + r_mohr
         p2 = (sig_x / 2.0) - r_mohr
 
-        sf_yield = material.yield_strength_mpa / c_vm_eff if c_vm_eff > 0 else 999.0
+        sf_yield = material.yield_strength_mpa / c_vm_eff if c_vm_eff > 0 else None
 
         critical_sec = SectionStress(
             x=c_x,
@@ -247,5 +247,5 @@ class StressSolver:
             "max_von_mises_mpa": float(np.max(effective_von_mises)),
             "max_von_mises_x": float(x_arr[np.argmax(effective_von_mises)]),
             "critical_section": critical_sec,
-            "min_yield_safety_factor": float(sf_yield),
+            "min_yield_safety_factor": float(sf_yield) if sf_yield is not None else None,
         }

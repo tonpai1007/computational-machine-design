@@ -25,7 +25,12 @@ class DesignCritic:
         fatigue_status = (
             "PASS"
             if result.fatigue_passed
-            else ("WARNING" if result.min_fatigue_safety_factor >= 1.0 else "FAIL")
+            else (
+                "WARNING"
+                if result.min_fatigue_safety_factor is not None
+                and result.min_fatigue_safety_factor >= 1.0
+                else "FAIL"
+            )
         )
         deflection_status = "PASS" if result.deflection_passed else "FAIL"
 

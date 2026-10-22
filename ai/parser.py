@@ -11,11 +11,11 @@ from typing import Any
 
 from ai.assumptions import AssumptionManager
 from core.frame_model import (
+    STRUCTURAL_MATERIALS,
     FrameDesignModel,
     FrameGeometry,
     FrameLoads,
     TubeProfile,
-    STRUCTURAL_MATERIALS,
 )
 from core.models import (
     DistributedLoad,

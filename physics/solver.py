@@ -181,15 +181,22 @@ class PhysicsSolver:
 
         # 8. Constraint Evaluation
         c = model.constraints
-        yield_passed = crit_sec.yield_safety_factor >= c.min_yield_safety_factor
-        fatigue_passed = crit_sec.fatigue_safety_factor >= c.min_fatigue_safety_factor
+        sf_yield = crit_sec.yield_safety_factor
+        sf_fatigue = crit_sec.fatigue_safety_factor
+        # A None safety factor means the underlying stress was zero (no load);
+        # the constraint cannot be evaluated as passed.
+        yield_passed = sf_yield is not None and sf_yield >= c.min_yield_safety_factor
+        fatigue_passed = sf_fatigue is not None and sf_fatigue >= c.min_fatigue_safety_factor
         deflection_passed = defl_data["max_deflection_mm"] <= c.max_deflection_mm
         slope_passed = defl_data["max_slope_rad"] <= c.max_slope_rad
         all_passed = bool(yield_passed and fatigue_passed and deflection_passed and slope_passed)
 
+        sf_yield_str = f"{sf_yield:.2f}" if sf_yield is not None else "N/A"
+        sf_fatigue_str = f"{sf_fatigue:.2f}" if sf_fatigue is not None else "N/A"
+
         calc_steps.append(
-            f"Constraint Summary: Yield ({crit_sec.yield_safety_factor:.2f} >= {c.min_yield_safety_factor})={yield_passed}; "
-            f"Fatigue ({crit_sec.fatigue_safety_factor:.2f} >= {c.min_fatigue_safety_factor})={fatigue_passed}; "
+            f"Constraint Summary: Yield ({sf_yield_str} >= {c.min_yield_safety_factor})={yield_passed}; "
+            f"Fatigue ({sf_fatigue_str} >= {c.min_fatigue_safety_factor})={fatigue_passed}; "
             f"Deflection ({defl_data['max_deflection_mm']:.3f} <= {c.max_deflection_mm})={deflection_passed}."
         )
 
@@ -266,8 +273,8 @@ class PhysicsSolver:
             ultimate_strength_mpa=material.ultimate_strength_mpa,
             endurance_limit_mpa=fatigue_data["endurance_limit_mpa"],
             total_mass_kg=round(total_mass, 3),
-            min_yield_safety_factor=round(crit_sec.yield_safety_factor, 2),
-            min_fatigue_safety_factor=round(crit_sec.fatigue_safety_factor, 2),
+            min_yield_safety_factor=round(crit_sec.yield_safety_factor, 2) if crit_sec.yield_safety_factor is not None else None,
+            min_fatigue_safety_factor=round(crit_sec.fatigue_safety_factor, 2) if crit_sec.fatigue_safety_factor is not None else None,
             fatigue_life_cycles=fatigue_data["predicted_cycles"],
             is_infinite_life=fatigue_data["is_infinite_life"],
             yield_passed=yield_passed,

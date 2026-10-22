@@ -186,16 +186,16 @@ def calib_to_mapping(calib: dict[str, list[float] | None]) -> dict[str, tuple[st
         dx2, dy2 = vec
         if abs(dx2) >= abs(dy2):
             if abs(dx2) < 1e-9:
-                raise ConversionError("calibration probe along +{} collapsed".format(axis))
+                raise ConversionError(f"calibration probe along +{axis} collapsed")
             mapping[axis] = ("X", 1.0 if dx2 >= 0 else -1.0)
         else:
             if abs(dy2) < 1e-9:
-                raise ConversionError("calibration probe along +{} collapsed".format(axis))
+                raise ConversionError(f"calibration probe along +{axis} collapsed")
             mapping[axis] = ("Y", 1.0 if dy2 >= 0 else -1.0)
     if len(mapping) != 2:
-        raise ConversionError("expected two planar axes, got {}".format(sorted(mapping)))
+        raise ConversionError(f"expected two planar axes, got {sorted(mapping)}")
     if {m[0] for m in mapping.values()} != {"X", "Y"}:
-        raise ConversionError("calibration axes are not orthogonal: {}".format(mapping))
+        raise ConversionError(f"calibration axes are not orthogonal: {mapping}")
     return mapping
 
 
@@ -340,9 +340,9 @@ def assemble_dxf(
     """
     for name in view_entities:
         if name not in view_calibs:
-            raise ConversionError("no calibration for view {!r}".format(name))
+            raise ConversionError(f"no calibration for view {name!r}")
         if name not in TARGET_FRAME:
-            raise ConversionError("no target frame for view {!r}".format(name))
+            raise ConversionError(f"no target frame for view {name!r}")
     mappings: dict[str, dict[str, tuple[str, float]]] = {}
     rights: dict[str, list[float]] = {}
     ups: dict[str, list[float]] = {}
@@ -496,9 +496,9 @@ def _sheet_extent(widths: dict[str, float], heights: dict[str, float], gap: floa
 def _dxf_line(layer: str, x1: float, y1: float, x2: float, y2: float) -> str:
     """One LINE entity on ``layer`` between two drawing points."""
     return (
-        "0\nLINE\n8\n{}\n".format(layer)
-        + "10\n{}\n20\n{}\n30\n0.0\n".format(repr(x1), repr(y1))
-        + "11\n{}\n21\n{}\n31\n0.0\n".format(repr(x2), repr(y2))
+        f"0\nLINE\n8\n{layer}\n"
+        + f"10\n{repr(x1)}\n20\n{repr(y1)}\n30\n0.0\n"
+        + f"11\n{repr(x2)}\n21\n{repr(y2)}\n31\n0.0\n"
     )
 
 
@@ -514,11 +514,11 @@ def _dxf_text(layer: str, x: float, y: float, text: str, height: float = _DIM_TE
     vanish from a sheet.
     """
     return (
-        "0\nTEXT\n8\n{}\n7\nSTANDARD\n".format(layer)
-        + "10\n{}\n20\n{}\n30\n0.0\n".format(repr(x), repr(y))
-        + "40\n{}\n1\n{}\n".format(repr(height), text)
+        f"0\nTEXT\n8\n{layer}\n7\nSTANDARD\n"
+        + f"10\n{repr(x)}\n20\n{repr(y)}\n30\n0.0\n"
+        + f"40\n{repr(height)}\n1\n{text}\n"
         + "72\n1\n73\n2\n"
-        + "11\n{}\n21\n{}\n31\n0.0\n".format(repr(x), repr(y))
+        + f"11\n{repr(x)}\n21\n{repr(y)}\n31\n0.0\n"
     )
 
 
@@ -653,11 +653,11 @@ def _title_block(
         "MDIE ENGINEERING DRAWING"[:max_chars],
         "UNITS: MM   SCALE: 1:1"[:max_chars],
         "PROJECTION: FIRST ANGLE"[:max_chars],
-        "SOURCE: {}.STEP".format(part_name.upper())[:max_chars],
+        f"SOURCE: {part_name.upper()}.STEP"[:max_chars],
     ]
-    for i, row in enumerate(rows[:_TITLE_ROWS]):
-        y = fy0 + block_h - row_h * (i + 0.5)
-        parts.append(_dxf_text(TITLE_LAYER, bx0 + block_w / 2, y, row, field_h))
+    for idx, row_text in enumerate(rows[:_TITLE_ROWS]):
+        y = fy0 + block_h - row_h * (idx + 0.5)
+        parts.append(_dxf_text(TITLE_LAYER, bx0 + block_w / 2, y, row_text, field_h))
     # Large part label above the views, left-aligned inside the border.
     label = part_name.upper()
     label_w = 0.62 * label_h * max(len(label), 1)

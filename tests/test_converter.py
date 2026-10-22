@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 
 from convert import convert_file
-from convert.dxf import assemble_dxf, calib_to_mapping, step_to_dxf
 from convert.documents import (
     blocks_from_docx,
     blocks_from_html,
@@ -17,6 +16,7 @@ from convert.documents import (
     blocks_to_html,
     blocks_to_markdown,
 )
+from convert.dxf import assemble_dxf, calib_to_mapping, step_to_dxf
 from convert.registry import (
     available_formats,
     describe_formats,

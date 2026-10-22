@@ -109,5 +109,5 @@ exclude = ["tests", "scratch", "Project", ".venv", "__pycache__", "\\.egg-info$"
 # already guarded at runtime (convert.registry.has_dependency and friends), so
 # the missing stubs are not a typing defect in this codebase.
 [[tool.mypy.overrides]]
-module = ["fitz.*", "httpx.*", "docx.*", "lt.*"]
+module = ["fitz.*", "httpx.*", "docx.*", "lt.*", "cairosvg.*"]
 ignore_missing_imports = true

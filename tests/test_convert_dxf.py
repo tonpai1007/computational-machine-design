@@ -230,7 +230,7 @@ def test_assemble_adds_a_title_block_and_part_label():
     views = {"front": _line(0.0, 0.0, -50.0, 100.0)}
     calibs = {"front": {"X": [0.0, 10.0], "Y": None, "Z": [-10.0, 0.0]}}
     text = assemble_dxf(views, calibs, gap=10.0, part_name="Test Part")
-    assert "2\n{}\n".format(TITLE_LAYER) in text
+    assert f"2\n{TITLE_LAYER}\n" in text
     assert "\n1\nTEST PART\n" in text
     assert "PROJECTION: FIRST ANGLE" in text
     assert "UNITS: MM" in text
@@ -242,7 +242,7 @@ def test_assemble_adds_overall_dimensions_from_measured_extents():
     calibs = {"front": {"X": [0.0, 10.0], "Y": None, "Z": [-10.0, 0.0]}}
     model_bbox = {"X": [0.0, 575.0], "Y": [0.0, 560.0], "Z": [0.0, 869.0]}
     text = assemble_dxf(views, calibs, gap=10.0, model_bbox=model_bbox)
-    assert "2\n{}\n".format(DIM_LAYER) in text
+    assert f"2\n{DIM_LAYER}\n" in text
     assert "\n1\n575.0\n" in text  # width text is the measured X extent
     assert "\n1\n869.0\n" in text  # height text is the measured Z extent
 
@@ -252,7 +252,7 @@ def test_assemble_without_a_model_bbox_skips_dimensions():
     views = {"front": _line(0.0, 0.0, -50.0, 100.0)}
     calibs = {"front": {"X": [0.0, 10.0], "Y": None, "Z": [-10.0, 0.0]}}
     text = assemble_dxf(views, calibs, gap=10.0, model_bbox=None)
-    assert "2\n{}\n".format(DIM_LAYER) not in text
+    assert f"2\n{DIM_LAYER}\n" not in text
 
 
 def test_assemble_opt_out_removes_the_dimension_layer():
@@ -261,7 +261,7 @@ def test_assemble_opt_out_removes_the_dimension_layer():
     calibs = {"front": {"X": [0.0, 10.0], "Y": None, "Z": [-10.0, 0.0]}}
     model_bbox = {"X": [0.0, 575.0], "Y": [0.0, 560.0], "Z": [0.0, 869.0]}
     text = assemble_dxf(views, calibs, gap=10.0, model_bbox=model_bbox, dimensions=False)
-    assert "2\n{}\n".format(DIM_LAYER) not in text
+    assert f"2\n{DIM_LAYER}\n" not in text
     assert "TEXT" not in text
 
 

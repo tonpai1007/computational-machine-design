@@ -6,7 +6,6 @@ Generates SVG diagrams and converts to PNG for embedding in Word documents.
 from __future__ import annotations
 
 import html
-import os
 from pathlib import Path
 from typing import Any
 
@@ -102,9 +101,9 @@ def generate_all_diagrams(result: SolverResult, output_dir: Path) -> dict[str, s
     Returns dict of diagram_name -> PNG file path (or SVG if PNG conversion failed).
     """
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     diagrams = {}
-    
+
     # Shear Force Diagram
     svg_shear = generate_svg_diagram(
         result.x_stations,
@@ -121,7 +120,7 @@ def generate_all_diagrams(result: SolverResult, output_dir: Path) -> dict[str, s
         svg_path = output_dir / "shear_force.svg"
         svg_path.write_text(svg_shear, encoding="utf-8")
         diagrams["shear_force"] = str(svg_path)
-    
+
     # Bending Moment Diagram
     svg_moment = generate_svg_diagram(
         result.x_stations,
@@ -138,7 +137,7 @@ def generate_all_diagrams(result: SolverResult, output_dir: Path) -> dict[str, s
         svg_path = output_dir / "bending_moment.svg"
         svg_path.write_text(svg_moment, encoding="utf-8")
         diagrams["bending_moment"] = str(svg_path)
-    
+
     # Von Mises Stress Diagram
     svg_stress = generate_svg_diagram(
         result.x_stations,
@@ -155,7 +154,7 @@ def generate_all_diagrams(result: SolverResult, output_dir: Path) -> dict[str, s
         svg_path = output_dir / "von_mises_stress.svg"
         svg_path.write_text(svg_stress, encoding="utf-8")
         diagrams["von_mises_stress"] = str(svg_path)
-    
+
     # Deflection Diagram
     svg_deflection = generate_svg_diagram(
         result.x_stations,
@@ -172,7 +171,7 @@ def generate_all_diagrams(result: SolverResult, output_dir: Path) -> dict[str, s
         svg_path = output_dir / "deflection.svg"
         svg_path.write_text(svg_deflection, encoding="utf-8")
         diagrams["deflection"] = str(svg_path)
-    
+
     return diagrams
 
 
@@ -188,7 +187,7 @@ def generate_fbd_diagram(model: Any, result: SolverResult, output_dir: Path) -> 
 
 __all__ = [
     "generate_svg_diagram",
-    "svg_to_png", 
+    "svg_to_png",
     "generate_all_diagrams",
     "generate_fbd_diagram",
 ]

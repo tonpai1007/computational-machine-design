@@ -35,6 +35,7 @@ from convert.documents import (
     blocks_to_pdf,
     blocks_to_text,
 )
+from convert.dxf import dxf_to_pdf, dxfs_to_pdf, step_parts_to_dxf, step_to_dxf
 from convert.registry import (
     DOCUMENT,
     EXTENSION_TO_FORMAT,
@@ -54,7 +55,6 @@ from convert.solids import (
     describe_mesh,
     find_kernel,
 )
-from convert.dxf import dxf_to_pdf, dxfs_to_pdf, step_to_dxf, step_parts_to_dxf
 
 __all__ = [
     "convert_file",

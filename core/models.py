@@ -220,8 +220,8 @@ class SectionStress(BaseModel):
     kt_bending: float = 1.0
     kt_torsion: float = 1.0
     effective_von_mises: float
-    yield_safety_factor: float
-    fatigue_safety_factor: float
+    yield_safety_factor: float | None
+    fatigue_safety_factor: float | None
     predicted_cycles: float
 
 
@@ -277,8 +277,8 @@ class SolverResult(BaseModel):
     total_mass_kg: float = 0.0
 
     # Safety Factors
-    min_yield_safety_factor: float = 0.0
-    min_fatigue_safety_factor: float = 0.0
+    min_yield_safety_factor: float | None = None
+    min_fatigue_safety_factor: float | None = None
     fatigue_life_cycles: float = 1e9
     is_infinite_life: bool = False
 

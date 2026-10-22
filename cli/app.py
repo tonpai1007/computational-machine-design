@@ -25,6 +25,7 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
 
+from ai.docgen_workflow import generate_docx_report
 from cli.designers import (
     _handle_bracket,
     _handle_chair,
@@ -33,7 +34,6 @@ from cli.designers import (
     _handle_space_frame,
 )
 from cli.viewers import find_cad_tools, launch_cad_viewer
-from ai.docgen_workflow import generate_docx_report
 
 if sys.platform == "win32":
     try:
@@ -470,24 +470,33 @@ def _cmd_trace(argv: list[str]) -> int:
     return 0
 
 
-def _load_project_model(target_name: str):
-    """Load or create the appropriate engineering model for a project type."""
+def _load_project_model(target_name: str) -> tuple[Any, Any]:
+    """Load or create the appropriate engineering model for a project type.
+
+    Returns a heterogeneous (model, solver) pair: shaft projects use
+    ``(EngineeringModel, PhysicsSolver)`` while bracket and chair projects use
+    domain-specific model/solver pairs that do not share a common base class.
+    Callers should treat the returned model via duck typing (``.name``,
+    ``.constraints`` etc.) rather than relying on a static common type.
+    """
+    from core.bracket_model import BracketGeometry, BracketLoads, BracketModel
+    from core.frame_model import STRUCTURAL_MATERIALS, FrameDesignModel, FrameGeometry, FrameLoads
     from core.models import (
+        EngineeringConstraints,
         EngineeringModel,
         ShaftSegment,
         Support,
-        EngineeringConstraints,
         TorqueLoad,
-        PointLoad,
-        DistributedLoad,
     )
-    from physics.solver import PhysicsSolver
     from physics.bracket_physics import BracketPhysicsSolver
     from physics.frame_physics import FramePhysicsSolver
-    from physics.fea_3d import FEA3DSolver, build_chair_3d_fea_model
-    from core.bracket_model import BracketGeometry, BracketLoads, BracketModel
-    from core.frame_model import FrameGeometry, FrameLoads, FrameDesignModel, STRUCTURAL_MATERIALS
-    
+    from physics.solver import PhysicsSolver
+
+    geom: Any
+    loads: Any
+    model: Any
+    solver: Any
+
     if target_name == "shaft":
         model = EngineeringModel(
             name="Stepped Transmission Shaft",
@@ -515,7 +524,7 @@ def _load_project_model(target_name: str):
         )
         solver = PhysicsSolver()
         return model, solver
-    
+
     elif target_name == "bracket":
         geom = BracketGeometry()
         loads = BracketLoads()
@@ -523,7 +532,7 @@ def _load_project_model(target_name: str):
         model = BracketModel(name="Motor Mounting Bracket", geometry=geom, loads=loads, material=material)
         solver = BracketPhysicsSolver()
         return model, solver
-    
+
     elif target_name == "chair":
         geom = FrameGeometry()
         loads = FrameLoads()
@@ -531,9 +540,9 @@ def _load_project_model(target_name: str):
         model = FrameDesignModel(name="Structural Frame Assembly", geometry=geom, loads=loads, material=material)
         solver = FramePhysicsSolver()
         return model, solver
-    
+
     elif target_name == "space_frame":
-        from core.frame_model import FrameDesignModel, FrameGeometry, FrameLoads, STRUCTURAL_MATERIALS
+        from core.frame_model import STRUCTURAL_MATERIALS, FrameDesignModel, FrameGeometry, FrameLoads
         # Space frame uses 3D FEA
         geom = FrameGeometry(topology_type="space_frame")
         loads = FrameLoads()
@@ -542,7 +551,7 @@ def _load_project_model(target_name: str):
         # Use frame solver for space frame
         solver = FramePhysicsSolver()
         return model, solver
-    
+
     else:
         # Default to shaft model
         console.print(f"[yellow]Unknown target '{target_name}', defaulting to shaft model[/yellow]")
@@ -552,7 +561,7 @@ def _load_project_model(target_name: str):
 def _cmd_docx_report(argv: list[str]) -> int:
     """Generate a DOCX engineering report using the multi-agent LangGraph workflow."""
     import argparse
-    
+
     ap = argparse.ArgumentParser(
         prog="mdie docx-report",
         description="Generate a professional DOCX engineering calculation sheet from solver results.",
@@ -562,27 +571,29 @@ def _cmd_docx_report(argv: list[str]) -> int:
     args = ap.parse_args(argv)
 
     target_name = args.target
-    
+
     # Load appropriate model and solver
     model, solver = _load_project_model(target_name)
 
     console.print(f"[bold cyan]>> Generating DOCX report for:[/bold cyan] {target_name}")
     console.print(f"[bold cyan]>> Model:[/bold cyan] {model.name}")
-    
+
     result = solver.solve(model)
-    
+
     console.print(f"[bold cyan]>> Solver result:[/bold cyan] {'PASS' if getattr(result, 'all_constraints_passed', getattr(result, 'passed', False)) else 'FAIL'}")
     if hasattr(result, 'min_yield_safety_factor'):
-        console.print(f"   Yield SF: {result.min_yield_safety_factor:.2f}")
+        sf = result.min_yield_safety_factor
+        console.print(f"   Yield SF: {sf:.2f}" if sf is not None else "   Yield SF: N/A")
     if hasattr(result, 'min_fatigue_safety_factor'):
-        console.print(f"   Fatigue SF: {result.min_fatigue_safety_factor:.2f}")
+        sf = result.min_fatigue_safety_factor
+        console.print(f"   Fatigue SF: {sf:.2f}" if sf is not None else "   Fatigue SF: N/A")
     if hasattr(result, 'max_deflection_mm'):
         console.print(f"   Max Deflection: {result.max_deflection_mm:.3f} mm")
     if hasattr(result, 'plate_yield_safety_factor'):
         console.print(f"   Plate Yield SF: {result.plate_yield_safety_factor:.2f}")
     if hasattr(result, 'bolt_safety_factor'):
         console.print(f"   Bolt SF: {result.bolt_safety_factor:.2f}")
-    
+
     # Check if the model is a frame model - we need to convert to EngineeringModel format
     # for the docgen workflow. For now, only shaft models work with the current workflow.
     # TODO: Implement frame/bracket model to EngineeringModel conversion
@@ -591,14 +602,14 @@ def _cmd_docx_report(argv: list[str]) -> int:
         # Fall back to shaft model
         model, solver = _load_project_model("shaft")
         result = solver.solve(model)
-    
+
     output_path, errors = generate_docx_report(model, result)
-    
+
     if errors:
         for err in errors:
             console.print(f"[bold red]Error:[/bold red] {err}")
         return 1
-    
+
     if output_path:
         console.print(f"[bold green]>> Report written:[/bold green] {output_path}")
         return 0

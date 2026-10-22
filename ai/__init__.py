@@ -7,7 +7,7 @@ from ai.classifier import DomainClassifier
 from ai.copilot import EngineeringCopilot
 from ai.critic import DesignCritic
 from ai.llm_router import LLMRouter
-from ai.parser import NLParser, FrameNLParser
+from ai.parser import FrameNLParser, NLParser
 
 __all__ = [
     "AssumptionManager",

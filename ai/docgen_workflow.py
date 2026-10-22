@@ -6,16 +6,15 @@ All numerical values come from deterministic solver results; agents only author 
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, TypedDict
 
-from langgraph.graph import StateGraph, END
+from langgraph.graph import END, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 
-from core.models import EngineeringModel, SolverResult
 from ai.critic import DesignCritic
+from core.models import EngineeringModel, SolverResult
 from reporting.diagrams import generate_all_diagrams
-
 
 # =============================================================================
 # State Definition
@@ -42,7 +41,7 @@ class DocGenState(TypedDict):
 def _extract_template_vars(model: EngineeringModel, result: SolverResult) -> dict[str, Any]:
     """Extract all numerical values from solver results for docxtpl template."""
     crit_sec = result.critical_section
-    
+
     # Assumptions
     assumptions = [
         {
@@ -54,7 +53,7 @@ def _extract_template_vars(model: EngineeringModel, result: SolverResult) -> dic
         }
         for a in model.assumptions
     ]
-    
+
     # Reactions
     reactions = [
         {
@@ -65,7 +64,7 @@ def _extract_template_vars(model: EngineeringModel, result: SolverResult) -> dic
         }
         for r in result.reactions
     ]
-    
+
     # Bearings
     bearings = []
     for b in result.bearings_selected:
@@ -81,7 +80,7 @@ def _extract_template_vars(model: EngineeringModel, result: SolverResult) -> dic
             "l10h_hours": f"{b.get('l10h_hours', 0):,.0f}",
             "status": b.get("status", "")
         })
-    
+
     # Keyway
     keyway = {}
     if result.keyway_analysis:
@@ -98,11 +97,11 @@ def _extract_template_vars(model: EngineeringModel, result: SolverResult) -> dic
             "crush_sf": k.get("crushing_safety_factor", 0),
             "status": "PASS" if k.get("passed") else "FAIL"
         }
-    
+
     # Critical section
     has_critical_section = crit_sec is not None
     crit_sec_data = {}
-    if has_critical_section:
+    if crit_sec is not None:
         crit_sec_data = {
             "x_mm": round(crit_sec.x * 1000.0, 1),
             "diameter_mm": round(crit_sec.outer_diameter * 1000.0, 1),
@@ -113,23 +112,23 @@ def _extract_template_vars(model: EngineeringModel, result: SolverResult) -> dic
             "kt_bending": round(crit_sec.kt_bending, 2),
             "von_mises_mpa": round(crit_sec.effective_von_mises, 2)
         }
-    
+
     # Verification badge
     verification_badge = "VERIFIED COMPLIANT (PASS)" if result.all_constraints_passed else "NON-COMPLIANT (FAIL)"
-    
+
     # Mass limit string
     mass_limit = f"≤ {model.constraints.max_mass_kg} kg" if model.constraints.max_mass_kg else "Unconstrained"
-    
+
     # Review from DesignCritic
     review = DesignCritic.review_design(model, result)
-    
+
     return {
         "project_name": model.name,
         "verification_badge": verification_badge,
-        "yield_sf": round(result.min_yield_safety_factor, 2),
+        "yield_sf": round(result.min_yield_safety_factor, 2) if result.min_yield_safety_factor is not None else "N/A",
         "min_yield_sf": round(model.constraints.min_yield_safety_factor, 2),
         "yield_status": "PASS" if result.yield_passed else "FAIL",
-        "fatigue_sf": round(result.min_fatigue_safety_factor, 2),
+        "fatigue_sf": round(result.min_fatigue_safety_factor, 2) if result.min_fatigue_safety_factor is not None else "N/A",
         "min_fatigue_sf": round(model.constraints.min_fatigue_safety_factor, 2),
         "fatigue_status": "PASS" if result.fatigue_passed else "FAIL",
         "max_deflection_mm": round(result.max_deflection_mm, 3),
@@ -176,16 +175,16 @@ def research_node(state: DocGenState) -> DocGenState:
     """Research Agent: Gather and structure context from solver results."""
     model = state["model"]
     result = state["result"]
-    
+
     # Extract all template variables
     template_vars = _extract_template_vars(model, result)
     state["template_vars"] = template_vars
-    
+
     # Initialize narrative sections
     state["narrative_sections"] = {}
     state["errors"] = []
     state["diagram_paths"] = {}
-    
+
     return state
 
 
@@ -193,7 +192,7 @@ def diagram_node(state: DocGenState) -> DocGenState:
     """Diagram Agent: Generate SVG/PNG diagrams from solver results."""
     model = state["model"]
     result = state["result"]
-    
+
     # Generate diagrams in the project output directory
     output_dir = Path(f"Project/{model.name}/diagrams")
     try:
@@ -204,14 +203,14 @@ def diagram_node(state: DocGenState) -> DocGenState:
         state["errors"].append(f"Diagram generation failed: {e}")
         state["diagram_paths"] = {}
         state["template_vars"]["diagram_paths"] = {}
-    
+
     return state
 
 
 def outline_node(state: DocGenState) -> DocGenState:
     """Outline Agent: Create document structure based on available data."""
     template_vars = state["template_vars"]
-    
+
     # Standard engineering report structure
     outline = [
         "Executive Summary",
@@ -224,7 +223,7 @@ def outline_node(state: DocGenState) -> DocGenState:
         "Parametric OpenSCAD 3D CAD Definition",
         "Deterministic Physics Solver Audit Trace"
     ]
-    
+
     # Conditionally include sections based on data availability
     if not template_vars.get("has_critical_section"):
         outline.remove("Critical Section Analysis (Peak Stress Plane)")
@@ -233,7 +232,7 @@ def outline_node(state: DocGenState) -> DocGenState:
     elif not template_vars.get("has_keyway"):
         # Keep bearings section but note no keyway
         pass
-    
+
     state["outline"] = outline
     return state
 
@@ -242,7 +241,7 @@ def writer_node(state: DocGenState) -> DocGenState:
     """Writer Agent: Generate explanatory narrative text (NO numerical values)."""
     template_vars = state["template_vars"]
     narrative = {}
-    
+
     # Executive Summary narrative
     narrative["exec_summary"] = (
         "This calculation sheet presents the deterministic verification of the "
@@ -250,14 +249,14 @@ def writer_node(state: DocGenState) -> DocGenState:
         "from closed-form physics solvers with full audit traceability. "
         "The design is evaluated against yield, fatigue, deflection, and mass constraints."
     )
-    
+
     # AI Design Review narrative
     narrative["ai_review_intro"] = (
         "The AI Design Critic provides an independent assessment of the design "
         "based on deterministic solver outputs. The review identifies root causes "
         "of any constraint violations and recommends specific engineering actions."
     )
-    
+
     # Assumptions narrative
     narrative["assumptions_intro"] = (
         "The following table documents all engineering assumptions made during "
@@ -265,21 +264,21 @@ def writer_node(state: DocGenState) -> DocGenState:
         "CONFIRMED assumptions are verified against standards; ASSUMED items "
         "require validation before manufacturing."
     )
-    
+
     # Materials narrative
     narrative["materials_intro"] = (
         "Material properties are sourced from the MDIE material database. "
         "The endurance limit is estimated as 0.5 × Sut for steels per Shigley, "
         "adjusted for surface finish, size, and reliability factors by the fatigue solver."
     )
-    
+
     # Reactions narrative
     narrative["reactions_intro"] = (
         "Support reactions are computed from static equilibrium of the loaded shaft. "
         "Vertical reactions and reaction moments at each support are listed below. "
         "The nominal transmitted torque is applied at the driven element."
     )
-    
+
     # Critical section narrative
     if template_vars.get("has_critical_section"):
         narrative["critical_section_intro"] = (
@@ -291,7 +290,7 @@ def writer_node(state: DocGenState) -> DocGenState:
         )
     else:
         narrative["critical_section_intro"] = ""
-    
+
     # Bearings narrative
     if template_vars.get("has_bearings"):
         narrative["bearings_intro"] = (
@@ -302,7 +301,7 @@ def writer_node(state: DocGenState) -> DocGenState:
         )
     else:
         narrative["bearings_intro"] = ""
-    
+
     # Keyway narrative
     if template_vars.get("has_keyway"):
         narrative["keyway_intro"] = (
@@ -312,7 +311,7 @@ def writer_node(state: DocGenState) -> DocGenState:
         )
     else:
         narrative["keyway_intro"] = ""
-    
+
     # OpenSCAD narrative
     narrative["openscad_intro"] = (
         "The parametric OpenSCAD script below defines the complete 3D geometry "
@@ -320,14 +319,14 @@ def writer_node(state: DocGenState) -> DocGenState:
         "deterministic calculations, not manual input. The script is ready for "
         "direct use in OpenSCAD, export to STEP/STL, or CAM processing."
     )
-    
+
     # Audit trace narrative
     narrative["audit_intro"] = (
         "The following audit trace documents every calculation step performed by "
         "the deterministic physics solver. This provides full traceability from "
         "inputs to final results, enabling independent verification."
     )
-    
+
     state["narrative_sections"] = narrative
     return state
 
@@ -336,33 +335,34 @@ def fact_checker_node(state: DocGenState) -> DocGenState:
     """Fact Checker Agent: Validate all narrative claims against solver results."""
     template_vars = state["template_vars"]
     result = state["result"]
-    
+
     fact_checks = []
-    
+
     # Check each narrative section for claims that can be verified
     # The writer should not have included numerical values, but we verify anyway
-    
+
     # Verify overall status claim
     ai_claim_safe = template_vars["overall_status"] == "PASS"
     physics_safe = result.all_constraints_passed
-    passed, msg = DesignCritic.verify_ai_claim(ai_claim_safe, result)
+    # Safety veto: AI's safety claim is accepted only if physics independently confirms
+    passed, msg = DesignCritic.verify_ai_claim(ai_claim_safe and physics_safe, result)
     fact_checks.append((passed, f"Overall status: {msg}"))
-    
+
     # Verify yield claim
     ai_claim_yield = template_vars["yield_status"] == "PASS"
     passed, msg = DesignCritic.verify_ai_claim(ai_claim_yield, result)
     fact_checks.append((passed, f"Yield constraint: {msg}"))
-    
+
     # Verify fatigue claim
     ai_claim_fatigue = template_vars["fatigue_status"] == "PASS"
     passed, msg = DesignCritic.verify_ai_claim(ai_claim_fatigue, result)
     fact_checks.append((passed, f"Fatigue constraint: {msg}"))
-    
+
     # Verify deflection claim
     ai_claim_deflection = template_vars["deflection_status"] == "PASS"
     passed, msg = DesignCritic.verify_ai_claim(ai_claim_deflection, result)
     fact_checks.append((passed, f"Deflection constraint: {msg}"))
-    
+
     # Check for any numerical claims in narrative (should be none)
     for section_name, text in state["narrative_sections"].items():
         # Simple heuristic: flag any text containing numbers with units that might be claims
@@ -370,17 +370,17 @@ def fact_checker_node(state: DocGenState) -> DocGenState:
         numeric_claims = re.findall(r'\d+(?:\.\d+)?\s*(?:MPa|mm|N|N·m|kN|cycles|kg|GPa)', text)
         if numeric_claims:
             fact_checks.append((
-                False, 
+                False,
                 f"Section '{section_name}' contains numerical values that should come from template: {numeric_claims}"
             ))
-    
+
     state["fact_check_results"] = fact_checks
-    
+
     # Collect any errors
     for passed, msg in fact_checks:
         if not passed:
             state["errors"].append(f"FACT CHECK FAILED: {msg}")
-    
+
     return state
 
 
@@ -389,7 +389,7 @@ def editor_node(state: DocGenState) -> DocGenState:
     # In a real implementation, this would use an LLM to polish the narrative
     # For now, we ensure narrative sections exist and are non-empty
     narrative = state["narrative_sections"]
-    
+
     for key in [
         "exec_summary", "ai_review_intro", "assumptions_intro", "materials_intro",
         "reactions_intro", "critical_section_intro", "bearings_intro",
@@ -397,7 +397,7 @@ def editor_node(state: DocGenState) -> DocGenState:
     ]:
         if key not in narrative or not narrative[key].strip():
             narrative[key] = f"[Section {key} - content to be generated]"
-    
+
     state["narrative_sections"] = narrative
     return state
 
@@ -405,47 +405,46 @@ def editor_node(state: DocGenState) -> DocGenState:
 def renderer_node(state: DocGenState) -> DocGenState:
     """Renderer Agent: Fill docxtpl template with solver data and narrative."""
     try:
-        from docxtpl import DocxTemplate
-        from docxtpl import InlineImage
         from docx.shared import Inches
+        from docxtpl import DocxTemplate, InlineImage  # type: ignore[import-untyped]
     except ImportError:
         state["errors"].append("docxtpl not installed. Install with: pip install docxtpl")
         return state
-    
+
     template_path = Path("templates/engineering_report.docx")
     if not template_path.exists():
         state["errors"].append(f"Template not found at {template_path}")
         return state
-    
+
     # Prepare context for docxtpl
     context = {}
     context.update(state["template_vars"])
     context.update(state["narrative_sections"])
-    
+
     # Create the template first
     doc = DocxTemplate(str(template_path))
-    
+
     # Handle diagram images - convert paths to InlineImage objects
     diagram_paths = state.get("diagram_paths", {})
     for diagram_name, diagram_path in diagram_paths.items():
         if diagram_path and Path(diagram_path).exists():
             try:
                 context[f"diagram_{diagram_name}"] = InlineImage(
-                    doc, 
-                    str(diagram_path), 
+                    doc,
+                    str(diagram_path),
                     width=Inches(6.5)
                 )
             except Exception as e:
                 state["errors"].append(f"Failed to load diagram {diagram_name}: {e}")
-    
+
     # Render template
     doc.render(context)
-    
+
     # Save output
     output_path = Path(f"Project/{state['model'].name}/report.docx")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(output_path))
-    
+
     state["output_path"] = output_path
     return state
 
@@ -453,22 +452,22 @@ def renderer_node(state: DocGenState) -> DocGenState:
 def qa_validator_node(state: DocGenState) -> DocGenState:
     """QA Validator Agent: Final verification of the generated document."""
     result = state["result"]
-    
+
     # Final physics authority check
     ai_claim_safe = state["template_vars"]["overall_status"] == "PASS"
     physics_safe = result.all_constraints_passed
-    
-    passed, msg = DesignCritic.verify_ai_claim(ai_claim_safe, result)
+    # Safety veto: AI's safety claim is accepted only if physics independently confirms
+    passed, msg = DesignCritic.verify_ai_claim(ai_claim_safe and physics_safe, result)
     state["qa_verdict"] = (passed, msg)
-    
+
     if not passed:
         state["errors"].append(f"QA VALIDATION FAILED: {msg}")
-    
+
     # Verify document was created
     if state["output_path"] is None or not state["output_path"].exists():
         state["errors"].append("QA VALIDATION FAILED: Output document not created")
         state["qa_verdict"] = (False, "Output document not created")
-    
+
     return state
 
 
@@ -476,10 +475,10 @@ def qa_validator_node(state: DocGenState) -> DocGenState:
 # Build Workflow Graph
 # =============================================================================
 
-def build_docgen_workflow() -> StateGraph:
+def build_docgen_workflow() -> CompiledStateGraph[DocGenState, None, DocGenState, DocGenState]:
     """Build and return the LangGraph workflow for document generation."""
     workflow = StateGraph(DocGenState)
-    
+
     # Add nodes
     workflow.add_node("research", research_node)
     workflow.add_node("diagram", diagram_node)
@@ -489,7 +488,7 @@ def build_docgen_workflow() -> StateGraph:
     workflow.add_node("editor", editor_node)
     workflow.add_node("renderer", renderer_node)
     workflow.add_node("qa_validator", qa_validator_node)
-    
+
     # Define edges (sequential pipeline)
     workflow.set_entry_point("research")
     workflow.add_edge("research", "diagram")
@@ -500,7 +499,7 @@ def build_docgen_workflow() -> StateGraph:
     workflow.add_edge("editor", "renderer")
     workflow.add_edge("renderer", "qa_validator")
     workflow.add_edge("qa_validator", END)
-    
+
     return workflow.compile()
 
 
@@ -511,12 +510,12 @@ def build_docgen_workflow() -> StateGraph:
 def generate_docx_report(model: EngineeringModel, result: SolverResult) -> tuple[Path | None, list[str]]:
     """
     Generate a DOCX engineering report using the multi-agent LangGraph workflow.
-    
+
     Returns:
         (output_path, errors) - output_path is None if generation failed
     """
     workflow = build_docgen_workflow()
-    
+
     initial_state: DocGenState = {
         "model": model,
         "result": result,
@@ -526,11 +525,12 @@ def generate_docx_report(model: EngineeringModel, result: SolverResult) -> tuple
         "fact_check_results": [],
         "qa_verdict": None,
         "output_path": None,
-        "errors": []
+        "errors": [],
+        "diagram_paths": {},
     }
-    
+
     final_state = workflow.invoke(initial_state)
-    
+
     return final_state["output_path"], final_state["errors"]
 
 
