@@ -9,6 +9,16 @@ description = "AI-driven mechanical design CLI: CAD, structural analysis and dra
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
+urls = { Homepage = "https://github.com/tonpai1007/computational-machine-design" }
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Engineering",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering",
+    "Topic :: CAD",
+]
 dependencies = [
     "rich>=13.7.0,<16",
     "jinja2>=3.1.0,<4",

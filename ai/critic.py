@@ -74,9 +74,12 @@ class DesignCritic:
             }
 
             if not result.yield_passed:
+                sf_y = result.min_yield_safety_factor
+                sf_y_str = f"{sf_y:.2f}" if sf_y is not None else "N/A"
+                allowable = result.yield_strength_mpa / sf_y if sf_y is not None and sf_y > 0 else "N/A"
                 issues.append(
                     f"Von Mises stress ({crit_sec.effective_von_mises:.1f} MPa) exceeds allowable yield limit "
-                    f"({result.yield_strength_mpa / c.min_yield_safety_factor:.1f} MPa) with SF_y = {result.min_yield_safety_factor:.2f}."
+                    f"({allowable} MPa) with SF_y = {sf_y_str}."
                 )
 
             if not result.fatigue_passed:
