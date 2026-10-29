@@ -6,10 +6,10 @@ solvers produce, with the formula that produced it and the call that returned
 it. This exists so that report writing never involves transcribing a number by
 hand: the document is generated from the solver result, so it cannot drift.
 
-Nothing here invents a value. Derived quantities that the frame solver does not
-expose (bracket stress, stretcher buckling, backrest stress, endurance limit)
-are recomputed here from the same model using the same formulas the reports
-document, and each is labelled with its source.
+Nothing here invents a value. Every quantity is read from the deterministic
+solver result -- including bracket stress, stretcher buckling, backrest stress
+and the endurance limit, which the solver computes in ``physics/frame_checks.py``.
+This module only formats them.
 
 Run::
 
@@ -116,13 +116,15 @@ class FrameDataSheetGenerator:
                 f"{p.section_modulus_m3 * 1e9:.2f} |"
             )
         bw, bh = self.g.armrest_bracket_thickness_mm, self.g.armrest_bracket_height_mm
-        bi = bw * bh**3 / 12.0
-        out.append(
-            f"| แผ่นยึดแขน (arm bracket) | rectangular plate | "
-            f"{bw:g} × {bh:g} | — | {bw * bh:.2f} | {bi:.2f} | "
-            f"{math.sqrt(bi / (bw * bh)):.3f} | {bh / 2:.2f} | "
-            f"{bi / (bh / 2):.2f} |"
-        )
+        brackets = self.sol.arm_brackets
+        if brackets:
+            b = brackets[0]
+            out.append(
+                f"| แผ่นยึดแขน (arm bracket) | rectangular plate | "
+                f"{bw:g} × {bh:g} | — | {b.section_area_mm2:.2f} | "
+                f"{b.section_inertia_mm4:.2f} | {b.section_radius_of_gyration_mm:.3f} | "
+                f"{b.extreme_fibre_mm:.2f} | {b.section_modulus_mm3:.2f} |"
+            )
         return "\n".join(out)
 
     def _armrest_geometry(self) -> str:
@@ -279,127 +281,107 @@ class FrameDataSheetGenerator:
         )
 
     def _rails_stretcher_back(self) -> str:
-        g, loads, m = self.g, self.loads, self.m
         r = self.sol.seat_frame
-        sp = g.stretcher_profile
-        sA = sp.area_m2 * 1e6
-        sI = sp.moment_of_inertia_m4 * 1e12
-        sk = math.sqrt(sI / sA)
-        s_len = g.seat_width_mm + 2 * (g.seat_height_mm - g.stretcher_height_mm) * math.tan(
-            math.radians(g.leg_splay_angle_deg)
-        )
-        kfac = 0.85 if g.has_stretchers else 1.2
-        slam = kfac * s_len / sk
-        E = m.elastic_modulus_gpa * 1000.0
-        sPcr = sA * (m.yield_strength_mpa - (m.yield_strength_mpa * slam / (2 * math.pi)) ** 2 / E)
-        s_load = loads.backrest_force_n / 2.0
-
-        lp = g.leg_profile
-        lZ = lp.moment_of_inertia_m4 * 1e12 / (lp.outer_dimension_mm / 2.0)
-        lA = lp.area_m2 * 1e6
-        # The backrest thrust is HORIZONTAL, so its moment arm about the post
-        # base is the post's vertical rise -- cos, not sin. sin gives the
-        # horizontal lean (58.45 mm) and understated the stress ~69x.
-        dz = g.backrest_height_above_seat_mm * math.cos(math.radians(g.backrest_angle_deg - 90.0))
-        fb = loads.backrest_force_n / 2.0
-        # F [N] * dz [mm] = M [N.mm]; dividing by Z [mm^3] yields MPa directly.
-        # No 1e3 here -- that would hand N.m into a mm^3 denominator and report
-        # the bending stress as ~1000x too small.
-        back_sigma = fb * dz / lZ + fb / lA
-
-        return "\n".join(
-            [
-                "## 8. คานโครงเบาะ (Seat Frame Rail)",
+        out = [
+            "## 8. คานโครงเบาะ (Seat Frame Rail)",
+            "",
+            "| ปริมาณ | ค่า | ที่มา |",
+            "|---|---|---|",
+            f"| แรงกดบนคาน | {r.seat_load_n:.1f} N | model |",
+            f"| M_max = PL/4 | {r.rail_bending_moment_nm:.4f} N·m | solver |",
+            f"| σ = M/Z | {r.rail_bending_stress_mpa:.4f} MPa | solver |",
+            f"| τ_max = R/(2·d·t) | {r.beam.max_shear_stress_mpa:.4f} MPa | solver |",
+            f"| σ_principal | {r.beam.max_principal_stress_mpa:.4f} MPa | solver |",
+            f"| δ = PL³/(48EI) | {r.rail_deflection_mm:.4f} mm | solver |",
+            f"| n = S_y/σ | {r.rail_safety_factor:.4f} | solver |",
+            f"| เกณฑ์เบี่ยงเบน L/250 | {r.beam.deflection_limit_mm:.4f} mm | solver |",
+            "",
+            "ผ่านทั้งการหักและเกณฑ์เบี่ยงเบน",
+            "",
+            "---",
+            "",
+            "## 9. สตรัชเตอร์ (Lower Stretcher)",
+            "",
+            "| ปริมาณ | ค่า |",
+            "|---|---|",
+        ]
+        if self.sol.stretchers:
+            s = self.sol.stretchers[0]
+            sb = s.buckling
+            out += [
+                f"| A | {sb.area_m2 * 1e6:.2f} mm² |",
+                f"| I | {sb.moment_of_inertia_m4 * 1e12:.1f} mm⁴ |",
+                f"| k = √(I/A) | {sb.radius_of_gyration_m * 1e3:.3f} mm |",
+                f"| L (รวมระยะเสียงเสา) | {sb.length_m * 1e3:.2f} mm |",
+                f"| k factor | {sb.k_factor:g} |",
+                f"| l/k | {sb.slenderness_ratio:.2f} |",
+                f"| P_cr | {sb.critical_buckling_load_n:.1f} N |",
+                f"| แรงต้าน (F_back/2) | {s.axial_force_n:.1f} N |",
+                f"| n = P_cr/F | {sb.buckling_safety_factor:.3f} |",
                 "",
-                "| ปริมาณ | ค่า | ที่มา |",
-                "|---|---|---|",
-                f"| แรงกดบนคาน | {r.seat_load_n:.1f} N | model |",
-                f"| M_max = PL/4 | {r.rail_bending_moment_nm:.4f} N·m | solver |",
-                f"| σ = M/Z | {r.rail_bending_stress_mpa:.4f} MPa | solver |",
-                f"| δ = PL³/(48EI) | {r.rail_deflection_mm:.4f} mm | solver |",
-                f"| n = S_y/σ | {r.rail_safety_factor:.4f} | solver |",
-                f"| เกณฑ์เบี่ยงเบน L/250 | {g.seat_width_mm / 250:.4f} mm | คำนวณ |",
-                "",
-                "ผ่านทั้งการหักและเกณฑ์เบี่ยงเบน",
-                "",
-                "---",
-                "",
-                "## 9. สตรัชเตอร์ (Lower Stretcher)",
-                "",
-                "| ปริมาณ | ค่า |",
-                "|---|---|",
-                f"| A | {sA:.2f} mm² |",
-                f"| I | {sI:.1f} mm⁴ |",
-                f"| k = √(I/A) | {sk:.3f} mm |",
-                f"| L (รวมระยะเสียงเสา) | {s_len:.2f} mm |",
-                f"| k factor | {kfac} |",
-                f"| l/k | {slam:.2f} |",
-                f"| P_cr | {sPcr:.1f} N |",
-                f"| แรงต้าน (F_back/2) | {s_load:.1f} N |",
-                f"| n = P_cr/F | {sPcr / s_load:.3f} |",
-                "",
-                "> ค่าชุดนี้คำนวณในเอกสารนี้ ไม่ใช่ผลจาก `frame_physics.py` โดยตรง",
-                "",
-                "---",
-                "",
-                "## 10. เสาหลังนั่ง (Backrest Post)",
-                "",
-                "| ปริมาณ | ค่า |",
-                "|---|---|",
-                f"| F_back/2 | {fb:.1f} N |",
-                f"| ระยะแนวดิ่งของโมเมนต์ dz | {dz:.3f} mm |",
-                f"| Z | {lZ:.2f} mm³ |",
-                f"| σ = F·dz/Z + F/A | {back_sigma:.3f} MPa |",
-                f"| n = S_y/σ | {m.yield_strength_mpa / back_sigma:.3f} |",
+                "> ค่าชุดนี้อ่านจาก `FrameSolverResult.stretchers[0]` "
+                "(`physics/frame_checks.py::CompressionMemberAssessment`)",
             ]
-        )
+        else:
+            out.append("| — | แบบจำลองนี้ไม่มีสตรัชเตอร์ |")
+        out += [
+            "",
+            "---",
+            "",
+            "## 10. เสาหลังนั่ง (Backrest Post)",
+            "",
+            "| ปริมาณ | ค่า |",
+            "|---|---|",
+        ]
+        if self.sol.backrest_post is not None:
+            bp = self.sol.backrest_post
+            out += [
+                f"| F_back/2 | {bp.applied_force_n:.1f} N |",
+                f"| ระยะแนวดิ่งของโมเมนต์ dz | {bp.moment_arm_mm:.3f} mm |",
+                f"| Z | {bp.section_modulus_mm3:.2f} mm³ |",
+                f"| σ = F·dz/Z + F/A | {bp.combined_stress_mpa:.3f} MPa |",
+                f"| n = S_y/σ | {bp.safety_factor:.3f} |",
+                "",
+                "> ค่าชุดนี้อ่านจาก `FrameSolverResult.backrest_post` "
+                "(`physics/frame_checks.py::BackrestPostAssessment`)",
+            ]
+        else:
+            out.append("| — | แบบจำลองนี้ไม่มีแรงกดหลังนั่งให้ตรวจ |")
+        return "\n".join(out)
 
     def _fatigue(self) -> str:
-        from physics.fatigue import FatigueSolver, MarinFactors
-
         m = self.m
-        # Governing member is the arm bracket (highest combined stress),
-        # read from the solver rather than recomputed here.
-        sig = self.sol.arm_brackets[0].combined_stress_mpa
+        # Governing member is the arm bracket (highest combined stress). Every
+        # fatigue quantity below comes from the solver's bracket assessment.
+        b = self.sol.arm_brackets[0]
+        f = b.fatigue
+        rl = f.repeated_load
+        assert rl is not None, "solver did not produce a repeated-load assessment"
+        sig = b.combined_stress_mpa
         d_eff_mm = self.ag.bracket_len_mm
-        # Single source of truth for Marin factors: physics/fatigue.py.
-        ka = MarinFactors.surface_factor(m.ultimate_strength_mpa, "machined")
-        kb = MarinFactors.size_factor(d_eff_mm / 1000.0)
-        kc = MarinFactors.load_factor("bending")
-        ke = MarinFactors.reliability_factor(0.90)
-        kd = kf = 1.0
-        se_prime = 0.5 * m.ultimate_strength_mpa
-        se = ka * kb * kc * kd * ke * kf * se_prime
-        # The arm carries a seated occupant: stress cycles zero -> peak as the
-        # user sits and stands. That is a repeated load (R = 0), not the fully
-        # reversed duty a bare Se assumes, so judge it on mean + alternating
-        # stress rather than on Se/sigma_max alone.
-        rl = FatigueSolver.repeated_load_fatigue(
-            sigma_max_mpa=sig,
-            s_ut_mpa=m.ultimate_strength_mpa,
-            s_y_mpa=m.yield_strength_mpa,
-            s_e_mpa=se,
-            stress_ratio_r=0.0,
-        )
+        se = f.endurance_limit_mpa
         return "\n".join(
             [
                 "## 11. ความทนทานของวัสดุ (Endurance)",
                 "",
-                "> ตัวปรับแก้ Marin ทั้งหมดอ่านจาก `physics/fatigue.py::MarinFactors`",
+                "> ตัวปรับแก้ Marin และ S_e ทั้งหมดอ่านจาก "
+                "`FrameSolverResult.arm_brackets[0].fatigue` "
+                "(`physics/frame_checks.py::FatigueAssessment`)",
                 "> σ_max อ่านจาก `FrameSolverResult.arm_brackets[0].combined_stress_mpa`",
-                "> เกณฑ์ตัดสินคำนวณจาก `physics/fatigue.py::FatigueSolver.repeated_load_fatigue`",
+                "> เกณฑ์ตัดสินอ่านจาก `fatigue.repeated_load` "
+                "(`physics/fatigue.py::FatigueSolver.repeated_load_fatigue`)",
                 "",
                 f"ชิ้นวิกฤต = แผ่นยึดแขน, σ_max = `{sig:.3f}` MPa",
                 "",
                 "| ปริมาณ | สูตร | ค่า |",
                 "|---|---|---|",
-                f"| S_e' | 0.5·S_ut | {se_prime:.2f} MPa |",
-                f"| k_a | MarinFactors.surface_factor(machined) | {ka:.4f} |",
-                f"| k_b | MarinFactors.size_factor (d = {d_eff_mm:.1f} mm) | {kb:.4f} |",
-                f"| k_c | ดัด (bending) | {kc:.4f} |",
-                f"| k_d | ภาระตัวแปร | {kd:.4f} |",
-                f"| k_e | ความเชื่อมโลหะ 90% | {ke:.4f} |",
-                f"| k_f | ปัจจัยอื่น | {kf:.4f} |",
+                f"| S_e' | 0.5·S_ut | {f.endurance_limit_prime_mpa:.2f} MPa |",
+                f"| k_a | surface_factor(machined) | {f.surface_factor_ka:.4f} |",
+                f"| k_b | size_factor (d = {d_eff_mm:.1f} mm) | {f.size_factor_kb:.4f} |",
+                f"| k_c | ดัด (bending) | {f.load_factor_kc:.4f} |",
+                f"| k_d | ภาระตัวแปร | {f.temperature_factor_kd:.4f} |",
+                f"| k_e | ความเชื่อมโลหะ 90% | {f.reliability_factor_ke:.4f} |",
+                f"| k_f | ปัจจัยอื่น | {f.other_factor_kf:.4f} |",
                 f"| S_e | k_a·k_b·k_c·k_d·k_e·k_f·S_e' | {se:.4f} MPa |",
                 "",
                 "**แรงกดที่แขนเป็นแรงทำซ้ำแบบไม่กลับทิศ (pulsating, R = 0)** — ขึ้นกับน้ำหนักผู้นั่ง"
@@ -430,7 +412,7 @@ class FrameDataSheetGenerator:
                 "```",
                 "",
                 "> **เทียบกับเกณฑ์เดิม**: ถ้าใช้ S_e/σ_max ตรง ๆ ได้ "
-                f"`{se / sig:.4f}` ซึ่งต่ำกว่า n_d = 2.0 แต่เกณฑ์นั้นสมมติแรงกลับทิศเต็มช่วง (R = −1)"
+                f"`{f.endurance_safety_factor:.4f}` ซึ่งต่ำกว่า n_d = 2.0 แต่เกณฑ์นั้นสมมติแรงกลับทิศเต็มช่วง (R = −1)"
                 " ซึ่งไม่ตรงกับการใช้งานจริงของเก้าอี้",
                 "> หากมีแรงดันส่วนหน้า–หลังที่กลับทิศจริง (R < 0) ค่า n จะลดลง "
                 "ตามสมการ σ_a/S_e + σ_m/S_y ดังนั้นผลนี้ใช้ได้เมื่อยอมรับ R = 0",

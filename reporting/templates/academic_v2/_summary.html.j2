@@ -1,0 +1,21 @@
+  <!-- ================= สรุป ================= -->
+  <div class="page-break"></div>
+  <h2 class="part-title" style="border-bottom: 2px solid #000000; text-align: center;">สรุป</h2>
+  <table class="data-table" style="margin-top: 20px;">
+    <thead>
+      <tr>
+        <th style="width: 45%;">Parts (ชิ้นส่วน)</th>
+        <th class="text-center" style="width: 18%;">Design Factor (nd)</th>
+        <th class="text-center" style="width: 18%;">Safety Factor (ns)</th>
+        <th class="text-center" style="width: 19%;">ผลการประเมิน</th>
+      </tr>
+    </thead>
+    <tbody>
+{% for row in spec.summary_rows %}      <tr>
+        <td>{{ row.name }}</td>
+        <td class="text-center">{{ row.design_factor | f2 }}</td>
+        <td class="text-center" style="font-weight: 700;">{{ row.safety_factor | f2 }}</td>
+        <td class="text-center" style="font-weight: 700; color: {% if row.passed %}#16a34a{% else %}#dc2626{% endif %};">{% if row.passed %}PASS{% else %}FAIL{% endif %}</td>
+      </tr>
+{% endfor %}    </tbody>
+  </table>

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+import types
 import zipfile
 from pathlib import Path
 
@@ -189,11 +191,361 @@ def test_docx_converts_back_to_markdown(tmp_path):
     assert "first bullet" in text
 
 
+def test_docx_context_extraction_tracks_text_tables_and_images(tmp_path):
+    from PIL import Image
+
+    image_path = tmp_path / "figure.png"
+    Image.new("RGB", (20, 20), color="blue").save(image_path)
+
+    docx_path = tmp_path / "semantic.docx"
+    doc = __import__("docx").Document()
+    doc.add_heading("Design Review", level=1)
+    doc.add_paragraph("The assembly was verified for fatigue and shaft alignment.")
+    table = doc.add_table(rows=2, cols=2)
+    table.cell(0, 0).text = "Part"
+    table.cell(0, 1).text = "Status"
+    table.cell(1, 0).text = "Bearing"
+    table.cell(1, 1).text = "Pass"
+    doc.add_paragraph()
+    doc.add_picture(str(image_path), width=120)
+    doc.save(str(docx_path))
+
+    from convert.documents import extract_docx_context
+
+    context = extract_docx_context(docx_path)
+    assert "Design Review" in context["full_text"]
+    assert "fatigue" in context["full_text"].lower()
+    assert len(context["tables"]) >= 1
+    assert len(context["images"]) >= 1
+    assert context["images"][0]["caption"] in {None, ""} or isinstance(context["images"][0]["caption"], str)
+
+
+def test_document_context_model_unifies_sections_tables_and_figures(tmp_path):
+    from PIL import Image
+
+    image_path = tmp_path / "figure.png"
+    Image.new("RGB", (20, 20), color="cyan").save(image_path)
+
+    docx_path = tmp_path / "unified.docx"
+    doc = __import__("docx").Document()
+    doc.add_heading("Overview", level=1)
+    doc.add_paragraph("This assembly was checked for fatigue.")
+    table = doc.add_table(rows=2, cols=2)
+    table.cell(0, 0).text = "Item"
+    table.cell(0, 1).text = "Result"
+    table.cell(1, 0).text = "Bearing"
+    table.cell(1, 1).text = "Pass"
+    doc.add_paragraph("Figure caption")
+    doc.add_picture(str(image_path), width=80)
+    doc.add_paragraph("Conclusion text")
+    doc.save(str(docx_path))
+
+    from convert.document_intelligence import extract_document_context
+
+    context = extract_document_context(docx_path)
+    assert context.title == "Overview"
+    assert context.full_text
+    assert len(context.tables) >= 1
+    assert len(context.images) >= 1
+    assert len(context.sections) >= 1
+    assert any(section.heading == "Overview" for section in context.sections)
+
+
+def test_document_context_exposes_semantic_tags_and_section_summaries(tmp_path):
+    docx_path = tmp_path / "semantic.docx"
+    doc = __import__("docx").Document()
+    doc.add_heading("Design Review", level=1)
+    doc.add_paragraph("The assembly was verified for fatigue and shaft alignment.")
+    doc.save(str(docx_path))
+
+    from convert.document_intelligence import extract_document_context
+
+    context = extract_document_context(docx_path)
+    assert context.semantic_tags
+    assert any(tag in context.semantic_tags for tag in ("design", "review", "fatigue"))
+    assert any(section.summary for section in context.sections)
+    assert any("fatigue" in section.summary.lower() for section in context.sections)
+
+
+def test_document_graph_links_figures_to_sections_and_captions(tmp_path):
+    from PIL import Image
+
+    image_path = tmp_path / "figure.png"
+    Image.new("RGB", (20, 20), color="orange").save(image_path)
+
+    docx_path = tmp_path / "graph.docx"
+    doc = __import__("docx").Document()
+    doc.add_heading("Design Overview", level=1)
+    doc.add_paragraph("The shaft was checked for fatigue and alignment.")
+    paragraph = doc.add_paragraph()
+    paragraph.add_run().add_picture(str(image_path), width=120)
+    doc.add_paragraph("Figure 1: Shaft alignment check")
+    doc.add_paragraph("Conclusion: use the corrected bearing spacing.")
+    doc.save(str(docx_path))
+
+    from convert.document_intelligence import build_document_graph, extract_document_context
+
+    context = extract_document_context(docx_path)
+    graph = build_document_graph(context)
+
+    assert any(fig.caption == "Figure 1: Shaft alignment check" for fig in graph.figures)
+    assert any("shaft" in tag for tag in graph.keywords)
+    assert any(rel.section_heading == "Design Overview" for rel in graph.figure_links)
+
+
+def test_engineering_metadata_extracts_objective_assumptions_and_conclusion(tmp_path):
+    docx_path = tmp_path / "engineering.docx"
+    doc = __import__("docx").Document()
+    doc.add_heading("Objective", level=1)
+    doc.add_paragraph("The goal is to size the shaft for a 120 N load.")
+    doc.add_heading("Assumptions", level=1)
+    doc.add_paragraph("Assume a safety factor of 1.5 and steel material.")
+    doc.add_heading("Results", level=1)
+    doc.add_paragraph("The stress is below allowable limits and fatigue is acceptable.")
+    doc.add_heading("Conclusion", level=1)
+    doc.add_paragraph("The design is acceptable for production.")
+    doc.save(str(docx_path))
+
+    from convert.document_intelligence import extract_document_context, extract_engineering_metadata
+
+    context = extract_document_context(docx_path)
+    meta = extract_engineering_metadata(context)
+
+    assert meta.objective
+    assert "120" in meta.objective
+    assert any("safety" in assumption.lower() for assumption in meta.assumptions)
+    assert meta.conclusion
+    assert "acceptable" in meta.conclusion.lower()
+
+
+def test_document_graph_links_sections_to_evidence_and_summarizes_report(tmp_path):
+    from PIL import Image
+
+    image_path = tmp_path / "result.png"
+    Image.new("RGB", (18, 18), color="blue").save(image_path)
+
+    docx_path = tmp_path / "report_evidence.docx"
+    doc = __import__("docx").Document()
+    doc.add_heading("Objective", level=1)
+    doc.add_paragraph("The design target is a 500 N shaft for a compact drive train.")
+    doc.add_heading("Assumptions", level=1)
+    doc.add_paragraph("Assume the material is steel and FOS is 1.8.")
+    doc.add_heading("Results", level=1)
+    doc.add_paragraph("The stress remains below allowable stress, see the validation plot.")
+    paragraph = doc.add_paragraph()
+    paragraph.add_run().add_picture(str(image_path), width=120)
+    doc.add_paragraph("Figure 2: Shaft stress validation plot")
+    doc.add_heading("Conclusion", level=1)
+    doc.add_paragraph("The shaft passes the design review and is ready for fabrication.")
+    doc.save(str(docx_path))
+
+    from convert.document_intelligence import build_document_graph, extract_document_context, synthesize_report_summary
+
+    context = extract_document_context(docx_path)
+    graph = build_document_graph(context)
+    summary = synthesize_report_summary(context, graph)
+
+    assert any(link.section_heading == "Results" for link in graph.evidence_links)
+    assert "objective" in summary.lower()
+    assert "results" in summary.lower()
+    assert "conclusion" in summary.lower()
+
+
+def test_docx_can_insert_inline_picture_and_preserve_context(tmp_path):
+    from PIL import Image
+
+    image_path = tmp_path / "figure.png"
+    Image.new("RGB", (20, 20), color="red").save(image_path)
+
+    docx_path = tmp_path / "with_image.docx"
+    doc = __import__("docx").Document()
+    doc.add_paragraph("Before image")
+    doc.save(str(docx_path))
+
+    from convert.documents import insert_docx_picture
+
+    result = insert_docx_picture(docx_path, image_path, caption="Figure 1: Bearing layout", width=180)
+    assert result.exists()
+
+    rebuilt = __import__("docx").Document(str(result))
+    assert len(rebuilt.inline_shapes) >= 1
+    assert "Figure 1: Bearing layout" in "\n".join(p.text for p in rebuilt.paragraphs)
+
+
+def test_report_editor_inserts_figure_into_named_section(tmp_path):
+    from PIL import Image
+
+    image_path = tmp_path / "figure.png"
+    Image.new("RGB", (20, 20), color="green").save(image_path)
+
+    docx_path = tmp_path / "report.docx"
+    doc = __import__("docx").Document()
+    doc.add_heading("Design Overview", level=1)
+    doc.add_paragraph("Initial design note.")
+    doc.save(str(docx_path))
+
+    from convert.report_editor import insert_report_figure
+
+    result = insert_report_figure(
+        docx_path,
+        image_path,
+        caption="Figure 1: Bearing layout",
+        section_heading="Design Overview",
+        width=180,
+    )
+    assert result.exists()
+
+    rebuilt = __import__("docx").Document(str(result))
+    text = "\n".join(p.text for p in rebuilt.paragraphs)
+    assert "Design Overview" in text
+    assert "Figure 1: Bearing layout" in text
+    assert len(rebuilt.inline_shapes) >= 1
+
+
+def test_report_editor_updates_existing_caption_in_place(tmp_path):
+    from PIL import Image
+
+    image_path = tmp_path / "figure.png"
+    Image.new("RGB", (20, 20), color="purple").save(image_path)
+
+    docx_path = tmp_path / "captioned.docx"
+    doc = __import__("docx").Document()
+    doc.add_heading("Results", level=1)
+    doc.add_paragraph("Before image")
+    paragraph = doc.add_paragraph()
+    paragraph.add_run().add_picture(str(image_path), width=120)
+    doc.add_paragraph("Figure 1: Old caption")
+    doc.save(str(docx_path))
+
+    from convert.report_editor import update_report_caption
+
+    result = update_report_caption(docx_path, "Figure 1: Old caption", "Figure 1: Updated bearing layout")
+    assert result.exists()
+
+    rebuilt = __import__("docx").Document(str(result))
+    text = "\n".join(p.text for p in rebuilt.paragraphs)
+    assert "Figure 1: Updated bearing layout" in text
+    assert "Figure 1: Old caption" not in text
+
+
+def test_embed_project_report_assets_inserts_existing_drawings_and_diagrams(tmp_path):
+    from PIL import Image
+
+    drawings_dir = tmp_path / "drawings"
+    diagrams_dir = tmp_path / "diagrams"
+    drawings_dir.mkdir()
+    diagrams_dir.mkdir()
+
+    Image.new("RGB", (24, 24), color="blue").save(drawings_dir / "chair_layout.png")
+    Image.new("RGB", (24, 24), color="green").save(diagrams_dir / "fbd_overview.png")
+
+    docx_path = tmp_path / "report.docx"
+    doc = __import__("docx").Document()
+    doc.add_heading("Results", level=1)
+    doc.add_paragraph("The chair layout and FBD are shown below.")
+    doc.save(str(docx_path))
+
+    from convert.report_editor import embed_project_report_assets
+
+    result = embed_project_report_assets(docx_path, [drawings_dir, diagrams_dir], section_heading="Results")
+    assert result == docx_path
+    assert result.exists()
+
+    rebuilt = __import__("docx").Document(str(result))
+    text = "\n".join(p.text for p in rebuilt.paragraphs)
+    assert "chair layout" in text.lower()
+    assert "fbd overview" in text.lower()
+    assert len(rebuilt.inline_shapes) >= 2
+
+
+def test_embed_project_report_assets_falls_back_to_document_end_when_results_heading_missing(tmp_path):
+    from PIL import Image
+
+    drawings_dir = tmp_path / "drawings"
+    drawings_dir.mkdir()
+    Image.new("RGB", (24, 24), color="blue").save(drawings_dir / "chair_layout.png")
+
+    docx_path = tmp_path / "report.docx"
+    doc = __import__("docx").Document()
+    doc.add_heading("Design Summary", level=1)
+    doc.add_paragraph("This report is about the chair design.")
+    doc.save(str(docx_path))
+
+    from convert.report_editor import embed_project_report_assets
+
+    result = embed_project_report_assets(docx_path, [drawings_dir], section_heading="Results")
+    assert result == docx_path
+    rebuilt = __import__("docx").Document(str(result))
+    text = "\n".join(p.text for p in rebuilt.paragraphs)
+    assert "chair layout" in text.lower()
+    assert len(rebuilt.inline_shapes) >= 1
+
+
 def test_target_format_is_inferred_from_the_output_suffix(tmp_path):
     src = tmp_path / "r.md"
     src.write_text("# hi", encoding="utf-8")
     dst = convert_file(src, output_path=tmp_path / "r.pdf")
     assert dst.suffix == ".pdf" and dst.exists()
+
+
+def test_docling_adapter_is_optional_and_preserves_context_when_unavailable(tmp_path):
+    from convert.docling_adapter import enrich_document_context
+    from convert.document_intelligence import DocumentContext
+
+    context = DocumentContext(
+        path=str(tmp_path / "report.docx"),
+        title="Overview",
+        full_text="Design review",
+        paragraphs=["Design review"],
+        tables=[],
+        images=[],
+        sections=[],
+    )
+
+    enriched = enrich_document_context(context)
+    assert enriched is context
+    assert enriched.title == "Overview"
+    assert enriched.full_text == "Design review"
+
+
+def test_docling_adapter_merges_docling_metadata_when_available(tmp_path, monkeypatch):
+    from convert.docling_adapter import enrich_document_context
+    from convert.document_intelligence import DocumentContext, _infer_semantic_tags
+
+    class DummyDocument:
+        title = "Design Review"
+        text = "Fatigue check summary and shaft alignment."
+
+    class DummyResult:
+        document = DummyDocument()
+
+    class DummyConverter:
+        def convert(self, path):
+            return DummyResult()
+
+    fake_docling = types.SimpleNamespace(
+        document_converter=types.SimpleNamespace(DocumentConverter=DummyConverter)
+    )
+    monkeypatch.setitem(sys.modules, "docling", fake_docling)
+    monkeypatch.setitem(sys.modules, "docling.document_converter", fake_docling.document_converter)
+
+    context = DocumentContext(
+        path=str(tmp_path / "report.docx"),
+        title="Overview",
+        full_text="Design review",
+        paragraphs=["Design review"],
+        tables=[],
+        images=[],
+        sections=[],
+        semantic_tags=["design"],
+    )
+
+    enriched = enrich_document_context(context)
+    assert enriched.title == "Design Review"
+    assert "design" in enriched.semantic_tags
+    assert "fatigue" in enriched.semantic_tags
+    assert "shaft" in enriched.semantic_tags
+    assert _infer_semantic_tags(enriched.full_text) == enriched.semantic_tags or set(enriched.semantic_tags).issubset(set(_infer_semantic_tags(enriched.full_text)))
 
 
 def test_unknown_target_format_is_rejected(tmp_path):

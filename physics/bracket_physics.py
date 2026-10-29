@@ -30,6 +30,10 @@ class BracketSolverResult(BaseModel):
     hole_bearing_stress_mpa: float
     bolt_safety_factor: float
     plate_yield_safety_factor: float
+    plate_shear_allowable_mpa: float
+    plate_shear_safety_factor: float
+    hole_bearing_allowable_mpa: float
+    hole_bearing_safety_factor: float
 
     passed: bool
     calculation_log: list[str] = Field(default_factory=list)
@@ -124,6 +128,14 @@ class BracketPhysicsSolver:
         sf_bolt = bolt_allowable_shear_mpa / max(tau_bolt_mpa, 0.01)
         sf_plate = m.yield_strength_mpa / max(sigma_vm_mpa, 0.01)
 
+        # Distortion-energy shear yield and the plate bearing allowable are
+        # physics decisions, so they are computed here and only printed by the
+        # report.
+        plate_shear_allowable_mpa = m.yield_strength_mpa * 0.577
+        sf_plate_shear = plate_shear_allowable_mpa / max(tau_shear_mpa, 0.01)
+        hole_bearing_allowable_mpa = m.yield_strength_mpa * 1.5
+        sf_bearing = hole_bearing_allowable_mpa / max(sigma_brg_mpa, 0.01)
+
         passed = (sf_plate >= 1.5) and (sf_bolt >= 2.0)
 
         log.append(
@@ -144,6 +156,10 @@ class BracketPhysicsSolver:
             hole_bearing_stress_mpa=sigma_brg_mpa,
             bolt_safety_factor=sf_bolt,
             plate_yield_safety_factor=sf_plate,
+            plate_shear_allowable_mpa=plate_shear_allowable_mpa,
+            plate_shear_safety_factor=sf_plate_shear,
+            hole_bearing_allowable_mpa=hole_bearing_allowable_mpa,
+            hole_bearing_safety_factor=sf_bearing,
             passed=passed,
             calculation_log=log,
         )

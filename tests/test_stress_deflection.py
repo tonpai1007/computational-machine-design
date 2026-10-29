@@ -61,3 +61,106 @@ def test_deflection_simply_supported():
     res = PhysicsSolver.solve(model)
     assert res.success is True
     assert pytest.approx(res.max_deflection_mm, 0.05) == expected_defl_mm
+
+
+def test_boundary_zero_length_shaft():
+    """Test that a zero-length shaft is rejected by validation."""
+    model = EngineeringModel(
+        name="Zero Length Shaft",
+        total_length=0.0,
+        material_id="AISI_1045_CD",
+        segments=[ShaftSegment(start_pos=0.0, end_pos=0.0, outer_diameter=0.03)],
+        supports=[Support(position=0.0)],
+    )
+    errors = PhysicsSolver.validate_model(model)
+    assert len(errors) > 0
+    assert any("length" in e.lower() for e in errors)
+
+
+def test_boundary_negative_outer_diameter():
+    """Test that negative outer diameter is rejected by validation."""
+    model = EngineeringModel(
+        name="Negative Diameter Shaft",
+        total_length=1.0,
+        material_id="AISI_1045_CD",
+        segments=[ShaftSegment(start_pos=0.0, end_pos=1.0, outer_diameter=-0.03)],
+        supports=[Support(position=0.0), Support(position=1.0)],
+    )
+    errors = PhysicsSolver.validate_model(model)
+    assert len(errors) > 0
+    assert any("outer diameter" in e.lower() and "<= 0" in e.lower() for e in errors)
+
+
+def test_boundary_no_supports():
+    """Test that a shaft with no supports produces validation errors."""
+    model = EngineeringModel(
+        name="Shaft No Supports",
+        total_length=1.0,
+        material_id="AISI_1045_CD",
+        segments=[ShaftSegment(start_pos=0.0, end_pos=1.0, outer_diameter=0.03)],
+    )
+    errors = PhysicsSolver.validate_model(model)
+    assert len(errors) > 0
+
+
+def test_failure_excessive_load():
+    """Test that an excessively loaded shaft still computes but marks appropriately."""
+    model = EngineeringModel(
+        name="Overloaded Shaft",
+        total_length=1.0,
+        material_id="AISI_1045_CD",
+        segments=[ShaftSegment(start_pos=0.0, end_pos=1.0, outer_diameter=0.03)],
+        supports=[Support(position=0.0), Support(position=1.0)],
+        point_loads=[PointLoad(position=0.5, magnitude=100000.0)],  # Very high load
+    )
+    res = PhysicsSolver.solve(model)
+    # Should still compute but safety factor should be very low
+    assert res.success is True
+    assert res.min_yield_safety_factor < 1.0
+
+
+def test_boundary_zero_torque():
+    """Test shaft with zero torque still computes correctly."""
+    model = EngineeringModel(
+        name="Zero Torque Shaft",
+        total_length=1.0,
+        material_id="AISI_1045_CD",
+        segments=[ShaftSegment(start_pos=0.0, end_pos=1.0, outer_diameter=0.03)],
+        supports=[Support(position=0.0), Support(position=1.0)],
+        torque_nm=0.0,
+    )
+    res = PhysicsSolver.solve(model)
+    assert res.success is True
+    # Shear force should be zero everywhere with no transverse load and zero torque
+    assert all(s == 0.0 for s in res.shear_force)
+
+
+def test_boundary_midpoint_load():
+    """Test load at midpoint of shaft."""
+    model = EngineeringModel(
+        name="Midpoint Load Shaft",
+        total_length=2.0,
+        material_id="AISI_1045_CD",
+        segments=[ShaftSegment(start_pos=0.0, end_pos=2.0, outer_diameter=0.05)],
+        supports=[Support(position=0.0), Support(position=2.0)],
+        point_loads=[PointLoad(position=1.0, magnitude=500.0)],
+    )
+    res = PhysicsSolver.solve(model)
+    assert res.success is True
+    assert res.shear_force != 0
+
+
+def test_failure_yielding_material():
+    """Test material with low yield strength results in low safety factor."""
+    model = EngineeringModel(
+        name="Low Yield Shaft",
+        total_length=1.0,
+        material_id="AISI_1018_CD",  # Lower yield than 1045
+        segments=[ShaftSegment(start_pos=0.0, end_pos=1.0, outer_diameter=0.03)],
+        supports=[Support(position=0.0), Support(position=1.0)],
+        point_loads=[PointLoad(position=0.5, magnitude=500.0)],
+    )
+    res = PhysicsSolver.solve(model)
+    assert res.success is True
+    # AISI 1018 has lower yield strength than 1045, safety factor should be reasonable
+    assert res.min_yield_safety_factor > 0

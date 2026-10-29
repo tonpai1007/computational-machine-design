@@ -7,6 +7,8 @@ Verifies:
 4. End-to-end CLI prompt processing producing all local engineering deliverables.
 """
 
+import pytest
+
 from ai.classifier import DomainClassifier
 from cad.bracket_cad import BracketCADEngine
 from cli import process_prompt
@@ -100,6 +102,33 @@ def test_bracket_physics_determinism():
     assert res.hole_bearing_stress_mpa > 0.0
     assert res.bolt_safety_factor > 1.0
     assert res.plate_yield_safety_factor > 1.0
+
+
+def test_bracket_shear_and_bearing_checks_are_solver_values():
+    """Allowables and their safety factors are physics decisions, not report math."""
+    model = BracketModel()
+    res = BracketPhysicsSolver.solve(model)
+    sy = model.material.yield_strength_mpa
+
+    assert res.plate_shear_allowable_mpa == pytest.approx(sy * 0.577)
+    assert res.plate_shear_safety_factor == pytest.approx(
+        res.plate_shear_allowable_mpa / max(res.plate_shear_stress_mpa, 0.01)
+    )
+    assert res.hole_bearing_allowable_mpa == pytest.approx(sy * 1.5)
+    assert res.hole_bearing_safety_factor == pytest.approx(
+        res.hole_bearing_allowable_mpa / max(res.hole_bearing_stress_mpa, 0.01)
+    )
+
+
+def test_bracket_report_prints_the_solver_shear_and_bearing_factors():
+    model = BracketModel()
+    res = BracketPhysicsSolver.solve(model)
+    html = BracketReportGenerator.generate_html_report(model, res)
+
+    assert f"{res.plate_shear_allowable_mpa:.1f} MPa" in html
+    assert f"{res.plate_shear_safety_factor:.1f}" in html
+    assert f"{res.hole_bearing_allowable_mpa:.1f} MPa" in html
+    assert f"{res.hole_bearing_safety_factor:.2f}" in html
 
 
 def test_bracket_cad_generation(tmp_path):

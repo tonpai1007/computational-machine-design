@@ -5,7 +5,7 @@ equilibrium reactions, column buckling tables, and stress distributions.
 Strictly follows clean white-paper professional engineering standard (Engineerview.md).
 """
 
-import math
+import html
 
 from core.frame_model import FrameDesignModel
 from physics.frame_physics import FrameSolverResult
@@ -37,7 +37,7 @@ class FrameReportGenerator:
         g = model.geometry
         loads = model.loads
         m = model.material
-        allowable_deflection_mm = getattr(m, "allowable_deflection_mm", 5.0)
+        rail_beam = result.seat_frame.beam
 
         # Overall Status Badge
         overall_badge = (
@@ -46,24 +46,20 @@ class FrameReportGenerator:
             else '<span class="badge badge-fail">NON-COMPLIANT (REDESIGN REQUIRED)</span>'
         )
 
-        # Section Properties for Column
+        # Section properties and the transition slenderness come from the
+        # solver's own buckling assessment. The report formats them; it does
+        # not re-derive them from E and Sy.
+        governing_col = result.floor_reactions[0].buckling
         col_prof = g.leg_profile
-        col_area_mm2 = col_prof.area_m2 * 1e6
-        col_i_mm4 = col_prof.moment_of_inertia_m4 * 1e12
-        col_z_mm3 = col_prof.section_modulus_m3 * 1e9
-        col_r_gyr_mm = col_prof.radius_of_gyration_m * 1000.0
-        unbraced_len_mm = max(100.0, g.seat_height_mm - g.stretcher_height_mm)
-        k_factor = 0.85 if g.has_stretchers else 1.2
-
-        # Johnson transition slenderness ratio (C = 1.0 pinned-pinned baseline)
+        col_area_mm2 = governing_col.area_m2 * 1e6
+        col_i_mm4 = governing_col.moment_of_inertia_m4 * 1e12
+        col_z_mm3 = governing_col.section_modulus_m3 * 1e9
+        col_r_gyr_mm = governing_col.radius_of_gyration_m * 1000.0
+        unbraced_len_mm = governing_col.length_m * 1000.0
+        effective_len_mm = governing_col.effective_length_m * 1000.0
+        k_factor = governing_col.k_factor
         c_end = 1.0
-        trans_slenderness = math.sqrt(
-            2.0
-            * (math.pi**2)
-            * c_end
-            * (m.elastic_modulus_gpa * 1000.0)
-            / max(m.yield_strength_mpa, 1.0)
-        )
+        trans_slenderness = governing_col.transition_slenderness_ratio
 
         # Column Reaction Rows
         leg_rows = ""
@@ -73,7 +69,9 @@ class FrameReportGenerator:
             yield_cls = "text-pass" if leg.yield_passed else "text-fail"
             status_text = "PASS" if (leg.buckling_passed and leg.yield_passed) else "FAIL"
             buckling_mode = (
-                "Euler (Long)" if leg.slenderness_ratio >= trans_slenderness else "Johnson (Int.)"
+                "Euler (Long)"
+                if leg.slenderness_ratio >= leg.transition_slenderness_ratio
+                else "Johnson (Int.)"
             )
 
             leg_rows += f"""
@@ -224,13 +222,13 @@ class FrameReportGenerator:
         </svg>
         """
 
-        calc_log_items = "".join([f"<li>{step}</li>" for step in result.calculation_log])
+        calc_log_items = "".join([f"<li>{html.escape(step)}</li>" for step in result.calculation_log])
 
         html_out = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>MDIE Structural Engineering Audit Report - {model.name}</title>
+  <title>MDIE Structural Engineering Audit Report - {html.escape(model.name)}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
@@ -496,12 +494,12 @@ class FrameReportGenerator:
         <div style="font-size: 11px; color: #64748b;">Deterministic Static Equilibrium & Buckling Audit</div>
       </div>
       <div class="doc-meta">
-        <div><strong>Doc ID:</strong> MDIE-CALC-{model.name.upper().replace(" ", "_")}</div>
+        <div><strong>Doc ID:</strong> MDIE-CALC-{html.escape(model.name.upper().replace(" ", "_"))}</div>
         <div><strong>Standard:</strong> ANSI/BIFMA X5.1 &bull; AISC 360 &bull; ISO 7173</div>
         <div><strong>Units:</strong> SI Metric (mm, N, N·m, MPa, GPa)</div>
       </div>
     </div>
-    <h1 class="main-title">{model.name}</h1>
+    <h1 class="main-title">{html.escape(model.name)}</h1>
     <div class="subtitle">
       Spatial Multi-Member Support Frame &bull; Splayed Column Assembly ({g.leg_splay_angle_deg:.1f}°) &bull; Material: {m.name}
     </div>
@@ -522,7 +520,7 @@ class FrameReportGenerator:
       <span style="font-size: 11px; font-weight: 400; color: var(--text-muted);">Engineering Specifications</span>
     </div>
     <p>
-      Deterministic structural calculation sheet for the <strong>{model.name}</strong>.
+      Deterministic structural calculation sheet for the <strong>{html.escape(model.name)}</strong>.
       Evaluated under design payload <strong>{loads.seat_vertical_load_n:.0f} N</strong>, auxiliary armrest loads of
       <strong>{loads.left_arm_vertical_n:.0f} N</strong>, and lateral disturbance thrust of <strong>{abs(loads.left_arm_lateral_n):.0f} N</strong>.
     </p>
@@ -678,9 +676,9 @@ class FrameReportGenerator:
         <tr>
           <td>Allowable Structural Deflection</td>
           <td>&delta;<sub>all</sub></td>
-          <td class="num">{allowable_deflection_mm:.1f}</td>
+          <td class="num">{rail_beam.deflection_limit_mm:.1f}</td>
           <td>mm</td>
-          <td>BIFMA X5.1 / Span limit (L / 120)</td>
+          <td>BIFMA X5.1 / Span limit (L / 250)</td>
         </tr>
       </tbody>
     </table>
@@ -720,7 +718,7 @@ class FrameReportGenerator:
         &lambda;<sub>1</sub> = &radic;[ (2 &pi;&sup2; C E) / S<sub>y</sub> ] = &radic;[ (2 &pi;&sup2; &times; {c_end:.1f} &times; {m.elastic_modulus_gpa * 1000.0:.0f} MPa) / {m.yield_strength_mpa:.1f} MPa ] = {trans_slenderness:.1f}
       </div>
       <div style="font-size: 12px; color: #475569; margin-top: 4px;">
-        Unbraced Length L = {unbraced_len_mm:.1f} mm &bull; Effective Length Factor K = {k_factor:.2f} &bull; L<sub>eff</sub> = K&times;L = {(k_factor * unbraced_len_mm):.1f} mm &bull; Radius of Gyration k = {col_r_gyr_mm:.2f} mm &bull; Column Slenderness &lambda; = L<sub>eff</sub> / k = {(k_factor * unbraced_len_mm / col_r_gyr_mm):.1f}
+        Unbraced Length L = {unbraced_len_mm:.1f} mm &bull; Effective Length Factor K = {k_factor:.2f} &bull; L<sub>eff</sub> = K&times;L = {effective_len_mm:.1f} mm &bull; Radius of Gyration k = {col_r_gyr_mm:.2f} mm &bull; Column Slenderness &lambda; = L<sub>eff</sub> / k = {governing_col.slenderness_ratio:.1f}
       </div>
     </div>
 
@@ -859,11 +857,13 @@ class FrameReportGenerator:
         <tr>
           <td style="font-weight: 600;">Main Platform Deck</td>
           <td>Payload W = {loads.seat_vertical_load_n:.0f} N</td>
-          <td class="num">&delta; = {result.seat_deflection_mm:.3f} mm</td>
-          <td class="num">&le; {allowable_deflection_mm:.1f} mm</td>
+          <td class="num">&delta; = {rail_beam.deflection_mm:.3f} mm</td>
+          <td class="num">&le; {rail_beam.deflection_limit_mm:.2f} mm</td>
           <td class="num">1.50</td>
-          <td class="num text-pass" style="font-weight: 700;">{(allowable_deflection_mm / max(result.seat_deflection_mm, 0.001)):.2f}</td>
-          <td style="text-align: center; font-weight: 700;" class="text-pass">PASS</td>
+          <td class="num {"text-pass" if rail_beam.deflection_passed else "text-fail"}" style="font-weight: 700;">{rail_beam.deflection_safety_factor:.2f}</td>
+          <td style="text-align: center; font-weight: 700;" class="{"text-pass" if rail_beam.deflection_passed else "text-fail"}">
+            {"PASS" if rail_beam.deflection_passed else "FAIL"}
+          </td>
         </tr>
         <tr>
           <td style="font-weight: 600;">Cantilever Armrests</td>

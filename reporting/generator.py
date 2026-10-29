@@ -8,6 +8,17 @@ import html
 
 from ai.critic import DesignCritic
 from core.models import EngineeringModel, SolverResult
+from materials.database import MaterialDatabase
+
+
+def format_safety_factor(value: float | None) -> str:
+    """Format a safety factor, or ``N/A`` when the solver did not produce one.
+
+    A torque-only load case can leave ``min_yield_safety_factor`` as ``None``.
+    Rendering that with ``:.2f`` raised ``TypeError`` and took the whole report
+    down; an honest ``N/A`` is both correct and printable.
+    """
+    return "N/A" if value is None else f"{value:.2f}"
 
 
 class ReportGenerator:
@@ -129,6 +140,12 @@ class ReportGenerator:
         )
 
         crit_sec = result.critical_section
+
+        # Elastic modulus and density are not carried on SolverResult, so read
+        # them from the same material record the solver used. Never hardcode
+        # steel constants here: the report must stay valid for aluminium,
+        # titanium, or any other database material.
+        material = MaterialDatabase.get(model.material_id)
 
         html_out = f"""<!DOCTYPE html>
 <html lang="en">
@@ -327,13 +344,13 @@ class ReportGenerator:
       <div class="card">
         <div class="kpi-label">Yield Safety Factor</div>
         <div class="kpi-val" style="color: {"#10b981" if result.yield_passed else "#ef4444"};">{
-            result.min_yield_safety_factor:.2f}</div>
+            format_safety_factor(result.min_yield_safety_factor)}</div>
         <div class="kpi-sub">Constraint: &ge; {model.constraints.min_yield_safety_factor:.2f}</div>
       </div>
       <div class="card">
         <div class="kpi-label">Fatigue SF (Goodman)</div>
         <div class="kpi-val" style="color: {"#10b981" if result.fatigue_passed else "#ef4444"};">{
-            result.min_fatigue_safety_factor:.2f}</div>
+            format_safety_factor(result.min_fatigue_safety_factor)}</div>
         <div class="kpi-sub">Life: {
             "Infinite (&gt;10⁷ cycles)"
             if result.is_infinite_life
@@ -418,8 +435,8 @@ class ReportGenerator:
           <td>{result.yield_strength_mpa:.1f} MPa</td>
           <td>{result.ultimate_strength_mpa:.1f} MPa</td>
           <td>{result.endurance_limit_mpa:.1f} MPa</td>
-          <td>206.0 GPa</td>
-          <td>7,850 kg/m&sup3;</td>
+          <td>{material.elastic_modulus_gpa:.1f} GPa</td>
+          <td>{material.density_kg_m3:,.0f} kg/m&sup3;</td>
         </tr>
       </tbody>
     </table>
@@ -525,11 +542,11 @@ class ReportGenerator:
             "## 1. Executive Summary",
             "| Metric | Calculated | Allowable / Limit | Status |",
             "| :--- | :--- | :--- | :--- |",
-            f"| **Yield Safety Factor** | {result.min_yield_safety_factor:.2f} | N/A | N/A | &ge; {model.constraints.min_yield_safety_factor:.2f} | {'PASS' if result.yield_passed else 'FAIL'} |",
-            f"| **Fatigue Safety Factor (Goodman)** | {result.min_fatigue_safety_factor:.2f} | N/A | N/A | &ge; {model.constraints.min_fatigue_safety_factor:.2f} | {'PASS' if result.fatigue_passed else 'FAIL'} |",
+            f"| **Yield Safety Factor** | {format_safety_factor(result.min_yield_safety_factor)} | &ge; {model.constraints.min_yield_safety_factor:.2f} | {'PASS' if result.yield_passed else 'FAIL'} |",
+            f"| **Fatigue Safety Factor (Goodman)** | {format_safety_factor(result.min_fatigue_safety_factor)} | &ge; {model.constraints.min_fatigue_safety_factor:.2f} | {'PASS' if result.fatigue_passed else 'FAIL'} |",
             f"| **Maximum Deflection** | {result.max_deflection_mm:.3f} mm | &le; {model.constraints.max_deflection_mm:.3f} mm | {'PASS' if result.deflection_passed else 'FAIL'} |",
-            f"| **Component Total Mass** | {result.total_mass_kg:.3f} kg | {f'<= {model.constraints.max_mass_kg} kg' if model.constraints.max_mass_kg else 'Unconstrained'} | {'PASS' if review['mass_review'] == 'PASS' else 'FAIL'} |",
-            f"| **Fatigue Life Prediction** | {result.fatigue_life_cycles:,.0f} cycles | Target: {model.constraints.target_life_cycles:,.0f} | {'PASS' if result.fatigue_passed else 'FAIL'} |",
+            f"| **Component Total Mass** | {result.total_mass_kg:.3f} kg | {f'&le; {model.constraints.max_mass_kg} kg' if model.constraints.max_mass_kg else 'Unconstrained'} | {'PASS' if review['mass_review'] == 'PASS' else 'FAIL'} |",
+            f"| **Fatigue Life Prediction** | {result.fatigue_life_cycles:,.0f} cycles | &ge; {model.constraints.target_life_cycles:,.0f} cycles | {'PASS' if result.fatigue_passed else 'FAIL'} |",
             "",
             "## 2. AI Design Critic Review",
             f"**Overall Status:** {review['overall_status']}  ",

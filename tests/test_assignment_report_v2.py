@@ -133,6 +133,20 @@ def test_leg_matches_solver(doc, sol):
     _num(doc, c.yield_safety_factor, 2)
 
 
+def test_leg_slenderness_comparison_matches_solver(doc, sol):
+    """The Euler/Johnson verdict must follow the solver's own comparison.
+
+    The template owns the wording but not the decision: a short column reads
+    ``<`` (Johnson), a slender one reads ``>=`` (Euler). Inverting the branch
+    silently prints the right formula under the wrong inequality.
+    """
+    b = sol.floor_reactions[0].buckling
+    operator = "&lt;" if b.slenderness_ratio < b.transition_slenderness_ratio else "&ge;"
+    assert f"(l / k)<sub>eff</sub> {operator} (l / k)<sub>1</sub>" in doc
+    expected = "J.B. Johnson" if not b.is_slender_euler else "Euler"
+    assert f"ใช้สูตร {expected}" in doc
+
+
 def test_arm_matches_solver(doc, sol):
     a = sol.armrests[0]
     _num(doc, a.overhang_moment_nm, 2)

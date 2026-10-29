@@ -1,7 +1,9 @@
 import sys
+
 sys.path.insert(0, r"c:/codework/computational-machine-design")
-from integrations.learning_tools import LearningToolsBridge
 import os
+
+from integrations.learning_tools import LearningToolsBridge
 
 bridge = LearningToolsBridge()
 print("Is online:", bridge.is_online(timeout=1.0))

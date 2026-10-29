@@ -29,53 +29,79 @@ AI is **never** treated as the source of truth for numerical engineering results
 
 ## 2. Architecture Overview
 
-```text
-                  ┌───────────────────────────────┐
-                  │          USER / UI            │
-                  └───────────────┬───────────────┘
-                                  │
-                                  ▼
-                  ┌───────────────────────────────┐
-                  │        AI ORCHESTRATOR        │
-                  │   Natural Language Parser     │
-                  │   Assumption Audit Manager    │
-                  │   Design Critic & Copilot     │
-                  └───────────────┬───────────────┘
-                                  │
-                                  ▼
-                  ┌───────────────────────────────┐
-                  │       ENGINEERING MODEL       │
-                  │   Shaft Segments & Keyways    │
-                  │   Supports & Loads            │
-                  │   Materials & Constraints     │
-                  └───────────────┬───────────────┘
-                                  │
-                                  ▼
-                  ┌───────────────────────────────┐
-                  │    DETERMINISTIC PHYSICS      │
-                  │   Equilibrium & Reactions     │
-                  │   Bending & Torsional Stress  │
-                  │   Euler-Bernoulli Deflection  │
-                  │   Marin & Goodman Fatigue     │
-                  └───────┬───────────────┬───────┘
-                          │               │
-                          ▼               ▼
-    ┌───────────────────────────┐   ┌───────────────────────────┐
-    │    OPTIMIZATION ENGINE    │   │      OPENSCAD ENGINE      │
-    │   Min Mass / Min Cost     │   │   Parametric .scad Code   │
-    │   Standardized Diameters  │   │   STEP / STL / SVG Export │
-    └─────────────┬─────────────┘   └─────────────┬─────────────┘
-                  │                               │
-                  └───────────────┬───────────────┘
-                                  │
-                                  ▼
-                  ┌───────────────────────────────┐
-                  │      VERIFIED DELIVERABLES    │
-                  │   CLI-run Audit Report         │
-                  │   Audit Calculation Report    │
-                  │   Downloadable OpenSCAD (.scad)
-                  └───────────────────────────────┘
+```mermaid
+flowchart LR
+    %% ===== User / entry =====
+    U([🧑 User Prompt]):::entry
+
+    %% ===== AI layer =====
+    subgraph AI ["🧠 AI Layer"]
+        direction TB
+        P[🧩 Prompt Parser]
+        C[🔍 Domain Classifier]
+        A[📋 Assumption Audit]
+        R[✍️ Design Critic]
+        N[📝 Narrative Synthesizer]
+        L[🌐 LLM Router]
+        P --> C --> A --> R --> N
+        L -.->|context| P
+    end
+
+    %% ===== Engineering model =====
+    subgraph MODEL ["⚙️ Engineering Model"]
+        direction TB
+        SEG[Shaft Segments & Keyways]
+        SUP[Supports & Loads]
+        MAT[Materials & Constraints]
+    end
+
+    %% ===== Physics =====
+    subgraph PHYS ["🔬 Deterministic Physics"]
+        direction TB
+        EQ[⚖️ Equilibrium & Reactions]
+        ST[💥 Bending & Torsional Stress]
+        DF[📐 Euler-Bernoulli Deflection]
+        FT[🔁 Marin & Goodman Fatigue]
+        BL[ Buckling Stability]
+        FEA[🧮 3D Direct-Stiffness FEA]
+    end
+
+    %% ===== Outputs =====
+    subgraph OUT ["📦 Outputs"]
+        direction TB
+        CAD[🛠️ Parametric CAD]
+        RPT[📄 Verified Report]
+        DRW[📐 2D Drawings]
+    end
+
+    U --> AI --> MODEL --> PHYS
+    PHYS --> OUT
+    PHYS -.->|override| R
+
+    classDef entry fill:#1e293b,stroke:#38bdf8,color:#f8fafc
+    classDef AI fill:#1e1b4b,stroke:#8b5cf6,color:#f5f3ff
+    classDef PHYS fill:#1a1a2e,stroke:#ef4444,color:#fee2e2
+    classDef OUT fill:#0c2640,stroke:#f59e0b,color:#fffbeb
 ```
+
+> **AI proposes and reasons. Physics verifies.** The AI layer is the *proposal* engine: it parses natural language, classifies the domain, audits assumptions, and drafts a narrative. The deterministic physics solver is the *sole authority* on every numerical result — forces, stresses, deflections, fatigue life, and buckling. If the critic asserts a design is safe while physics calculates a safety factor below 1.0, the system issues a hard override and physics wins.
+
+### 2.1 Package Responsibilities
+
+| Package | Owns |
+| --- | --- |
+| `core` | Geometry primitives, units, the engineering data model (`FrameDesignModel`, `TubeProfile`, `StructuralMaterial`) |
+| `cad` | Solids, STEP/STL export, OpenSCAD emission, assembly primitives |
+| `components` | Standard parts: bearings, gears, keys, springs, fasteners, power screws |
+| `physics` | Stress, deflection, fatigue, buckling, FEA, frame solver, provenance |
+| `drafting` | Dimensioned drawing sheets (ISO 128 / ANSI Y14.5), FBD plots, Mermaid diagrams |
+| `reporting` | HTML/Markdown engineering report generators, validation, academic engine |
+| `convert` | File converter: documents, CAD solids, drawing sheets |
+| `cli` | Command line interface (entry point; `__version__` lives in `core`) |
+| `ai` | NL prompt parsing, domain classification, LLM routing, design critic, assumption audit |
+| `materials` | Material property database and derived elastic/shear moduli |
+| `optimizer` | Parametric design search over candidate geometries |
+| `integrations` | Bridges to external toolchains (e.g. the learning-tools project) |
 
 ---
 

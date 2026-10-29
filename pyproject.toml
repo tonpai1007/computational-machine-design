@@ -59,6 +59,9 @@ include = [
 ]
 exclude = ["tests*", "scratch*", "Project*"]
 
+[tool.setuptools.package-data]
+reporting = ["templates/academic_v2/*.j2"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 filterwarnings = ["ignore::DeprecationWarning"]

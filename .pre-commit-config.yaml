@@ -1,0 +1,8 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-fix
+        name: Ruff Lint Fix
+        entry: ruff check --select=I001,F401,W292,W293 --fix
+        language: python
+        stages: [commit]

@@ -9,6 +9,8 @@ Produces formal, audit-ready engineering dossiers adhering to university Machine
 - Comprehensive component summary audit table and formal engineering sign-off block
 """
 
+import html
+
 from core.bracket_model import BracketModel
 from physics.bracket_physics import BracketSolverResult
 
@@ -109,13 +111,13 @@ class BracketReportGenerator:
         </svg>
         """
 
-        calc_log_items = "".join([f"<li>{log}</li>" for log in result.calculation_log])
+        calc_log_items = "".join([f"<li>{html.escape(log)}</li>" for log in result.calculation_log])
 
         html_out = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Engineering Design & Structural Calculation Report - {model.name}</title>
+  <title>Engineering Design & Structural Calculation Report - {html.escape(model.name)}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
@@ -385,12 +387,12 @@ class BracketReportGenerator:
         <div style="font-size: 11px; color: #64748b;">Motor Mounting Bracket Structural & Fastener Dossier</div>
       </div>
       <div class="doc-meta">
-        <div><strong>Doc ID:</strong> MDIE-BRACKET-{model.name.upper().replace(" ", "_")}</div>
+        <div><strong>Doc ID:</strong> MDIE-BRACKET-{html.escape(model.name.upper().replace(" ", "_"))}</div>
         <div><strong>Standard:</strong> ASME B1.1 &bull; ISO 898-1 &bull; AISC 360</div>
         <div><strong>Units:</strong> SI Metric (mm, N, N·m, MPa, GPa)</div>
       </div>
     </div>
-    <h1 class="main-title">{model.name}</h1>
+    <h1 class="main-title">{html.escape(model.name)}</h1>
     <div class="subtitle">
       Cantilever Motor Mounting Bracket &bull; Plate Thickness {g.thickness_mm:.1f} mm &bull; Material: {m.name}
     </div>
@@ -597,9 +599,9 @@ class BracketReportGenerator:
           <td style="font-weight: 600;">Transverse Direct Shear</td>
           <td>F<sub>g</sub> = {result.motor_weight_n:.1f} N</td>
           <td class="num">{result.plate_shear_stress_mpa:.2f} MPa</td>
-          <td class="num">{(m.yield_strength_mpa * 0.577):.1f} MPa</td>
-          <td class="num text-pass" style="font-weight: 700;">{((m.yield_strength_mpa * 0.577) / max(result.plate_shear_stress_mpa, 0.01)):.1f}</td>
-          <td style="text-align: center;" class="text-pass"><strong>PASS</strong></td>
+          <td class="num">{result.plate_shear_allowable_mpa:.1f} MPa</td>
+          <td class="num {"text-pass" if result.plate_shear_safety_factor >= 1.5 else "text-fail"}" style="font-weight: 700;">{result.plate_shear_safety_factor:.1f}</td>
+          <td style="text-align: center;" class="{"text-pass" if result.plate_shear_safety_factor >= 1.5 else "text-fail"}"><strong>{"PASS" if result.plate_shear_safety_factor >= 1.5 else "FAIL"}</strong></td>
         </tr>
         <tr>
           <td style="font-weight: 600;">Motor Bolt Fasteners (Shear)</td>
@@ -613,9 +615,9 @@ class BracketReportGenerator:
           <td style="font-weight: 600;">Fastener Hole Bearing / Tearout</td>
           <td>Plate t = {g.thickness_mm:.1f} mm</td>
           <td class="num">{result.hole_bearing_stress_mpa:.1f} MPa</td>
-          <td class="num">{(m.yield_strength_mpa * 1.5):.1f} MPa</td>
-          <td class="num text-pass" style="font-weight: 700;">{((m.yield_strength_mpa * 1.5) / max(result.hole_bearing_stress_mpa, 0.01)):.2f}</td>
-          <td style="text-align: center;" class="text-pass"><strong>PASS</strong></td>
+          <td class="num">{result.hole_bearing_allowable_mpa:.1f} MPa</td>
+          <td class="num {"text-pass" if result.hole_bearing_safety_factor >= 1.5 else "text-fail"}" style="font-weight: 700;">{result.hole_bearing_safety_factor:.2f}</td>
+          <td style="text-align: center;" class="{"text-pass" if result.hole_bearing_safety_factor >= 1.5 else "text-fail"}"><strong>{"PASS" if result.hole_bearing_safety_factor >= 1.5 else "FAIL"}</strong></td>
         </tr>
       </tbody>
     </table>

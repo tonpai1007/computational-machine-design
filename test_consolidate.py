@@ -1,7 +1,8 @@
 import sys
+
 sys.path.insert(0, r"c:/codework/computational-machine-design")
+
 from integrations.learning_tools import LearningToolsBridge
-import os
 
 bridge = LearningToolsBridge()
 html_file = r"c:/codework/computational-machine-design/Project/shaft/shaft_blueprint.html"

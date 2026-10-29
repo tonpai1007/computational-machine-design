@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Any
 
 from rich.console import Console
 from rich.panel import Panel
@@ -17,12 +18,13 @@ from rich.table import Table
 console = Console()
 
 
-def _handle_bracket(prompt: str, p_lower: str, output_dir: str | None = None) -> bool:
+def _handle_bracket(prompt: str, p_lower: str, output_dir: str | None = None, params: dict | None = None) -> bool:
     from cad.bracket_cad import BracketCADEngine
     from core.bracket_model import BracketGeometry, BracketLoads, BracketModel
     from core.frame_model import STRUCTURAL_MATERIALS
     from physics.bracket_physics import BracketPhysicsSolver
     from reporting.bracket_report import BracketReportGenerator
+    from reporting.validate import write_validated
 
     out_path = Path(output_dir or "Project/bracket")
     out_path.mkdir(parents=True, exist_ok=True)
@@ -86,6 +88,15 @@ def _handle_bracket(prompt: str, p_lower: str, output_dir: str | None = None) ->
     if base_len_match:
         geom.base_length_mm = float(base_len_match.group(1))
 
+    # Use extracted parameters if available
+    if params and "extracted_params" in params:
+        ep: dict[str, Any] = params["extracted_params"]
+        # Bolt pattern from extracted params
+        if "outer_diameter_mm" in ep:
+            geom.motor_bolt_pattern.bolt_circle_diameter_mm = ep["outer_diameter_mm"]
+        if "total_length_mm" in ep:
+            geom.base_length_mm = ep["total_length_mm"]
+
     # Gussets
     if "no gusset" in p_lower or "without gusset" in p_lower:
         geom.has_gussets = False
@@ -118,8 +129,7 @@ def _handle_bracket(prompt: str, p_lower: str, output_dir: str | None = None) ->
         "[bold green][3/3] Generating Engineering Calculation Audit Sheet...[/bold green]"
     )
     report_file = out_path / "bracket_report.html"
-    with open(report_file, "w", encoding="utf-8") as f:
-        f.write(BracketReportGenerator.generate_html_report(model, result))
+    write_validated(report_file, BracketReportGenerator.generate_html_report(model, result))
 
     # Print Executive Physics Results Table
     table = Table(title=f"MDIE Physics & Fastener Verification: {model.name}")
@@ -192,13 +202,14 @@ def _handle_bracket(prompt: str, p_lower: str, output_dir: str | None = None) ->
     return True
 
 
-def _handle_chair(prompt: str, p_lower: str, output_dir: str | None = None) -> bool:
+def _handle_chair(prompt: str, p_lower: str, output_dir: str | None = None, params: dict | None = None) -> bool:
     from ai.parser import FrameNLParser
     from cad.assembly import FrameCADEngine
     from physics.fea_3d import build_chair_3d_fea_model
     from physics.frame_physics import FramePhysicsSolver
     from reporting.academic_engine import AcademicAssignmentEngine
     from reporting.frame_report import FrameReportGenerator
+    from reporting.validate import write_validated
 
     out_path = Path(output_dir or "Project/chair")
     out_path.mkdir(parents=True, exist_ok=True)
@@ -241,8 +252,7 @@ def _handle_chair(prompt: str, p_lower: str, output_dir: str | None = None) -> b
     part_files = FrameCADEngine.export_individual_parts(model, parts_dir)
 
     report_file = out_path / "chair_report.html"
-    with open(report_file, "w", encoding="utf-8") as f:
-        f.write(FrameReportGenerator.generate_html_report(model, result))
+    write_validated(report_file, FrameReportGenerator.generate_html_report(model, result))
 
     # Provenance manifest: records which solver field every reported number
     # came from, so a stale hand-typed value is detectable downstream.
@@ -252,26 +262,27 @@ def _handle_chair(prompt: str, p_lower: str, output_dir: str | None = None) -> b
 
     assignment_file = out_path / "academic_assignment_report.html"
     preview_path = out_path / "chair_preview.png"
-    with open(assignment_file, "w", encoding="utf-8") as f:
-        f.write(
-            AcademicAssignmentEngine.generate_assignment_report(
-                model,
-                result,
-                fea_result=fea_res,
-                preview_image="chair_preview.png" if preview_path.exists() else None,
-            )
-        )
+    write_validated(
+        assignment_file,
+        AcademicAssignmentEngine.generate_assignment_report(
+            model,
+            result,
+            fea_result=fea_res,
+            preview_image="chair_preview.png" if preview_path.exists() else None,
+        ),
+    )
 
     # Version 2 (Strictly tailored to match university student project report format without OOS content)
     assignment_v2_file = out_path / "academic_assignment_report_v2.html"
-    with open(assignment_v2_file, "w", encoding="utf-8") as f:
-        f.write(
-            AcademicAssignmentEngine.generate_assignment_report_v2(
-                model, result, preview_image="chair_preview.png" if preview_path.exists() else None
-            )
-        )
+    write_validated(
+        assignment_v2_file,
+        AcademicAssignmentEngine.generate_assignment_report_v2(
+            model, result, preview_image="chair_preview.png" if preview_path.exists() else None
+        ),
+    )
 
     # Generate Word (.docx) deliverables & Consolidate study materials via Learning Tools
+    from convert.report_editor import embed_project_report_assets
     from convert.solids import ConversionError
     from integrations.learning_tools import LearningToolsBridge
 
@@ -288,6 +299,9 @@ def _handle_chair(prompt: str, p_lower: str, output_dir: str | None = None) -> b
     ):
         try:
             bridge.convert_docx(src, dst)
+            asset_dirs = [out_path / "drawings", out_path / "diagrams"]
+            if dst.exists():
+                embed_project_report_assets(dst, asset_dirs, section_heading="Results")
         except ConversionError as exc:
             console.print(f"[yellow]DOCX skipped ({dst.name}): {exc}[/yellow]")
 
@@ -369,9 +383,10 @@ def _handle_chair(prompt: str, p_lower: str, output_dir: str | None = None) -> b
     return True
 
 
-def _handle_space_frame(prompt: str, p_lower: str, output_dir: str | None = None) -> bool:
+def _handle_space_frame(prompt: str, p_lower: str, output_dir: str | None = None, params: dict | None = None) -> bool:
     from cad.space_frame_cad import SpaceFrameCADEngine
     from physics.fea_3d import build_cantilever_space_frame_model, build_space_truss_tower_model
+    from reporting.validate import write_validated
 
     out_path = Path(output_dir or "Project/space_frame")
     out_path.mkdir(parents=True, exist_ok=True)
@@ -439,9 +454,10 @@ def _handle_space_frame(prompt: str, p_lower: str, output_dir: str | None = None
       <div class="metric-card"><div>Max Deflection</div><strong style="font-size:1.4em;color:#38bdf8;">{fea_res["max_displacement_mm"]:.2f} mm</strong></div>
     </div>
     <h3>Top Loaded Members (First 20)</h3>
-    <table><tr><th>Member ID</th><th>Axial Force</th><th>Max Moment</th><th>Von Mises Stress</th><th>Safety Factor</th></tr>{rows}</table></body></html>"""
-    with open(rep_path, "w", encoding="utf-8") as f:
-        f.write(html_content)
+    <table><tr><th>Member ID</th><th>Axial Force</th><th>Max Moment</th><th>Von Mises Stress</th><th>Safety Factor</th></tr>{rows}</table>
+    <p><strong>Overall Verdict:</strong> {"PASS" if fea_res["passed"] else "FAIL"} &mdash; governing member safety factor {fea_res["min_safety_factor"]:.2f} against a required 2.00.</p>
+    </body></html>"""
+    write_validated(rep_path, html_content)
 
     # Summary table
     table = Table(title=f"3D Space Frame FEA & CAD Deliverables: {solver.name}")
@@ -493,9 +509,10 @@ def _handle_space_frame(prompt: str, p_lower: str, output_dir: str | None = None
     return True
 
 
-def _handle_generative(prompt: str, p_lower: str, output_dir: str | None = None) -> bool:
+def _handle_generative(prompt: str, p_lower: str, output_dir: str | None = None, params: dict | None = None) -> bool:
     from ai.generative_agent import GenerativeEngineeringAgent
     from drafting.blueprint_2d import Blueprint2DGenerator
+    from reporting.validate import write_validated
 
     # Extract clean project slug
     words = [
@@ -529,8 +546,7 @@ def _handle_generative(prompt: str, p_lower: str, output_dir: str | None = None)
 
     # 3. Calculation Report
     rep_file = out_path / f"{slug}_report.html"
-    with open(rep_file, "w", encoding="utf-8") as f:
-        f.write(res.report_html)
+    write_validated(rep_file, res.report_html)
 
     console.print(
         "[bold green][2/3] Generating 2D Blueprint & Engineering Calculation Sheet...[/bold green]"
@@ -581,7 +597,8 @@ def _handle_shaft(prompt: str, p_lower: str, output_dir: str | None = None) -> b
     from cad.step_exporter import STEPExporter
     from cad.stl_exporter import STLExporter
     from physics.solver import PhysicsSolver
-    from reporting.generator import ReportGenerator
+    from reporting.generator import ReportGenerator, format_safety_factor
+    from reporting.validate import write_validated
 
     out_path = Path(output_dir or "Project/shaft")
     out_path.mkdir(parents=True, exist_ok=True)
@@ -615,8 +632,7 @@ def _handle_shaft(prompt: str, p_lower: str, output_dir: str | None = None) -> b
         f.write(step_data)
 
     report_file = out_path / "shaft_report.html"
-    with open(report_file, "w", encoding="utf-8") as f:
-        f.write(ReportGenerator.generate_html_report(model, result))
+    write_validated(report_file, ReportGenerator.generate_html_report(model, result))
 
     # 2D Technical Drawing Blueprint
     from drafting.blueprint_2d import Blueprint2DGenerator
@@ -646,13 +662,13 @@ def _handle_shaft(prompt: str, p_lower: str, output_dir: str | None = None) -> b
     )
     table.add_row(
         "Yield Safety Factor",
-        f"{result.min_yield_safety_factor:.2f}",
+        format_safety_factor(result.min_yield_safety_factor),
         f">= {model.constraints.min_yield_safety_factor:.2f}",
         "[green]PASS[/green]" if result.yield_passed else "[red]FAIL[/red]",
     )
     table.add_row(
         "Fatigue SF (Goodman)",
-        f"{result.min_fatigue_safety_factor:.2f}",
+        format_safety_factor(result.min_fatigue_safety_factor),
         f">= {model.constraints.min_fatigue_safety_factor:.2f}",
         "[green]PASS[/green]" if result.fatigue_passed else "[red]FAIL[/red]",
     )

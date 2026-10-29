@@ -1,0 +1,39 @@
+{% set stretcher = spec.stretcher %}
+  <div class="page-break"></div>
+  <h2 class="part-title">{{ stretcher.part_no }}. คานค้ำยันรอบล่าง (Lower Stretcher Bracing)</h2>
+  <p>{{ stretcher.description }}</p>
+  <p><strong>ขนาดของ คานค้ำยันรอบล่าง</strong><br>
+    ความหนา = {{ stretcher.thickness_m | f4 }} m<br>
+    l = {{ stretcher.length_m | f3 }} m , Do = {{ stretcher.outer_diameter_m | f3 }} m , Di = {{ stretcher.inner_diameter_m | f3 }} m
+  </p>
+  <p><strong>Material : {{ spec.material.name }} (ท่อกลม &Oslash;{{ stretcher.profile_outer_mm | f0 }} &times; {{ stretcher.profile_wall_mm | f1 }} mm)</strong></p>
+
+  <h3 class="step-title">Step 1 : หาคุณสมบัติหน้าตัด</h3>
+  <div class="math-block">
+    A = {{ stretcher.area_m2 | sci }} m&sup2; , I = {{ stretcher.inertia_m4 | sci }} m&sup4; , c = {{ stretcher.extreme_fibre_m | f4 }} m , Z = {{ stretcher.section_modulus_m3 | sci }} m&sup3;<br>
+    k = &radic;(I / A) = {{ stretcher.radius_of_gyration_m | f5 }} m<br>
+    L<sub>eff</sub> = K &times; l = {{ stretcher.k_factor | f2 }} &times; {{ stretcher.length_m | f3 }} = {{ stretcher.effective_length_m | f3 }} m<br>
+    (l / k)<sub>eff</sub> = {{ stretcher.effective_length_m | f3 }} / {{ stretcher.radius_of_gyration_m | f5 }} = {{ stretcher.slenderness | f2 }}<br>
+    (l / k)<sub>1</sub> = {{ stretcher.transition_slenderness | f2 }} &nbsp;&nbsp;&rarr; {% if stretcher.is_johnson %}ใช้สูตร J.B. Johnson (เสากลาง){% else %}ใช้สูตร Euler (เสายาว){% endif %}
+  </div>
+
+  <h3 class="step-title">Step 2 : หาแรงอัดตามแกน</h3>
+  <div class="math-block">
+    คานค้ำยันรับแรงดันจากพลังหลังนั่ง แบ่งสองข้าง F = {{ stretcher.backrest_force_n | f0 }} N / 2 = {{ stretcher.axial_force_n | f1 }} N
+  </div>
+
+  <h3 class="step-title">Step 3 : หาการโก่งเดาะ (Buckling)</h3>
+  <div class="math-block">
+    P<sub>cr</sub> = {{ stretcher.critical_load_n | f1 }} N = {{ stretcher.critical_load_kn | f2 }} kN
+  </div>
+
+  <h3 class="step-title">Step 4 : หาความเค้นตามแกน</h3>
+  <div class="math-block">
+    &sigma;axial = F / A = {{ stretcher.axial_stress_mpa | f2 }} MPa
+  </div>
+
+  <h3 class="step-title">Step 5 : หา Safety Factor</h3>
+  <div class="math-block">
+    ns (Yield) = Sy / &sigma;axial = {{ spec.material.yield_strength_mpa | f0 }} / {{ stretcher.axial_stress_mpa | f2 }} = {{ stretcher.yield_safety_factor | f2 }}<br>
+    ns (Buckling) = P<sub>cr</sub> / F = {{ stretcher.critical_load_n | f1 }} / {{ stretcher.axial_force_n | f1 }} = {{ stretcher.buckling_safety_factor | f2 }}
+  </div>

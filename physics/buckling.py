@@ -8,10 +8,15 @@ import math
 
 from pydantic import BaseModel
 
+#: End-condition constant baked into the transition slenderness ``Cc``.
+#: 1.0 corresponds to the pinned-pinned assumption used by this solver.
+END_CONDITION_C = 1.0
+
 
 class BucklingResult(BaseModel):
     slenderness_ratio: float
     transition_slenderness_cc: float
+    end_condition_c: float
     is_slender_euler: bool
     critical_buckling_load_n: float
     applied_load_n: float
@@ -58,7 +63,10 @@ class ColumnBuckling:
         slenderness = l_eff / max(r, 1e-9)
 
         # Transition slenderness Cc
-        cc = math.sqrt((2.0 * (math.pi**2) * elastic_modulus_pa) / max(yield_strength_pa, 1e6))
+        cc = math.sqrt(
+            (2.0 * END_CONDITION_C * (math.pi**2) * elastic_modulus_pa)
+            / max(yield_strength_pa, 1e6)
+        )
 
         p_applied = max(abs(applied_load_n), 1e-3)
 
@@ -86,6 +94,7 @@ class ColumnBuckling:
         return BucklingResult(
             slenderness_ratio=slenderness,
             transition_slenderness_cc=cc,
+            end_condition_c=END_CONDITION_C,
             is_slender_euler=is_euler,
             critical_buckling_load_n=p_cr,
             applied_load_n=p_applied,

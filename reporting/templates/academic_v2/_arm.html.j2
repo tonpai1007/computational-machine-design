@@ -1,0 +1,45 @@
+{% set arm = spec.arm %}
+  <div class="page-break"></div>
+  <h2 class="part-title">{{ arm.part_no }}. ชุดโครงสร้างคานยื่นที่พักแขน (Armrest Cantilever Struts)</h2>
+  <p>{{ arm.description }}</p>
+  <p><strong>ขนาดของ ชุดโครงสร้างที่พักแขน</strong><br>
+    ความหนา = {{ arm.thickness_m | f4 }} m<br>
+    Do = {{ arm.outer_diameter_m | f3 }} m , Di = {{ arm.inner_diameter_m | f3 }} m , loverhang = {{ arm.overhang_m | f3 }} m
+  </p>
+  <p><strong>Material : {{ spec.material.name }} (ท่อกลม &Oslash;{{ arm.outer_diameter_mm | f0 }} &times; {{ arm.profile_wall_mm | f1 }} mm)</strong></p>
+
+  <h3 class="step-title">Step 1 : หาคุณสมบัติหน้าตัด</h3>
+  <div class="math-block">
+    A = {{ arm.area_m2 | sci }} m&sup2; , I = {{ arm.inertia_m4 | sci }} m&sup4; , c = {{ arm.extreme_fibre_m | f4 }} m , Z = {{ arm.section_modulus_m3 | sci }} m&sup3;
+  </div>
+
+  <h3 class="step-title">Step 2 : หาแรงกดที่กระจายลงเสาหน้าและเสาหลัง</h3>
+  <div class="math-block">
+    เสาหน้า y = {{ arm.front_post_y_mm | f1 }} mm , เสาหลัง y = {{ arm.rear_post_y_mm | f1 }} mm , จุดกด y = {{ arm.load_y_mm | f1 }} mm<br>
+    เสาหน้ารับสัดส่วน = {{ arm.front_fraction | f4 }} &rarr; {{ arm.governing_post_force_n | f1 }} N (เป็นเสาที่รับแรงมากที่สุด)<br>
+    เสาหลังรับสัดส่วน = {{ arm.rear_fraction | f4 }} &rarr; {{ arm.rear_post_force_n | f1 }} N
+  </div>
+
+  <h3 class="step-title">Step 3 : หาโมเมนต์ที่ฐานเสา (Spatial strut)</h3>
+  <div class="math-block">
+    M<sub>cantilever</sub> = Fv &times; loverhang = {{ arm.applied_vertical_n | f1 }} &times; {{ arm.overhang_m | f3 }} = {{ arm.cantilever_moment_nm | f2 }} N&middot;m<br>
+    M<sub>base</sub> = &radic;[ (Flat &times; h)&sup2; + M<sub>cantilever</sub>&sup2; ] = &radic;[ ({{ arm.applied_lateral_n | f1 }} &times; {{ arm.post_height_m | f3 }})&sup2; + {{ arm.cantilever_moment_nm | f2 }}&sup2; ] = {{ arm.base_moment_nm | f3 }} N&middot;m
+  </div>
+
+  <h3 class="step-title">Step 4 : หาความเค้นรวมของเสาพัก (linear superposition)</h3>
+  <div class="math-block">
+    &sigma;axial = F<sub>gov</sub> / A = {{ arm.governing_post_force_n | f1 }} / {{ arm.area_mm2 | f2 }} mm&sup2; = {{ arm.axial_stress_mpa | f3 }} MPa<br>
+    &sigma;bending = (M<sub>base</sub> / 2) / Z = ({{ arm.base_moment_nm | f3 }} / 2) &times; 1e3 / {{ arm.section_modulus_mm3 | f2 }} mm&sup3; = {{ arm.bending_stress_mpa | f3 }} MPa<br>
+    &sigma;combined = &sigma;axial + &sigma;bending = {{ arm.axial_stress_mpa | f3 }} + {{ arm.bending_stress_mpa | f3 }} = {{ arm.combined_stress_mpa | f3 }} MPa
+  </div>
+
+  <h3 class="step-title">Step 5 : หา Actual endurance limit ( Se ) และ Fatigue Strength ( Sf )</h3>
+  <div class="math-block">
+    kb = {{ arm.size_factor_kb | f3 }} (d = {{ arm.outer_diameter_mm | f0 }} mm) , kc = {{ arm.load_factor_kc | f1 }} (Bending) &rarr; Se = {{ arm.endurance_limit_mpa | f2 }} MPa<br>
+    Sf = {{ arm.fatigue_strength_at_1e4_mpa | f2 }} MPa ({{ arm.fatigue_strength_ratio_percent | f2 }} %) &rarr; Sy' = {{ arm.fatigue_yield_strength_mpa | f2 }} MPa
+  </div>
+
+  <h3 class="step-title">Step 6 : หา Safety Factor</h3>
+  <div class="math-block">
+    ns = Sy / &sigma;combined = {{ spec.material.yield_strength_mpa | f0 }} / {{ arm.combined_stress_mpa | f2 }} = {{ arm.safety_factor | f2 }}
+  </div>

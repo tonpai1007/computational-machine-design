@@ -263,6 +263,8 @@ def blocks_from_docx(path: Path) -> list[Block]:
             blocks.append(("numbered", text))
         elif style.startswith("quote"):
             blocks.append(("quote", text))
+        elif style.startswith("caption"):
+            blocks.append(("para", text))
         else:
             blocks.append(("para", text))
 
@@ -271,6 +273,87 @@ def blocks_from_docx(path: Path) -> list[Block]:
         if rows:
             blocks.append(("table", rows))
     return blocks
+
+
+def _docx_picture_width(width: float | int | Any) -> Any:
+    """Convert a simple width to python-docx's expected length type."""
+    from docx.shared import Inches
+
+    if width is None:
+        return None
+    if isinstance(width, (int, float)):
+        return Inches(float(width) / 96)
+    return width
+
+
+def extract_docx_context(path: Path) -> dict[str, Any]:
+    """Extract the semantic content of a DOCX file: text, tables, and images."""
+    import docx as python_docx
+
+    document = python_docx.Document(str(path))
+    paragraphs: list[str] = []
+    for para in document.paragraphs:
+        text = para.text.strip()
+        if text:
+            paragraphs.append(text)
+
+    tables: list[list[list[str]]] = []
+    for table in document.tables:
+        rows = [[cell.text.strip() for cell in row.cells] for row in table.rows]
+        if rows:
+            tables.append(rows)
+
+    images: list[dict[str, Any]] = []
+    caption_map: dict[int, str] = {}
+    last_image_index: int | None = None
+    for para in document.paragraphs:
+        text = para.text.strip()
+        style_name = (para.style.name if para.style is not None else "").lower()
+        if style_name.startswith("caption") or text.lower().startswith(("figure ", "fig. ", "table ")):
+            if last_image_index is not None:
+                caption_map[last_image_index] = text
+    for index, shape in enumerate(document.inline_shapes, start=1):
+        caption = caption_map.get(index)
+        images.append({
+            "index": index,
+            "shape_type": getattr(shape, "shape_type", None),
+            "caption": caption,
+            "width": getattr(shape, "width", None),
+            "height": getattr(shape, "height", None),
+        })
+        last_image_index = index
+
+    return {
+        "full_text": "\n".join(paragraphs),
+        "paragraphs": paragraphs,
+        "tables": tables,
+        "images": images,
+        "heading_count": sum(1 for para in document.paragraphs if (para.style.name if para.style else "").lower().startswith("heading")),
+    }
+
+
+def insert_docx_picture(docx_path: str | Path, image_path: str | Path, caption: str | None = None, width: float | int | Any = 180) -> Path:
+    """Insert an image into a Word document and optionally add a caption paragraph."""
+    import docx as python_docx
+    from docx.shared import Inches
+
+    source = Path(docx_path)
+    image = Path(image_path)
+    if not source.exists():
+        raise FileNotFoundError(f"Word document not found: {source}")
+    if not image.exists():
+        raise FileNotFoundError(f"Image not found: {image}")
+
+    document = python_docx.Document(str(source))
+    paragraph = document.add_paragraph()
+    run = paragraph.add_run()
+    run.add_picture(str(image), width=_docx_picture_width(width) or Inches(float(width) / 96 if isinstance(width, (int, float)) else Inches(1.5)))
+    if caption:
+        document.add_paragraph(caption, style="Caption")
+
+    output = source.with_name(f"{source.stem}_with_picture{source.suffix}")
+    document.save(str(output))
+    return output
 
 
 # --------------------------------------------------------------- parsing: pdf

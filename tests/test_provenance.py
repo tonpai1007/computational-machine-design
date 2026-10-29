@@ -147,17 +147,26 @@ def test_reporting_layer_does_not_recompute_bracket_stress():
     assert "self.sol.arm_brackets[0]" in src, "bracket section no longer reads the solver"
 
 
-def test_reporting_layer_uses_physics_marin_factors():
-    """Marin factors must come from physics/fatigue.py, not an inline copy."""
+def test_reporting_layer_reads_solver_fatigue_fields():
+    """Fatigue values must come from the solver, never an inline Marin chain."""
     import inspect
 
-    from reporting import academic_engine, frame_data_sheet
+    from reporting import academic_engine, frame_data_sheet, spec
 
-    for mod in (frame_data_sheet, academic_engine):
+    # The dossier's numbers are collected in ``reporting.spec`` and only
+    # formatted by the templates, so the solver read lives there.
+    for mod in (frame_data_sheet, academic_engine, spec):
         src = inspect.getsource(mod)
         assert "4.51 * (Sut**-0.265)" not in src, f"{mod.__name__} inlines the Marin k_a"
         assert "1.24 * (d_mm**-0.107)" not in src, f"{mod.__name__} inlines the Marin k_b"
-        assert "MarinFactors" in src, f"{mod.__name__} does not use physics.fatigue.MarinFactors"
+        # A second copy of the Marin chain is exactly how the dossier and the
+        # data sheet drifted apart before. Reports read the solver now.
+        assert "MarinFactors" not in src, (
+            f"{mod.__name__} rebuilds Marin factors instead of reading the solver"
+        )
+    assert "endurance_limit_mpa" in inspect.getsource(spec), (
+        "reporting.spec does not read the solver's Se"
+    )
 
 
 # --------------------------------------------------------------------------

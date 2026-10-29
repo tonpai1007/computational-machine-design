@@ -1,0 +1,69 @@
+{% set rail = spec.rail %}
+  <div class="page-break"></div>
+  <h2 class="part-title">{{ rail.part_no }}. คานโครงสร้างรองรับเบาะนั่ง (Seat Support Rails)</h2>
+  <p>{{ rail.description }}</p>
+  <p><strong>ขนาดของ คานโครงสร้างรองรับเบาะนั่ง</strong><br>
+    ความหนา = {{ rail.thickness_m | f4 }} m<br>
+    w = {{ rail.width_m | f3 }} m , h = {{ rail.height_m | f3 }} m , l = {{ rail.span_m | f3 }} m (ช่วงใน = ความกว้างที่นั่ง)
+  </p>
+  <p><strong>Material : {{ spec.material.name }} (เหล็กกล่อง {{ rail.profile_outer_mm | f0 }} &times; {{ rail.profile_outer_mm | f0 }} &times; {{ rail.profile_wall_mm | f1 }} mm)</strong></p>
+
+  <h3 class="step-title">Step 1 : หาคุณสมบัติหน้าตัด</h3>
+  <div class="math-block">
+    A = {{ rail.area_m2 | sci }} m&sup2; , I = {{ rail.inertia_m4 | sci }} m&sup4; , c = {{ rail.extreme_fibre_m | f4 }} m , Z = {{ rail.section_modulus_m3 | sci }} m&sup3;
+  </div>
+
+  <h3 class="step-title">Step 2 : หาแรงที่กระทำและ V-M diagram</h3>
+  <div class="math-block">
+    ภาระกดกลางคานต่อคาน P = {{ rail.applied_load_n | f1 }} N (ครึ่งหนึ่งของภาระที่นั่ง {{ rail.seat_load_n | f0 }} N)<br>
+    R₁ = R₂ = {{ rail.support_reaction_n | f2 }} N<br>
+    V(x) = R₁ &minus; P (x / l) &rarr; Vmax = {{ rail.support_reaction_n | f2 }} N<br>
+    M(x) = R₁ x &minus; P x&sup2; / (2 l) &rarr; Mmax = P l / 4 = {{ rail.max_moment_nm | f2 }} N&middot;m
+  </div>
+
+  <div style="margin: 12px 0; text-align: center;">
+    <svg viewBox="0 0 600 160" style="width: 100%; max-width: 520px; height: auto; background: #ffffff; border: 1px solid #cbd5e1;">
+      <line x1="50" y1="45" x2="550" y2="45" stroke="#000000" stroke-width="1.5" />
+      <polygon points="50,45 50,20 300,45 550,70 550,45" fill="rgba(2, 132, 199, 0.15)" stroke="#0284c7" stroke-width="1.5" />
+      <text x="55" y="16" font-size="11" font-family="monospace">+{{ rail.support_reaction_n | f1 }} N</text>
+      <text x="500" y="85" font-size="11" font-family="monospace">-{{ rail.support_reaction_n | f1 }} N</text>
+      <line x1="300" y1="45" x2="300" y2="24" stroke="#dc2626" stroke-width="2" />
+      <text x="272" y="16" font-size="11" font-family="monospace">P = {{ rail.applied_load_n | f1 }} N</text>
+      <line x1="50" y1="120" x2="550" y2="120" stroke="#000000" stroke-width="1.5" />
+      <path d="M 50 120 Q 300 65 550 120" fill="rgba(22, 163, 74, 0.15)" stroke="#16a34a" stroke-width="1.5" />
+      <text x="300" y="75" font-size="11" text-anchor="middle" font-family="monospace">Mmax = {{ rail.max_moment_nm | f2 }} N·m</text>
+    </svg>
+  </div>
+
+  <h3 class="step-title">Step 3 : หา Maximum normal stress</h3>
+  <div class="math-block">
+    &sigma;max = (Mmax c) / I = {{ rail.max_bending_stress_mpa | f2 }} MPa
+  </div>
+
+  <h3 class="step-title">Step 4 : หา Maximum shear stress</h3>
+  <div class="math-block">
+    &tau;max = Vmax / Aweb = {{ rail.max_shear_stress_mpa | f2 }} MPa
+  </div>
+
+  <h3 class="step-title">Step 5 : หา &sigma;principle</h3>
+  <div class="math-block">
+    &sigma;principle = &sigma;max / 2 + &radic;[ (&sigma;max / 2)&sup2; + (&tau;max)&sup2; ] = {{ rail.max_principal_stress_mpa | f2 }} MPa
+  </div>
+
+  <h3 class="step-title">Step 6 : หาการเบี่ยงเบนตามเกณฑ์การใช้งาน (Serviceability)</h3>
+  <div class="math-block">
+    &delta; = P l&sup3; / (48 E I) = {{ rail.deflection_mm | f4 }} mm<br>
+    เกณฑ์ loads / 250 = {{ rail.deflection_limit_mm | f4 }} mm &rarr; &delta; {% if rail.deflection_ok %}&lt;{% else %}&ge;{% endif %} เกณฑ์ {% if rail.deflection_ok %}ผ่าน{% else %}ไม่ผ่าน{% endif %}
+  </div>
+
+  <h3 class="step-title">Step 7 : หา Actual endurance limit ( Se ) และ Fatigue Strength ( Sf )</h3>
+  <div class="math-block">
+    kb = {{ rail.size_factor_kb | f3 }} (d = {{ rail.profile_outer_mm | f0 }} mm) , kc = {{ rail.load_factor_kc | f1 }} (Bending) &rarr; Se = {{ rail.endurance_limit_mpa | f2 }} MPa<br>
+    Sf = a Nᵇ = {{ rail.fatigue_strength_at_1e4_mpa | f2 }} MPa ({{ rail.fatigue_strength_ratio_percent | f2 }} %) &rarr; Sy' = {{ rail.fatigue_yield_strength_mpa | f2 }} MPa
+  </div>
+
+  <h3 class="step-title">Step 8 : หา Safety Factor</h3>
+  <div class="math-block">
+    ns = Sy / &sigma;max = {{ spec.material.yield_strength_mpa | f0 }} / {{ rail.max_bending_stress_mpa | f2 }} = {{ rail.safety_factor | f2 }}<br>
+    (เมื่อรวมแรงเฉือน &sigma;principle = {{ rail.max_principal_stress_mpa | f2 }} MPa ค่า n ลดลงเล็กน้อย)
+  </div>

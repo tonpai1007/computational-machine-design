@@ -47,6 +47,7 @@ from convert.registry import (
     format_for_extension,
     missing_dependencies,
 )
+from convert.report_editor import embed_project_report_assets, insert_report_figure, update_report_caption
 from convert.sheets import merge_pdfs, sheets_to_pdf, sheets_to_png, svg_to_pdf, svg_to_png
 from convert.solids import (
     ConversionError,
@@ -70,6 +71,9 @@ __all__ = [
     "step_parts_to_dxf",
     "dxf_to_pdf",
     "dxfs_to_pdf",
+    "insert_report_figure",
+    "update_report_caption",
+    "embed_project_report_assets",
 ]
 
 # Only the renderers that take blocks and return text. The DOCX and PDF

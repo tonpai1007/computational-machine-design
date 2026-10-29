@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ spec.title }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Sarabun', 'TH Sarabun New', 'Angsana New', sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
+      color: #000000;
+      background: #f8fafc;
+      margin: 0;
+      padding: 20px;
+    }
+    .sheet-wrapper {
+      max-width: 820px;
+      margin: 0 auto;
+      background: #ffffff;
+      padding: 40px 45px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      border: 1px solid #e2e8f0;
+    }
+    .student-block {
+      font-weight: 600;
+      line-height: 1.6;
+      margin-bottom: 25px;
+    }
+    h2.part-title {
+      font-size: 19px;
+      font-weight: 700;
+      margin-top: 30px;
+      margin-bottom: 10px;
+      border-bottom: 1.5px solid #000000;
+      padding-bottom: 4px;
+    }
+    h3.step-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-top: 14px;
+      margin-bottom: 6px;
+    }
+    p {
+      margin: 6px 0 10px 0;
+      text-align: justify;
+    }
+    .math-block {
+      font-family: 'JetBrains Mono', 'Cambria Math', monospace;
+      font-size: 14px;
+      margin: 6px 0 8px 18px;
+      line-height: 1.6;
+    }
+    table.data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 15px;
+    }
+    table.data-table th, table.data-table td {
+      border: 1px solid #000000;
+      padding: 5px 10px;
+      text-align: left;
+    }
+    table.data-table th {
+      background: #f1f5f9;
+      font-weight: 700;
+    }
+    .text-center { text-align: center !important; }
+    .text-right { text-align: right !important; }
+    .page-break {
+      page-break-before: always;
+      margin-top: 30px;
+    }
+    @media print {
+      body { background: #ffffff; padding: 0; }
+      .sheet-wrapper { box-shadow: none; border: none; padding: 0; max-width: 100%; }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="no-print" style="text-align: right; max-width: 820px; margin: 0 auto 10px auto;">
+  <button onclick="window.print()" style="padding: 6px 16px; background: #0284c7; color: white; border: none; border-radius: 4px; font-weight: 600; cursor: pointer;">พิมพ์รายงาน (Print to PDF)</button>
+</div>
+
+<div class="sheet-wrapper">
+
+  <div class="student-block">
+{% if spec.students %}{% for student in spec.students %}    <div>{{ student.name }} &nbsp;&nbsp; {{ student.student_id }}</div>
+{% endfor %}{% else %}    <div>คณะวิศวกรรมศาสตร์ ภาควิชาวิศวกรรมเครื่องกล</div>
+    <div>โครงงานการออกแบบเครื่องจักรกล: {{ spec.design_name }}</div>
+    <div>ผู้จัดทำ: ผู้จัดทำโครงงาน (Project Designer Team)</div>
+{% endif %}  </div>
+
+  <div style="font-size: 18px; font-weight: 700; margin-bottom: 8px;">บทนำ</div>
+  <p>{% for paragraph in spec.intro_paragraphs %}{{ paragraph }}{% if not loop.last %}</p><p>{% endif %}{% endfor %}</p>
+
+{% if spec.preview_image %}        <div style="text-align: center; margin: 18px 0;">
+          <img src="{{ spec.preview_image }}" alt="ภาพจำลอง 3 มิติของโครงสร้าง" style="max-width: 480px; width: 100%; height: auto; border: 1px solid #cbd5e1; border-radius: 4px;" />
+          <div style="font-size: 13px; color: #475569; margin-top: 5px; font-style: italic;">
+            {{ spec.cad_caption }}
+          </div>
+        </div>
+{% endif %}
+{% include "academic_v2/_leg.html.j2" %}
+
+{% include "academic_v2/_rail.html.j2" %}
+{% if spec.stretcher %}
+
+{% include "academic_v2/_stretcher.html.j2" %}
+{% endif %}
+{% if spec.arm %}
+
+{% include "academic_v2/_arm.html.j2" %}
+{% endif %}
+{% if spec.bracket %}
+
+{% include "academic_v2/_bracket.html.j2" %}
+{% endif %}
+
+{% include "academic_v2/_summary.html.j2" %}
+
+</div>
+
+</body>
+</html>

@@ -1,0 +1,42 @@
+{% set bracket = spec.bracket %}
+  <div class="page-break"></div>
+  <h2 class="part-title">{{ bracket.part_no }}. แผ่นยึดเสาพักแขน (Arm Mounting Bracket Plate)</h2>
+  <p>ทำหน้าที่ถ่ายแรงและโมเมนต์จากเสาพักแขนลงเสาขาโครงสร้างหลัก โดย<strong>แต่ละเสาพักแขนมีแผ่นยึดของตัวเอง 1 แผ่น</strong> แผ่นยึดจึงรับแรงตั้งและโมเมนต์ของเสาที่ผูกอยู่เท่านั้น ไม่ได้แบ่งชันกับแผ่นยึดอีกแผ่น
+     ชิ้นส่วนนี้เป็น<strong>ชิ้นวิกฤตของชุดแขน</strong> เพราะรับทั้งแรงตั้งและโมเมนต์ฐานเสาพร้อมกัน</p>
+  <p><strong>ขนาดของ แผ่นยึดเสาพักแขน</strong><br>
+    b<sub>L</sub> = {{ bracket.length_mm | f1 }} mm , b<sub>W</sub> = {{ bracket.thickness_mm | f1 }} mm (ความหนา) , b<sub>H</sub> = {{ bracket.height_mm | f1 }} mm
+  </p>
+  <p><strong>Material : {{ spec.material.name }}</strong></p>
+
+  <h3 class="step-title">Step 1 : หาคุณสมบัติหน้าตัด</h3>
+  <div class="math-block">
+    I = b<sub>W</sub> b<sub>H</sub>&sup3; / 12 = {{ bracket.thickness_mm | f1 }} &times; {{ bracket.height_mm | f1 }}&sup3; / 12 = {{ bracket.inertia_mm4 | f1 }} mm&sup4;<br>
+    c = b<sub>H</sub> / 2 = {{ bracket.extreme_fibre_mm | f2 }} mm<br>
+    Z = I / c = {{ bracket.section_modulus_mm3 | f2 }} mm&sup3;<br>
+    A (หน้าตัดดัด) = b<sub>W</sub> &times; b<sub>H</sub> = {{ bracket.section_area_mm2 | f1 }} mm&sup2;
+  </div>
+
+  <h3 class="step-title">Step 2 : หาความเค้นรวม (แผ่นยึดของเสาวิกฤต)</h3>
+  <div class="math-block">
+    อ่านค่าจาก <code>FrameSolverResult.arm_brackets[0]</code>
+    (<code>physics/frame_physics.py::ArmBracketAnalysisResult</code>)<br>
+    แรงตั้งที่แผ่นยึดรับ <code>post_axial_n</code> = แรงตั้งของเสาวิกฤต (แบ่งตามหลักการคาน) = {{ bracket.post_axial_n | f1 }} N<br>
+    &sigma;axial <code>axial_stress_mpa</code> = F<sub>gov</sub> / A = {{ bracket.post_axial_n | f1 }} / {{ bracket.section_area_mm2 | f1 }} = {{ bracket.axial_stress_mpa | f3 }} MPa<br>
+    &sigma;bending <code>bending_stress_mpa</code> = (M<sub>base</sub> / 2) / Z = ({{ bracket.post_base_moment_nm | f3 }} / 2) &times; 1e3 / {{ bracket.section_modulus_mm3 | f2 }} = {{ bracket.bending_stress_mpa | f3 }} MPa<br>
+    &sigma;total <code>combined_stress_mpa</code> = {{ bracket.axial_stress_mpa | f3 }} + {{ bracket.bending_stress_mpa | f3 }} = {{ bracket.combined_stress_mpa | f3 }} MPa
+  </div>
+
+  <h3 class="step-title">Step 3 : หา Actual endurance limit ( Se )</h3>
+  <div class="math-block">
+    ka = {{ bracket.surface_factor_ka | f4 }} (machined) , kb = {{ bracket.size_factor_kb | f4 }} (d = {{ bracket.length_mm | f1 }} mm) , kc = {{ bracket.load_factor_kc | f2 }} (Bending) ,<br>
+    kd = {{ bracket.temperature_factor_kd | f1 }} , ke = {{ bracket.reliability_factor_ke | f3 }} (90% Reliability) , kf = {{ bracket.other_factor_kf | f1 }}<br>
+    Se = ka kb kc kd ke kf Se' = {{ bracket.endurance_limit_mpa | f2 }} MPa<br>
+    n (endurance) = Se / &sigma;total = {{ bracket.endurance_limit_mpa | f2 }} / {{ bracket.combined_stress_mpa | f2 }} = {{ bracket.endurance_safety_factor | f2 }}
+    > แรงที่กดแขนมาจากน้ำหนักผู้ใช้ จึงเป็นแรงสถิต ไม่ใช่แรงกลับทิศ
+    ค่า n จาก S_e จึงเป็นค่าประเมินเผื่อมาก ไม่ใช่เกณฑ์ตัดสินจริง
+  </div>
+
+  <h3 class="step-title">Step 4 : หา Safety Factor</h3>
+  <div class="math-block">
+    ns = Sy / &sigma;total = {{ spec.material.yield_strength_mpa | f0 }} / {{ bracket.combined_stress_mpa | f2 }} = {{ bracket.safety_factor | f2 }}
+  </div>

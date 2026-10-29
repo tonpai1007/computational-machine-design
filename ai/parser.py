@@ -7,7 +7,7 @@ Integrates Google Gemini API (gemini-3.8-flash) with an offline deterministic he
 import json
 import os
 import re
-from typing import Any
+from typing import Any, TypedDict
 
 from ai.assumptions import AssumptionManager
 from core.frame_model import (
@@ -25,6 +25,295 @@ from core.models import (
     ShaftSegment,
     Support,
 )
+
+
+def _extract_number_with_unit(
+    text: str,
+    patterns: list[str],
+    default: float,
+    label: str = "",
+) -> tuple[float, bool]:
+    """Try a list of regex patterns; return (value, found)."""
+    for pat in patterns:
+        m = re.search(pat, text, re.IGNORECASE)
+        if m:
+            try:
+                val = float(m.group(1))
+                return val, True
+            except ValueError:
+                continue
+    return default, False
+
+
+def extract_mm(pattern: str, default: float, label: str) -> float:
+    """Extract a dimension in millimetres from *pattern* with *default* fallback."""
+    m = re.search(pattern, re.IGNORECASE)
+    if m:
+        try:
+            return float(m.group(1))
+        except ValueError:
+            pass
+    return default
+
+
+def extract_kg_to_n(
+    pattern: str,
+    default_kg: float,
+    label: str,
+) -> float:
+    """Extract *kg* and convert to Newtons (9.81 m/s²)."""
+    m = re.search(pattern, re.IGNORECASE)
+    if m:
+        try:
+            return float(m.group(1)) * 9.81
+        except ValueError:
+            pass
+    return default_kg * 9.81
+
+
+def extract_n(
+    pattern: str,
+    default: float,
+    label: str,
+) -> float:
+    """Extract force in Newtons from *pattern* with *default* fallback."""
+    m = re.search(pattern, re.IGNORECASE)
+    if m:
+        try:
+            return float(m.group(1))
+        except ValueError:
+            pass
+    return default
+
+
+def extract_power(
+    text: str,
+    default: float | None = None,
+) -> tuple[float | None, bool]:
+    """Extract power (kW / hp / W) from free-form text.
+
+    Returns ``(power_watts, found)``.
+    """
+    # kW
+    m = re.search(r"(\d+(?:\.\d+)?)\s*kw\\b", text, re.IGNORECASE)
+    if m:
+        return float(m.group(1)) * 1000.0, True
+    # hp
+    m = re.search(r"(\d+(?:\.\d+)?)\s*hp\\b", text, re.IGNORECASE)
+    if m:
+        return float(m.group(1)) * 745.7, True
+    # W (but not scientific-notation patterns like 10^5)
+    m = re.search(r"(\d+(?:\.\d+)?)\s*w\\b(?!\\s*\\^)", text, re.IGNORECASE)
+    if m:
+        return float(m.group(1)), True
+    return default, False
+
+class ExtractedParameters(TypedDict, total=False):
+    """Structured parameters extracted from a natural-language prompt.
+
+    Populated by :func:`extract_from_prompt`.  Keys map directly to fields
+    expected by the various domain parsers (shaft, frame, bracket).
+    """
+
+    # Shaft parameters
+    total_length_mm: float
+    outer_diameter_mm: float
+    inner_diameter_mm: float
+    power_watts: float
+    speed_rpm: float
+    torque_nm: float
+    material_id: str
+
+    # Frame / Chair parameters
+    seat_height_mm: float
+    seat_width_mm: float
+    seat_depth_mm: float
+    num_legs: int
+    has_arms: bool
+    has_backrest: bool
+    armrest_height_above_seat_mm: float
+    armrest_length_mm: float
+    armrest_width_mm: float
+    armrest_overhang_front_mm: float
+    backrest_height_above_seat_mm: float
+    backrest_angle_deg: float
+    leg_profile_outer_dimension_mm: float
+    leg_profile_wall_thickness_mm: float
+    seat_vertical_load_n: float
+    left_arm_vertical_n: float
+    right_arm_vertical_n: float
+
+def extract_from_prompt(prompt: str) -> ExtractedParameters:
+    """Parse dimension and load values from a free-form engineering prompt.
+
+    The function uses deterministic regex patterns to pull out quantities
+    (lengths in mm, forces in N, powers in W, etc.) and returns a
+    typed ``ExtractedParameters`` dict.  Missing values retain their
+    sensible defaults — callers should treat absent keys as *not* set.
+
+    The extracted values are *unit-aware*: all lengths come out in
+    millimetres, forces in Newtons, and power in Watts.
+    """
+    t = prompt.lower()
+
+    # --- Length / Dimension extraction ---
+    total_length_mm, _ = _extract_number_with_unit(
+        t,
+        [
+            r"(\d+(?:\.\d+)?)\s*mm\b",
+            r"(\d+(?:\.\d+)?)\s*millimeter\b",
+            r"(\d+(?:\.\d+)?)\s*(?:long|length)\s*(?:of|:)?\s*(\d+(?:\.\d+)?)\s*mm\b",
+            r"(\d+(?:\.\d+)?)\s*m\b(?!^\s*\^)",  # avoid 10^ style
+        ],
+        default=400.0,
+    )
+
+    outer_dia_mm, _ = _extract_number_with_unit(
+        t,
+        [
+            r"(\d+(?:\.\d+)?)\s*mm\b(?:\\s+dia(?:meter)?)?\b",
+            r"(\d+(?:\.\d+)?)\s*od\b",
+            r"(\d+(?:\.\d+)?)\s*outer\s+diameter\b",
+        ],
+        default=28.0,
+    )
+
+    # --- Power / Speed ---
+    power_watts, _ = extract_power(t)
+    speed_rpm, _ = _extract_number_with_unit(
+        t,
+        [r"(\d+(?:\.\d+)?)\s*rpm\b", r"(\d+(?:\.\d+)?)\s*rev\s*min\b"],
+        default=0.0,
+    )
+
+    # --- Loads (forces) ---
+    # Seat load: try kg -> N conversion, then N directly
+    seat_load_n, seat_found = _extract_number_with_unit(
+        t,
+        [
+            r"(\d+(?:\.\d+)?)\s*kg\b(?:\\s+(?:seat|person|user|load|weight)?)?",
+            r"(\d+(?:\.\d+)?)\s*n\b(?:\\s+(?:seat|person|user|load|weight)?)?",
+            r"(\d+(?:\.\d+)?)\s*newton\b(?:\\s+(?:seat|person|user|load|weight)?)?",
+        ],
+        default=1300.0,
+    )
+    if not seat_found:
+        seat_load_n = 1300.0  # keep default if not found
+
+    arm_load_n, _ = _extract_number_with_unit(
+        t,
+        [
+            r"(\d+(?:\.\d+)?)\s*n\b(?:\\s+(?:arm|armrest)?)?",
+            r"(\d+(?:\.\d+)?)\s*newton\b(?:\\s+(?:arm|armrest)?)?",
+            r"(\d+(?:\.\d+)?)\s*kg\b(?:\\s+(?:arm|armrest)?)?",
+        ],
+        default=450.0,
+    )
+
+    # --- Geometry-specific dimensions per domain ---
+    seat_height_mm, _ = _extract_number_with_unit(
+        t,
+        [
+            r"(\d+(?:\.\d+)?)\s*mm\b(?:\s+seat\s+height)?\b",
+            r"(\d+(?:\.\d+)?)\s*seat\s+height\b(?:\s+mm)?\b",
+            r"(\d+(?:\.\d+)?)\s*height\b(?:\s+mm)?\b",
+        ],
+        default=450.0,
+    )
+
+    seat_width_mm, _ = _extract_number_with_unit(
+        t,
+        [r"(\d+(?:\.\d+)?)\s*mm\b(?:\\s+width)?\b", r"(\d+(?:\.\d+)?)\s*width\b(?:\\s+mm)?\b"],
+        default=450.0,
+    )
+
+    seat_depth_mm, _ = _extract_number_with_unit(
+        t,
+        [r"(\d+(?:\.\d+)?)\s*mm\b(?:\\s+depth)?\b", r"(\d+(?:\.\d+)?)\s*depth\b(?:\\s+mm)?\b"],
+        default=450.0,
+    )
+
+    armrest_height_mm, _ = _extract_number_with_unit(
+        t,
+        [
+            r"(\d+(?:\.\d+)?)\s*mm\b(?:\\s+height(?: above seat)?)?\b",
+            r"(\d+(?:\.\d+)?)\s*height\b(?:\\s+above\s+seat)?\b(?:\\s+mm)?\b",
+        ],
+        default=210.0,
+    )
+
+    backrest_height_mm, _ = _extract_number_with_unit(
+        t,
+        [
+            r"(\d+(?:\.\d+)?)\s*mm\b(?:\\s+back(?:rest)?)?\\s*height\b",
+            r"(\d+(?:\.\d+)?)\s*back(?:rest)?\\s*height\b(?:\\s+mm)?\b",
+        ],
+        default=420.0,
+    )
+
+    backrest_angle_deg, _ = _extract_number_with_unit(
+        t,
+        [
+            r"(\d+(?:\.\d+)?)\s*deg\b(?:\\s+back(?:rest)?)?\\s*angle\b",
+            r"(\d+(?:\.\d+)?)\s*angle\b(?:\\s+back(?:rest)?)?\\b(?:\\s+deg)?\b",
+        ],
+        default=98.0,
+    )
+
+    # Leg / tube dimensions (for frame/chair)
+    leg_outer_dia_mm, _ = _extract_number_with_unit(
+        t,
+        [r"(\d+(?:\.\d+)?)\s*mm\b(?:\\s+leg(?: tube)?)?\b", r"(\d+(?:\.\d+)?)\s*dia\b(?:\\s+mm)?\b"],
+        default=28.0,
+    )
+
+    leg_wall_mm, _ = _extract_number_with_unit(
+        t,
+        [r"(\d+(?:\.\d+)?)\s*mm\b(?:\\s+wall(?: thickness)?)?\\s+leg\b", r"(\d+(?:\.\d+)?)\s*wall\b(?:\\s+mm)?\\b(?:\\s+leg)?\b"],
+        default=2.0,
+    )
+
+    # Splay angle
+    splay_angle_deg, _ = _extract_number_with_unit(
+        t,
+        [r"(\d+(?:\.\d+)?)\s*deg\b(?:\\s+splay)?\b", r"(\d+(?:\.\d+)?)\s*splay\b(?:\\s+deg)?\b"],
+        default=3.5,
+    )
+
+    stretcher_height_mm, _ = _extract_number_with_unit(
+        t,
+        [r"(\d+(?:\.\d+)?)\s*mm\b(?:\\s+stretcher(?: height)?)?\b", r"(\d+(?:\.\d+)?)\s*stretcher\b(?:\\s+height)?\b(?:\\s+mm)?\b"],
+        default=150.0,
+    )
+
+    # --- Return the structured dict ---
+    return ExtractedParameters(  # type: ignore
+        total_length_mm=total_length_mm,
+        outer_diameter_mm=outer_dia_mm,
+        inner_diameter_mm=outer_dia_mm * 0.6 if "hollow" in t else outer_dia_mm,
+        power_watts=power_watts,
+        speed_rpm=speed_rpm,
+        torque_nm=power_watts / (2 * 3.14159 * speed_rpm / 60) if power_watts and speed_rpm else None,
+        material_id="STEEL_1018",  # will be overridden by domain-specific logic
+        # Frame / Chair fields
+        seat_height_mm=seat_height_mm,
+        seat_width_mm=seat_width_mm,
+        seat_depth_mm=seat_depth_mm,
+        num_legs=4,  # default, detected by classifier
+        has_arms="arm" in t or "arms" in t,
+        has_backrest="back" in t or "backrest" in t,
+        armrest_height_above_seat_mm=armrest_height_mm,
+        armrest_length_mm=320.0,  # default, can be overridden
+        armrest_width_mm=45.0,  # default, can be overridden
+        armrest_overhang_front_mm=60.0,  # default, can be overridden
+        backrest_height_above_seat_mm=backrest_height_mm,
+        backrest_angle_deg=backrest_angle_deg,
+        leg_profile_outer_dimension_mm=leg_outer_dia_mm,
+        leg_profile_wall_thickness_mm=leg_wall_mm,
+        seat_vertical_load_n=seat_load_n,
+        left_arm_vertical_n=arm_load_n,
+        right_arm_vertical_n=arm_load_n,
+    )
 
 
 class NLParser:

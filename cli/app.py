@@ -113,14 +113,20 @@ def process_prompt(prompt: str, output_dir: str | None = None, auto_open: bool =
     console.print(f"\n[bold cyan]>> Analyzing Prompt:[/bold cyan] [italic]{prompt}[/italic]")
 
     from ai.classifier import DomainClassifier
+    from ai.parser import extract_from_prompt
 
     domain, meta = DomainClassifier.classify(prompt)
+
+    # Extract structured parameters from the prompt
+    params = extract_from_prompt(prompt)
+    if params:
+        meta["extracted_params"] = params
 
     if domain == "bracket":
         console.print(
             f"[bold cyan]>> Classified Domain:[/bold cyan] [bold green]Mounting Bracket & Flange Plate[/bold green] (confidence: {meta.get('confidence', 0.95):.0%})"
         )
-        res = _handle_bracket(prompt, p_lower, output_dir)
+        res = _handle_bracket(prompt, p_lower, output_dir, params)
         if res and auto_open:
             launch_cad_viewer(Path(output_dir or "Project/bracket"))
         return res
@@ -129,7 +135,7 @@ def process_prompt(prompt: str, output_dir: str | None = None, auto_open: bool =
         console.print(
             f"[bold cyan]>> Classified Domain:[/bold cyan] [bold green]3D Space Frame & Truss[/bold green] (confidence: {meta.get('confidence', 0.95):.0%})"
         )
-        res = _handle_space_frame(prompt, p_lower, output_dir)
+        res = _handle_space_frame(prompt, p_lower, output_dir, params)
         if res and auto_open:
             launch_cad_viewer(Path(output_dir or "Project/space_frame"))
         return res
@@ -138,7 +144,7 @@ def process_prompt(prompt: str, output_dir: str | None = None, auto_open: bool =
         console.print(
             f"[bold cyan]>> Classified Domain:[/bold cyan] [bold green]Structural Frame & Furniture[/bold green] (confidence: {meta.get('confidence', 0.95):.0%})"
         )
-        res = _handle_chair(prompt, p_lower, output_dir)
+        res = _handle_chair(prompt, p_lower, output_dir, params)
         if res and auto_open:
             launch_cad_viewer(Path(output_dir or "Project/chair"))
         return res
@@ -150,7 +156,7 @@ def process_prompt(prompt: str, output_dir: str | None = None, auto_open: bool =
             console.print(
                 "[bold cyan]>> Classified Domain:[/bold cyan] [bold green]Specialized Power-Transmission Element[/bold green]"
             )
-            res = _handle_generative(prompt, p_lower, output_dir)
+            res = _handle_generative(prompt, p_lower, output_dir, params)
             if res and auto_open:
                 slug = meta.get("slug", "generative_part")
                 launch_cad_viewer(Path(output_dir or f"Project/{slug}"))
@@ -227,6 +233,8 @@ def _show_help() -> None:
             "  mdie <spec.docx|md|html|pdf>            read a spec file as a design prompt\n"
             "  mdie drawings [--outdir DIR] [--pdf]      regenerate chair drawing sheets\n"
             "  mdie report <project> [--ai]              consolidate an engineering report\n"
+            "  mdie report <project> --check             validate report structure\n"
+            "  mdie validate <file> [--profile NAME]     check tables, anchors, sentinels\n"
             "  mdie view <project|file> [--freecad]     open in a CAD viewer\n\n"
             "[bold]Other:[/bold]\n"
             "  mdie info                                 detected tools and providers\n"
@@ -376,11 +384,17 @@ def _cmd_report(argv: list[str]) -> int:
     )
     ap.add_argument("target", nargs="?", default="chair", help="project name or report path")
     ap.add_argument("--ai", action="store_true", help="enable AI summarisation")
+    ap.add_argument(
+        "--check",
+        action="store_true",
+        help="validate the report's structure instead of consolidating it",
+    )
+    ap.add_argument(
+        "--profile",
+        choices=["core", "academic", "academic_v2", "reference_closed_form"],
+        help="content policy for --check (default: inferred from the file name)",
+    )
     args = ap.parse_args(argv)
-
-    from integrations.learning_tools import LearningToolsBridge
-
-    bridge = LearningToolsBridge()
 
     target_p = Path(args.target)
     if target_p.exists() and target_p.is_file():
@@ -397,6 +411,29 @@ def _cmd_report(argv: list[str]) -> int:
     if not target_file.exists():
         console.print(f"[bold red]Report file not found:[/bold red] {target_file}")
         return 1
+
+    if args.check:
+        from reporting.validate import validate_file
+
+        try:
+            issues = validate_file(target_file, profile=args.profile)
+        except ValueError as exc:
+            console.print(f"[bold red]Cannot check:[/bold red] {target_file} ({exc})")
+            return 1
+        if not issues:
+            console.print(f"[bold green]>> Report OK:[/bold green] {target_file}")
+            return 0
+        for issue in issues:
+            style = "bold red" if issue.severity == "error" else "yellow"
+            console.print(
+                f"[{style}]{issue.severity.upper()}[/{style}] "
+                f"[bold]{issue.code}[/bold]: {issue.message}"
+            )
+        return 1
+
+    from integrations.learning_tools import LearningToolsBridge
+
+    bridge = LearningToolsBridge()
 
     console.print(f"[bold cyan]>> Consolidating:[/bold cyan] {target_file}")
     console.print(
@@ -415,6 +452,50 @@ def _cmd_report(argv: list[str]) -> int:
     for ftype, fpath in res.get("generated_files", {}).items():
         console.print(f"   - [bold]{ftype.upper()}:[/bold] [cyan]{fpath}[/cyan]")
     return 0
+
+
+def _cmd_validate(argv: list[str]) -> int:
+    """Check rendered reports for structural defects (tables, anchors, sentinels)."""
+    import argparse
+
+    from reporting.validate import validate_file
+
+    ap = argparse.ArgumentParser(
+        prog="mdie validate",
+        description="Check rendered reports for structural defects.",
+    )
+    ap.add_argument("paths", nargs="+", help="report file(s) to check")
+    ap.add_argument(
+        "--profile",
+        choices=["core", "academic", "academic_v2", "reference_closed_form"],
+        help="content policy (default: inferred from the file name)",
+    )
+    ap.add_argument("--strict", action="store_true", help="treat warnings as errors")
+    args = ap.parse_args(argv)
+
+    failed = False
+    for raw in args.paths:
+        path = Path(raw)
+        if not path.exists():
+            console.print(f"[bold red]Missing:[/bold red] {path}")
+            failed = True
+            continue
+        try:
+            issues = validate_file(path, profile=args.profile)
+        except ValueError as exc:
+            console.print(f"[bold red]Cannot check:[/bold red] {path} ({exc})")
+            failed = True
+            continue
+        blocking = [i for i in issues if i.severity == "error" or args.strict]
+        if not issues:
+            console.print(f"[bold green]OK[/bold green] {path}")
+            continue
+        console.print(f"[bold yellow]{len(issues)} issue(s)[/bold yellow] {path}")
+        for issue in issues:
+            style = "bold red" if issue.severity == "error" else "yellow"
+            console.print(f"  [{style}]{issue.code}[/{style}]: {issue.message}")
+        failed = failed or bool(blocking)
+    return 1 if failed else 0
 
 
 def _cmd_view(argv: list[str]) -> int:
@@ -619,6 +700,30 @@ def _cmd_docx_report(argv: list[str]) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """CLI entry point.
+
+    Report generation is gated on structural validation, so a malformed
+    deliverable is never written. Catching that here turns the gate into a
+    readable panel instead of a traceback.
+    """
+    from reporting.validate import ReportValidationError
+
+    try:
+        return _dispatch(argv)
+    except ReportValidationError as exc:
+        console.print(
+            Panel(
+                f"[bold]{exc.source}[/bold]\n\n"
+                + "\n".join(f"  [red]{i.code}[/red]: {i.message}" for i in exc.issues)
+                + "\n\n[dim]The report was not written. Fix the generator, then rerun.[/dim]",
+                title="[bold red]Report validation failed[/bold red]",
+                border_style="red",
+            )
+        )
+        return 2
+
+
+def _dispatch(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
 
     if not argv:
@@ -642,6 +747,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_drawings(argv[1:])
     if head in ("report", "consolidate", "study"):
         return _cmd_report(argv[1:])
+    if head == "validate":
+        return _cmd_validate(argv[1:])
     if head in ("docx-report", "word-report"):
         return _cmd_docx_report(argv[1:])
     if head in ("docx", "convert-docx", "word"):

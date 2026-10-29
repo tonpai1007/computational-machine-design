@@ -54,6 +54,24 @@ def test_learning_tools_bridge_convert_docx(tmp_path):
     assert result_docx.stat().st_size > 0
 
 
+def test_learning_tools_bridge_convert_docx_falls_back_to_builtin_renderer(tmp_path, monkeypatch):
+    """When the optional learning-tools dependency is absent, use the built-in DOCX renderer."""
+    monkeypatch.setattr(LearningToolsBridge, "is_online", lambda self, timeout=1.0: False)
+    import convert.registry as registry
+
+    monkeypatch.setattr(registry, "has_dependency", lambda name: False if name == "bs4" else True)
+
+    bridge = LearningToolsBridge()
+    html_file = tmp_path / "report.html"
+    html_file.write_text("<html><body><h1>Chair design</h1><p>Load path check.</p></body></html>", encoding="utf-8")
+    out_docx = tmp_path / "report.docx"
+
+    result_docx = bridge.convert_docx(html_file, out_docx)
+
+    assert result_docx.exists()
+    assert result_docx.stat().st_size > 0
+
+
 def test_learning_tools_bridge_consolidate(tmp_path):
     """Verify consolidate_report ingests, chunks, and creates study materials using learning-tools."""
     _require_learning_tools_deps()

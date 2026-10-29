@@ -14,7 +14,18 @@ from core.frame_model import (
     FrameDesignModel,
     resolve_armrest_shared,
 )
-from physics.buckling import ColumnBuckling
+from physics.frame_checks import (
+    BackrestPostAssessment,
+    BeamAssessment,
+    BucklingAssessment,
+    CompressionMemberAssessment,
+    FatigueAssessment,
+    assess_backrest_post,
+    assess_buckling,
+    assess_compression_member,
+    assess_fatigue,
+    assess_simply_supported_beam,
+)
 
 
 class ColumnAnalysisResult(BaseModel):
@@ -30,11 +41,15 @@ class ColumnAnalysisResult(BaseModel):
     bending_stress_mpa: float  # M / Z
     combined_stress_mpa: float  # P/A + M/Z
     slenderness_ratio: float  # lambda = L_eff / r
+    transition_slenderness_ratio: float  # lambda_c (Euler/Johnson boundary)
     critical_buckling_load_n: float  # P_cr (Euler or Johnson)
     buckling_safety_factor: float  # P_cr / P
     yield_safety_factor: float  # Sy / sigma_combined
     buckling_passed: bool
     yield_passed: bool
+    # Full check results: reports format these, they never recompute them.
+    buckling: BucklingAssessment
+    fatigue: FatigueAssessment
 
 
 class UpperStrutAnalysisResult(BaseModel):
@@ -42,13 +57,27 @@ class UpperStrutAnalysisResult(BaseModel):
     applied_vertical_n: float
     applied_lateral_n: float
     applied_foreaft_n: float
+    load_y_mm: float
+    front_reaction_fraction: float
+    rear_reaction_fraction: float
+    governing_axial_n: float
+    rear_axial_n: float
+    post_height_m: float
+    overhang_m: float
     overhang_moment_nm: float
     strut_base_moment_nm: float
+    # Section data the stresses above were computed on.
+    section_area_m2: float
+    moment_of_inertia_m4: float
+    extreme_fibre_m: float
+    section_modulus_m3: float
+    radius_of_gyration_m: float
     strut_axial_stress_mpa: float
     strut_bending_stress_mpa: float
     strut_combined_stress_mpa: float
     arm_safety_factor: float
     passed: bool
+    fatigue: FatigueAssessment
 
 
 class ArmBracketAnalysisResult(BaseModel):
@@ -66,11 +95,14 @@ class ArmBracketAnalysisResult(BaseModel):
     section_area_mm2: float  # bW * bH
     section_inertia_mm4: float  # bW * bH^3 / 12 about Y
     section_modulus_mm3: float  # I / c
+    extreme_fibre_mm: float  # c = bH / 2
+    section_radius_of_gyration_mm: float  # sqrt(I / A)
     axial_stress_mpa: float  # F / A
     bending_stress_mpa: float  # (M_base / 2) / Z
     combined_stress_mpa: float  # Superposition of the two
     bracket_safety_factor: float  # S_y / combined
     passed: bool
+    fatigue: FatigueAssessment
 
 
 class FrameRailAnalysisResult(BaseModel):
@@ -80,6 +112,9 @@ class FrameRailAnalysisResult(BaseModel):
     rail_deflection_mm: float
     rail_safety_factor: float
     passed: bool
+    # Full beam check: shear, principal stress, deflection limit, section data.
+    beam: BeamAssessment
+    fatigue: FatigueAssessment
 
 
 class FrameSolverResult(BaseModel):
@@ -107,6 +142,12 @@ class FrameSolverResult(BaseModel):
 
     # Frame rails
     seat_frame: FrameRailAnalysisResult
+
+    # Lower bracing: compression members, one per side
+    stretchers: list[CompressionMemberAssessment] = Field(default_factory=list)
+
+    # Backrest posts (None when there is no backrest thrust to check)
+    backrest_post: BackrestPostAssessment | None = None
 
     # Margins
     min_leg_buckling_sf: float
@@ -292,23 +333,21 @@ class FramePhysicsSolver:
         )
 
         prof = geom.leg_profile
-        e_pa = mat.elastic_modulus_gpa * 1e9
-        sy_pa = mat.yield_strength_mpa * 1e6
 
-        # Deterministic Buckling Calculation via general engine
-        buck_res = ColumnBuckling.calculate(
-            elastic_modulus_pa=e_pa,
-            yield_strength_pa=sy_pa,
-            area_m2=prof.area_m2,
-            moment_of_inertia_m4=prof.moment_of_inertia_m4,
+        # Deterministic Buckling Calculation via the shared member-check engine
+        buck = assess_buckling(
+            prof,
+            mat,
             length_m=unbraced_len_m,
             applied_load_n=total_vert_down_n / float(n_legs),
             k_factor=k_factor,
         )
-        p_cr = buck_res.critical_buckling_load_n
+        p_cr = buck.critical_buckling_load_n
 
         calc_log.append(
-            f"Column Slenderness λ = {buck_res.slenderness_ratio:.1f} (Threshold λc = {buck_res.transition_slenderness_cc:.1f}) -> {buck_res.formula_used} P_cr = {p_cr / 1000.0:.2f} kN per column."
+            f"Column Slenderness λ = {buck.slenderness_ratio:.1f} "
+            f"(Threshold λc = {buck.transition_slenderness_ratio:.1f}) -> "
+            f"{buck.formula_used} P_cr = {p_cr / 1000.0:.2f} kN per column."
         )
 
         for lid, (lx, ly, lname) in leg_coords.items():
@@ -348,12 +387,20 @@ class FramePhysicsSolver:
                     bending_moment_nm=m_leg_nm,
                     bending_stress_mpa=sigma_bend_mpa,
                     combined_stress_mpa=sigma_combined_mpa,
-                    slenderness_ratio=buck_res.slenderness_ratio,
+                    slenderness_ratio=buck.slenderness_ratio,
+                    transition_slenderness_ratio=buck.transition_slenderness_ratio,
                     critical_buckling_load_n=p_cr,
                     buckling_safety_factor=sf_buckling,
                     yield_safety_factor=sf_yield,
                     buckling_passed=(sf_buckling >= 2.0),
                     yield_passed=(sf_yield >= 1.5),
+                    buckling=buck,
+                    fatigue=assess_fatigue(
+                        mat,
+                        diameter_mm=prof.outer_dimension_mm,
+                        load_type="axial",
+                        stress_mpa=sigma_combined_mpa,
+                    ),
                 )
             )
 
@@ -463,13 +510,31 @@ class FramePhysicsSolver:
                         applied_vertical_n=f_v,
                         applied_lateral_n=f_lat,
                         applied_foreaft_n=f_fa,
+                        load_y_mm=load_y,
+                        front_reaction_fraction=w_front,
+                        rear_reaction_fraction=w_rear,
+                        governing_axial_n=governing_axial_n,
+                        rear_axial_n=f_v * w_rear,
+                        post_height_m=arm_h_m,
+                        overhang_m=ag.cantilever_front_mm / 1000.0,
                         overhang_moment_nm=m_cantilever,
                         strut_base_moment_nm=m_strut_base,
+                        section_area_m2=arm_prof.area_m2,
+                        moment_of_inertia_m4=arm_prof.moment_of_inertia_m4,
+                        extreme_fibre_m=arm_prof.outer_dim_m / 2.0,
+                        section_modulus_m3=arm_prof.section_modulus_m3,
+                        radius_of_gyration_m=arm_prof.radius_of_gyration_m,
                         strut_axial_stress_mpa=sigma_axial,
                         strut_bending_stress_mpa=sigma_bend,
                         strut_combined_stress_mpa=sigma_tot,
                         arm_safety_factor=sf_arm,
                         passed=(sf_arm >= 2.0),
+                        fatigue=assess_fatigue(
+                            mat,
+                            diameter_mm=arm_prof.outer_dimension_mm,
+                            load_type="bending",
+                            stress_mpa=sigma_tot,
+                        ),
                     )
                 )
 
@@ -496,42 +561,102 @@ class FramePhysicsSolver:
                         section_area_mm2=brk_area_mm2,
                         section_inertia_mm4=brk_i_mm4,
                         section_modulus_mm3=brk_z_mm3,
+                        extreme_fibre_mm=brk_c_mm,
+                        section_radius_of_gyration_mm=math.sqrt(
+                            brk_i_mm4 / max(brk_area_mm2, 1e-9)
+                        ),
                         axial_stress_mpa=brk_axial_mpa,
                         bending_stress_mpa=brk_bend_mpa,
                         combined_stress_mpa=brk_tot_mpa,
                         bracket_safety_factor=sf_brk,
                         passed=(sf_brk >= 2.0),
+                        fatigue=assess_fatigue(
+                            mat,
+                            diameter_mm=ag.bracket_len_mm,
+                            load_type="bending",
+                            stress_mpa=brk_tot_mpa,
+                        ),
                     )
                 )
 
         # 6. Main Frame Rails & Deck Deflection
         frame_prof = geom.frame_profile
-        span_m = geom.seat_width_mm / 1000.0
-        p_rail = loads.seat_vertical_load_n / 2.0
-        m_rail_max = (p_rail * span_m) / 4.0
-        sigma_rail_bend = (m_rail_max / max(frame_prof.section_modulus_m3, 1e-9)) / 1e6
-
-        # Deflection: delta = (P * L^3) / (48 * E * I)
-        delta_m = (p_rail * (span_m**3)) / (
-            48.0 * (mat.elastic_modulus_gpa * 1e9) * max(frame_prof.moment_of_inertia_m4, 1e-12)
+        rail_beam = assess_simply_supported_beam(
+            frame_prof,
+            mat,
+            span_m=geom.seat_width_mm / 1000.0,
+            applied_load_n=loads.seat_vertical_load_n / 2.0,
+            deflection_limit_mm=geom.seat_width_mm / 250.0,
         )
-        delta_mm = delta_m * 1000.0
 
-        sf_rail = mat.yield_strength_mpa / max(sigma_rail_bend, 0.01)
         rail_result = FrameRailAnalysisResult(
             seat_load_n=loads.seat_vertical_load_n,
-            rail_bending_moment_nm=m_rail_max,
-            rail_bending_stress_mpa=sigma_rail_bend,
-            rail_deflection_mm=delta_mm,
-            rail_safety_factor=sf_rail,
-            passed=(sf_rail >= 2.0 and delta_mm < (geom.seat_width_mm / 250.0)),
+            rail_bending_moment_nm=rail_beam.max_moment_nm,
+            rail_bending_stress_mpa=rail_beam.max_bending_stress_mpa,
+            rail_deflection_mm=rail_beam.deflection_mm,
+            rail_safety_factor=rail_beam.yield_safety_factor,
+            passed=rail_beam.passed,
+            beam=rail_beam,
+            fatigue=assess_fatigue(
+                mat,
+                diameter_mm=frame_prof.outer_dimension_mm,
+                load_type="bending",
+                stress_mpa=rail_beam.max_bending_stress_mpa,
+            ),
         )
 
         calc_log.append(
-            f"Seat-frame rail: M = {m_rail_max:.2f} N·m -> sigma = M/Z = {sigma_rail_bend:.3f} MPa, "
-            f"deflection = {delta_mm:.4f} mm vs limit L/250 = {geom.seat_width_mm / 250.0:.4f} mm "
-            f"-> n = {sf_rail:.2f} (seat_frame.rail_safety_factor)."
+            f"Seat-frame rail: M = {rail_beam.max_moment_nm:.2f} N·m -> "
+            f"sigma = M/Z = {rail_beam.max_bending_stress_mpa:.3f} MPa, "
+            f"deflection = {rail_beam.deflection_mm:.4f} mm vs limit L/250 = "
+            f"{rail_beam.deflection_limit_mm:.4f} mm "
+            f"-> n = {rail_beam.yield_safety_factor:.2f} (seat_frame.rail_safety_factor)."
         )
+
+        # 6b. Lower stretcher bracing: a compression member, not a transverse
+        # foot-impact beam. The two sides are identical, so one representative
+        # check is stored.
+        stretcher_results: list[CompressionMemberAssessment] = []
+        if geom.has_stretchers:
+            stretcher_len_m = (
+                geom.seat_width_mm
+                + 2.0
+                * (geom.seat_height_mm - geom.stretcher_height_mm)
+                * math.tan(math.radians(geom.leg_splay_angle_deg))
+            ) / 1000.0
+            stretcher_results.append(
+                assess_compression_member(
+                    geom.stretcher_profile,
+                    mat,
+                    member_id="lower_bracing",
+                    length_m=stretcher_len_m,
+                    axial_force_n=loads.backrest_force_n / 2.0,
+                    k_factor=0.85,
+                )
+            )
+            calc_log.append(
+                f"Stretcher: L = {stretcher_len_m:.3f} m, lambda = "
+                f"{stretcher_results[0].buckling.slenderness_ratio:.2f}, P_cr = "
+                f"{stretcher_results[0].buckling.critical_buckling_load_n:.1f} N, "
+                f"n_buckling = {stretcher_results[0].buckling.buckling_safety_factor:.2f}."
+            )
+
+        # 6c. Backrest post: horizontal thrust, moment arm is the vertical rise.
+        backrest_post: BackrestPostAssessment | None = None
+        if loads.backrest_force_n > 0.0:
+            backrest_post = assess_backrest_post(
+                geom.leg_profile,
+                mat,
+                backrest_force_n=loads.backrest_force_n,
+                height_above_seat_mm=geom.backrest_height_above_seat_mm,
+                angle_deg=geom.backrest_angle_deg,
+            )
+            calc_log.append(
+                f"Backrest post: F = {backrest_post.applied_force_n:.1f} N at "
+                f"dz = {backrest_post.moment_arm_mm:.2f} mm -> sigma = "
+                f"{backrest_post.combined_stress_mpa:.2f} MPa, n = "
+                f"{backrest_post.safety_factor:.2f}."
+            )
 
         # 7. Tipping Safety Margins
         lever_fwd = d_floor_m / 2.0
@@ -573,6 +698,8 @@ class FramePhysicsSolver:
             and all(a.passed for a in arm_results)
             and all(b.passed for b in bracket_results)
             and rail_result.passed
+            and all(s.passed for s in stretcher_results)
+            and (backrest_post is None or backrest_post.passed)
             and min_tip_sf >= 1.5
         )
 
@@ -600,11 +727,13 @@ class FramePhysicsSolver:
             armrests=arm_results,
             arm_brackets=bracket_results,
             seat_frame=rail_result,
+            stretchers=stretcher_results,
+            backrest_post=backrest_post,
             min_leg_buckling_sf=min_leg_buck,
             min_leg_yield_sf=min_leg_yld,
             min_arm_sf=min_arm_sf,
             min_arm_bracket_sf=min_bracket_sf,
-            seat_deflection_mm=delta_mm,
+            seat_deflection_mm=rail_beam.deflection_mm,
             all_safety_criteria_passed=all_passed,
             calculation_log=calc_log,
         )

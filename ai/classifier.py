@@ -10,6 +10,8 @@ Accurately categorizes user engineering prompts into specific machine design dom
 
 from typing import Any
 
+from ai.parser import extract_from_prompt
+
 
 class DomainClassifier:
     """Classifies natural language mechanical requests into supported MDIE domains."""
@@ -126,4 +128,11 @@ class DomainClassifier:
             return "shaft", {"confidence": 0.70, "matched": "shaft_physics_cues"}
 
         # Default domain: shaft with low confidence notice
-        return "shaft", {"confidence": 0.50, "matched": "default"}
+        domain, metadata = "shaft", {"confidence": 0.50, "matched": "default"}
+
+        # Extract parameters from the prompt
+        params = extract_from_prompt(prompt)
+        if params:
+            metadata["extracted_params"] = params
+
+        return domain, metadata

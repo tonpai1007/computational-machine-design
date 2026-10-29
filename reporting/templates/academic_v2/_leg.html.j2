@@ -1,0 +1,68 @@
+{% set leg = spec.legs %}
+  <h2 class="part-title">{{ leg.part_no }}. เสาขาโครงสร้างหลัก ({{ leg.count }} ขา) (Leg Columns)</h2>
+  <p>{{ leg.description }}</p>
+  <p><strong>ขนาดของ เสาขาโครงสร้างหลัก</strong><br>
+    ความหนา = {{ leg.thickness_m | f4 }} m<br>
+    l = {{ leg.length_m | f3 }} m , Do = {{ leg.outer_diameter_m | f3 }} m , Di = {{ leg.inner_diameter_m | f3 }} m
+  </p>
+  <p><strong>Material : {{ spec.material.name }}</strong></p>
+  <table class="data-table">
+    <tr><td>Density</td><td class="text-right">{{ spec.material.density_g_cm3 | f2 }} g/cm&sup3;</td></tr>
+    <tr><td>Tensile Strength, Ultimate ( Sut )</td><td class="text-right">{{ spec.material.ultimate_strength_mpa | f0 }} MPa</td></tr>
+    <tr><td>Tensile Strength, Yield ( Sy )</td><td class="text-right">{{ spec.material.yield_strength_mpa | f0 }} MPa</td></tr>
+    <tr><td>Modulus of Elasticity ( E )</td><td class="text-right">{{ spec.material.elastic_modulus_gpa | f0 }} GPa</td></tr>
+    <tr><td>Poisson's Ratio</td><td class="text-right">{{ spec.material.poissons_ratio | f2 }}</td></tr>
+    <tr><td>น้ำหนักตัวเองของโครงสร้าง</td><td class="text-right">{{ spec.self_weight_n | f1 }} N</td></tr>
+    <tr><td>แรงลงรวมทั้งหมด</td><td class="text-right">{{ spec.total_downward_load_n | f1 }} N</td></tr>
+  </table>
+
+  <h3 class="step-title">Step 1 : หา Di และคุณสมบัติหน้าตัด</h3>
+  <div class="math-block">
+    t = (Do - Di) / 2 &rarr; Di = {{ leg.inner_diameter_m | f3 }} m<br>
+    I = (&pi; / 64) [(Do)&sup4; - (Di)&sup4;] = {{ leg.inertia_m4 | sci }} m&sup4;<br>
+    A = (&pi; / 4) [(Do)&sup2; - (Di)&sup2;] = {{ leg.area_m2 | sci }} m&sup2;<br>
+    k = &radic;(I / A) = {{ leg.radius_of_gyration_m | f5 }} m<br>
+    L<sub>eff</sub> = K &times; l = {{ leg.k_factor | f2 }} &times; {{ leg.length_m | f3 }} = {{ leg.effective_length_m | f3 }} m<br>
+    (l / k)<sub>eff</sub> = L<sub>eff</sub> / k = {{ leg.effective_length_m | f3 }} / {{ leg.radius_of_gyration_m | f5 }} = {{ leg.slenderness | f2 }}<br>
+    (l / k)<sub>1</sub> = &radic;[ 2 &pi;&sup2; C E / Sy ] = {{ leg.transition_slenderness | f2 }} &nbsp;&nbsp;&nbsp;; C = {{ leg.end_condition_c | f1 }}<br>
+    (l / k)<sub>eff</sub> {% if leg.is_slender %}&ge;{% else %}&lt;{% endif %} (l / k)<sub>1</sub> &nbsp;&nbsp; ใช้สูตร {% if leg.is_slender %}Euler (เสายาว){% else %}J.B. Johnson (เสากลาง){% endif %}
+  </div>
+
+  <h3 class="step-title">Step 2 : หาการโก่งเดาะของเสาขาโครงสร้าง (Deflection & Buckling)</h3>
+  <div class="math-block">
+    Pcr = {{ leg.critical_load_n | f2 }} N = {{ leg.critical_load_kn | f2 }} kN
+  </div>
+
+  <h3 class="step-title">Step 3 : หา Endurance limit พื้นฐาน ( Se' และ &sigma;f' )</h3>
+  <div class="math-block">
+    &sigma;f' = 1.5 Sut = {{ leg.sigma_f_prime_mpa | f1 }} MPa<br>
+    Se' = 0.5 Sut = {{ leg.endurance_limit_prime_mpa | f1 }} MPa
+  </div>
+
+  <h3 class="step-title">Step 4 : หา Actual endurance limit ( Se )</h3>
+  <div class="math-block">
+    ka = 4.51({{ spec.material.ultimate_strength_mpa | f0 }})⁻⁰·²⁶⁵ = {{ leg.surface_factor_ka | f3 }}<br>
+    kb = 1.24&middot;d<sup>-0.107</sup> = {{ leg.size_factor_kb | f3 }} (d = {{ leg.outer_diameter_mm | f0 }} mm) , kc = {{ leg.load_factor_kc | f2 }} (Axial) , kd = {{ leg.temperature_factor_kd | f1 }} , ke = {{ leg.reliability_factor_ke | f3 }} (90% Reliability) , kf = {{ leg.other_factor_kf | f1 }}<br>
+    Se = ka kb kc kd ke kf Se' = {{ leg.endurance_limit_mpa | f2 }} MPa
+  </div>
+
+  <h3 class="step-title">Step 5 : หา medium - cycle region ( S-N Curve ที่ N = 10⁴ รอบ )</h3>
+  <div class="math-block">
+    a = (f Sut)&sup2; / Se = {{ leg.fatigue_strength_coefficient_mpa | f2 }} MPa<br>
+    b = - (1/3) log₁₀( f Sut / Se ) = {{ leg.fatigue_strength_exponent | f4 }}<br>
+    Sf = a Nᵇ = {{ leg.fatigue_strength_at_1e4_mpa | f2 }} MPa &rarr; ({{ leg.fatigue_strength_at_1e4_mpa | f2 }} / {{ spec.material.ultimate_strength_mpa | f0 }}) &times; 100 = {{ leg.fatigue_strength_ratio_percent | f2 }} %<br>
+    Sy' = ({{ (leg.fatigue_strength_ratio_percent / 100.0) | f4 }})({{ spec.material.yield_strength_mpa | f0 }}) = {{ leg.fatigue_yield_strength_mpa | f2 }} MPa
+  </div>
+
+  <h3 class="step-title">Step 6 : หาความเค้นในเสาขา (Column Stress)</h3>
+  <div class="math-block">
+    แรงกดสูงสุดต่อเสาขา P = {{ leg.max_reaction_n | f1 }} N<br>
+    &sigma;axial = P / A = {{ leg.axial_stress_mpa | f2 }} MPa<br>
+    ความเค้นรวมสูงสุด &sigma;max = {{ leg.max_combined_stress_mpa | f2 }} MPa
+  </div>
+
+  <h3 class="step-title">Step 7 : หา Safety Factor</h3>
+  <div class="math-block">
+    ns (Buckling) = Pcr / P = {{ leg.critical_load_n | f2 }} / {{ leg.max_reaction_n | f1 }} = {{ leg.buckling_safety_factor | f2 }}<br>
+    ns (Yield) = Sy / &sigma;max = {{ spec.material.yield_strength_mpa | f0 }} / {{ leg.max_combined_stress_mpa | f2 }} = {{ leg.yield_safety_factor | f2 }}
+  </div>

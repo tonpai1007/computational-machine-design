@@ -115,12 +115,22 @@ class LearningToolsBridge:
         from convert.solids import ConversionError
 
         if not has_dependency("bs4"):
-            raise ConversionError(
-                "learning-tools HTML->DOCX conversion needs the optional 'bs4' "
-                "(beautifulsoup4) package, which is not installed. Install it with "
-                "'pip install beautifulsoup4' or start the learning-tools REST API "
-                "on port 5000 to use the API path instead."
+            logger.warning(
+                "learning-tools HTML->DOCX dependency 'bs4' is missing; "
+                "falling back to the built-in DOCX renderer."
             )
+            try:
+                from convert.documents import blocks_from_source, blocks_to_docx
+
+                blocks = blocks_from_source(html_path, "html")
+                output_docx_path.parent.mkdir(parents=True, exist_ok=True)
+                return blocks_to_docx(blocks, output_docx_path, title=html_path.stem)
+            except Exception as exc:  # pragma: no cover - safety net for malformed HTML
+                raise ConversionError(
+                    "learning-tools HTML->DOCX conversion is unavailable and the built-in fallback failed "
+                    f"for {html_path}: {exc}"
+                ) from exc
+
         try:
             from lt.docx_converter import HTMLToDocxConverter
         except ImportError as exc:

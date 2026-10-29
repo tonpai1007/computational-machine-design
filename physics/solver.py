@@ -62,6 +62,11 @@ class PhysicsSolver:
                     f"Support {idx + 1} at x={sup.position}m outside shaft span [0, {model.total_length}]m"
                 )
 
+        if not model.supports:
+            errors.append(
+                "No supports defined: at least one support is required to resolve reactions"
+            )
+
         for idx, p in enumerate(model.point_loads):
             if p.position < 0 or p.position > model.total_length * 1.001:
                 errors.append(
