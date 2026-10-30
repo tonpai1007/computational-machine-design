@@ -45,47 +45,6 @@ def _extract_number_with_unit(
     return default, False
 
 
-def extract_mm(pattern: str, default: float, label: str) -> float:
-    """Extract a dimension in millimetres from *pattern* with *default* fallback."""
-    m = re.search(pattern, re.IGNORECASE)
-    if m:
-        try:
-            return float(m.group(1))
-        except ValueError:
-            pass
-    return default
-
-
-def extract_kg_to_n(
-    pattern: str,
-    default_kg: float,
-    label: str,
-) -> float:
-    """Extract *kg* and convert to Newtons (9.81 m/s²)."""
-    m = re.search(pattern, re.IGNORECASE)
-    if m:
-        try:
-            return float(m.group(1)) * 9.81
-        except ValueError:
-            pass
-    return default_kg * 9.81
-
-
-def extract_n(
-    pattern: str,
-    default: float,
-    label: str,
-) -> float:
-    """Extract force in Newtons from *pattern* with *default* fallback."""
-    m = re.search(pattern, re.IGNORECASE)
-    if m:
-        try:
-            return float(m.group(1))
-        except ValueError:
-            pass
-    return default
-
-
 def extract_power(
     text: str,
     default: float | None = None,
@@ -119,9 +78,9 @@ class ExtractedParameters(TypedDict, total=False):
     total_length_mm: float
     outer_diameter_mm: float
     inner_diameter_mm: float
-    power_watts: float
+    power_watts: float | None
     speed_rpm: float
-    torque_nm: float
+    torque_nm: float | None
     material_id: str
 
     # Frame / Chair parameters
@@ -287,7 +246,7 @@ def extract_from_prompt(prompt: str) -> ExtractedParameters:
     )
 
     # --- Return the structured dict ---
-    return ExtractedParameters(  # type: ignore
+    return ExtractedParameters(
         total_length_mm=total_length_mm,
         outer_diameter_mm=outer_dia_mm,
         inner_diameter_mm=outer_dia_mm * 0.6 if "hollow" in t else outer_dia_mm,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -45,11 +46,11 @@ def insert_report_figure(
                     insert_at += 1
                 break
 
-    paragraph = document.paragraphs[insert_at] if insert_at < len(document.paragraphs) else None
-    if paragraph is None:
-        paragraph = document.add_paragraph()
-    else:
-        paragraph = document.insert_paragraph_before("", paragraph)
+    paragraph = (
+        document.paragraphs[insert_at].insert_paragraph_before("")
+        if insert_at < len(document.paragraphs)
+        else document.add_paragraph()
+    )
 
     run = paragraph.add_run()
     run.add_picture(str(image), width=_docx_picture_width(width))
@@ -114,7 +115,7 @@ def _resolve_embeddable_asset(path: Path) -> Path:
 
 def embed_project_report_assets(
     docx_path: str | Path,
-    asset_dirs: str | Path | list[str | Path],
+    asset_dirs: str | Path | Sequence[str | Path],
     section_heading: str | None = None,
     width: float | int | Any = 180,
 ) -> Path:

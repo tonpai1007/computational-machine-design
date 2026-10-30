@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -388,22 +389,21 @@ def extract_document_context(path: str | Path) -> DocumentContext:
     )
 
 
-def _try_import_ocr():
-    """Try to import OCR libraries, return None if not available."""
-    try:
-        import pytesseract
-        return "pytesseract"
-    except ImportError:
-        pass
-    try:
-        from docling.document_converter import DocumentConverter
-        return "docling"
-    except ImportError:
-        pass
+def _try_import_ocr() -> str | None:
+    """Return the name of an importable OCR backend, or None."""
+    for name, module in (
+        ("pytesseract", "pytesseract"),
+        ("docling", "docling.document_converter"),
+    ):
+        try:
+            importlib.import_module(module)
+        except ImportError:
+            continue
+        return name
     return None
 
 
-def extract_document_context_ocr(path: str | Path) -> dict:
+def extract_document_context_ocr(path: str | Path) -> dict[str, Any]:
     """OCR fallback for scanned documents.
 
     Uses available OCR libraries (pytesseract or docling) to extract
@@ -414,6 +414,7 @@ def extract_document_context_ocr(path: str | Path) -> dict:
     The native pipeline remains authoritative for native DOCX content.
     """
     from pathlib import Path
+
     from PIL import Image
 
     ocr_lib = _try_import_ocr()
@@ -431,7 +432,7 @@ def extract_document_context_ocr(path: str | Path) -> dict:
 
     if ocr_lib == "docling":
         try:
-            from docling.document_converter import DocumentConverter
+            from docling.document_converter import DocumentConverter  # type: ignore[import-not-found]
             converter = DocumentConverter()
             result = converter.convert(str(doc_path))
             text = result.text if hasattr(result, "text") else ""
@@ -454,7 +455,7 @@ def extract_document_context_ocr(path: str | Path) -> dict:
 
     # pytesseract path
     try:
-        import pytesseract
+        import pytesseract  # type: ignore[import-not-found]
         image = Image.open(str(doc_path))
         text = pytesseract.image_to_string(image)
         return {
@@ -480,7 +481,9 @@ def extract_document_context_ocr(path: str | Path) -> dict:
         }
 
 
-def enrich_document_context_with_ocr(path: str | Path, context: dict | None = None) -> dict:
+def enrich_document_context_with_ocr(
+    path: str | Path, context: DocumentContext | None = None
+) -> DocumentContext:
     """Enrich an existing DocumentContext with OCR-extracted text.
 
     If the native DOCX parse found little or no text, OCR can supplement it.
@@ -488,47 +491,30 @@ def enrich_document_context_with_ocr(path: str | Path, context: dict | None = No
 
     Parameters:
         path: Path to the DOCX file (used only if context is not provided)
-        context: Optional pre-extracted DocumentContext dict. If provided,
-                 this is used instead of re-extracting from the file.
+        context: Optional pre-extracted context. If provided, this is used
+                 instead of re-extracting from the file.
     """
-    from convert.document_intelligence import extract_document_context
-
-    if context and isinstance(context, dict) and "title" in context:
-        native = context
-    else:
-        native = extract_document_context(path)
-
+    native = context if context is not None else extract_document_context(path)
     ocr = extract_document_context_ocr(path)
 
     if not ocr["success"]:
-        return {
-            "path": native["path"],
-            "title": native["title"],
-            "full_text": native["full_text"],
-            "paragraphs": native["paragraphs"],
-            "tables": native["tables"],
-            "images": native["images"],
-            "sections": native["sections"],
-            "semantic_tags": native["semantic_tags"],
-            "ocr_note": ocr.get("note"),
-        }
+        return native
 
-    merged_paragraphs = list(native["paragraphs"])
-    if ocr["full_text"] and not native["full_text"]:
-        merged_paragraphs = ocr["paragraphs"]
-    elif native["full_text"] and ocr["full_text"]:
-        merged_paragraphs = native["paragraphs"] + ocr["paragraphs"][:5]
+    merged_paragraphs = list(native.paragraphs)
+    if ocr["full_text"] and not native.full_text:
+        merged_paragraphs = list(ocr["paragraphs"])
+    elif native.full_text and ocr["full_text"]:
+        merged_paragraphs = native.paragraphs + list(ocr["paragraphs"][:5])
 
-    merged_full_text = ocr["full_text"] if not native["full_text"] else native["full_text"]
+    merged_full_text = native.full_text or ocr["full_text"]
 
-    return {
-        "path": native["path"],
-        "title": native["title"],
-        "full_text": merged_full_text,
-        "paragraphs": merged_paragraphs,
-        "tables": native["tables"],
-        "images": native["images"] + ocr.get("images", []),
-        "sections": native["sections"],
-        "semantic_tags": native["semantic_tags"],
-        "ocr_note": ocr.get("note"),
-    }
+    return DocumentContext(
+        path=native.path,
+        title=native.title,
+        full_text=merged_full_text,
+        paragraphs=merged_paragraphs,
+        tables=native.tables,
+        images=native.images + list(ocr.get("images", [])),
+        sections=native.sections,
+        semantic_tags=native.semantic_tags,
+    )

@@ -27,7 +27,7 @@ import sys
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Literal
+from typing import Literal, TypedDict
 
 Severity = Literal["error", "warning"]
 
@@ -49,7 +49,15 @@ _REFERENCE_BANNED = (
     "element analysis",
 )
 
-_PROFILES: dict[str, dict[str, tuple[str, ...]]] = {
+class _ProfileRules(TypedDict):
+    """Content policy for one report profile."""
+
+    required: tuple[str, ...]
+    required_any: tuple[tuple[str, ...], ...]
+    banned: tuple[str, ...]
+
+
+_PROFILES: dict[str, _ProfileRules] = {
     "core": {
         "required": (),
         "required_any": (("PASS", "FAIL"),),
@@ -149,7 +157,7 @@ def _visible_text(document: str) -> str:
     return re.sub(r"<[^>]+>", " ", text)
 
 
-def _profile_rules(profile: str) -> dict[str, tuple[str, ...]]:
+def _profile_rules(profile: str) -> _ProfileRules:
     try:
         return _PROFILES[profile]
     except KeyError as exc:

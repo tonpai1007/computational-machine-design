@@ -8,6 +8,7 @@ full design run: parameters, geometry, structural checks and deliverables.
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +19,7 @@ from rich.table import Table
 console = Console()
 
 
-def _handle_bracket(prompt: str, p_lower: str, output_dir: str | None = None, params: dict | None = None) -> bool:
+def _handle_bracket(prompt: str, p_lower: str, output_dir: str | None = None, params: Mapping[str, Any] | None = None) -> bool:
     from cad.bracket_cad import BracketCADEngine
     from core.bracket_model import BracketGeometry, BracketLoads, BracketModel
     from core.frame_model import STRUCTURAL_MATERIALS
@@ -202,7 +203,7 @@ def _handle_bracket(prompt: str, p_lower: str, output_dir: str | None = None, pa
     return True
 
 
-def _handle_chair(prompt: str, p_lower: str, output_dir: str | None = None, params: dict | None = None) -> bool:
+def _handle_chair(prompt: str, p_lower: str, output_dir: str | None = None, params: Mapping[str, Any] | None = None) -> bool:
     from ai.parser import FrameNLParser
     from cad.assembly import FrameCADEngine
     from physics.fea_3d import build_chair_3d_fea_model
@@ -383,7 +384,7 @@ def _handle_chair(prompt: str, p_lower: str, output_dir: str | None = None, para
     return True
 
 
-def _handle_space_frame(prompt: str, p_lower: str, output_dir: str | None = None, params: dict | None = None) -> bool:
+def _handle_space_frame(prompt: str, p_lower: str, output_dir: str | None = None, params: Mapping[str, Any] | None = None) -> bool:
     from cad.space_frame_cad import SpaceFrameCADEngine
     from physics.fea_3d import build_cantilever_space_frame_model, build_space_truss_tower_model
     from reporting.validate import write_validated
@@ -509,7 +510,7 @@ def _handle_space_frame(prompt: str, p_lower: str, output_dir: str | None = None
     return True
 
 
-def _handle_generative(prompt: str, p_lower: str, output_dir: str | None = None, params: dict | None = None) -> bool:
+def _handle_generative(prompt: str, p_lower: str, output_dir: str | None = None, params: Mapping[str, Any] | None = None) -> bool:
     from ai.generative_agent import GenerativeEngineeringAgent
     from drafting.blueprint_2d import Blueprint2DGenerator
     from reporting.validate import write_validated

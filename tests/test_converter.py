@@ -402,6 +402,42 @@ def test_report_editor_inserts_figure_into_named_section(tmp_path):
     assert len(rebuilt.inline_shapes) >= 1
 
 
+def test_report_editor_inserts_figure_into_empty_section(tmp_path):
+    """A heading immediately followed by another heading is still a valid target.
+
+    Regression: the insertion point called ``insert_paragraph_before`` on the
+    ``Document``, but that method only exists on ``Paragraph``. The branch was
+    unreachable until a section had no body text of its own.
+    """
+    from PIL import Image
+
+    image_path = tmp_path / "figure.png"
+    Image.new("RGB", (20, 20), color="orange").save(image_path)
+
+    docx_path = tmp_path / "empty_section.docx"
+    doc = __import__("docx").Document()
+    doc.add_heading("Design Overview", level=1)
+    doc.add_heading("Results", level=1)
+    doc.save(str(docx_path))
+
+    from convert.report_editor import insert_report_figure
+
+    result = insert_report_figure(
+        docx_path,
+        image_path,
+        caption="Figure 1: Empty section",
+        section_heading="Design Overview",
+        width=120,
+    )
+    assert result.exists()
+
+    rebuilt = __import__("docx").Document(str(result))
+    texts = [p.text for p in rebuilt.paragraphs]
+    assert len(rebuilt.inline_shapes) == 1
+    assert texts.index("Design Overview") < texts.index("Results")
+    assert "Figure 1: Empty section" in texts
+
+
 def test_report_editor_updates_existing_caption_in_place(tmp_path):
     from PIL import Image
 

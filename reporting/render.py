@@ -12,6 +12,7 @@ turns it into HTML-safe output.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
@@ -19,7 +20,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoes
 _TEMPLATE_ROOT = Path(__file__).resolve().parent / "templates"
 
 
-def _fixed(decimals: int):
+def _fixed(decimals: int) -> Callable[[float], str]:
     """Format a float with a fixed number of decimal places."""
 
     def formatter(value: float) -> str:
@@ -28,7 +29,7 @@ def _fixed(decimals: int):
     return formatter
 
 
-def _scientific(decimals: int):
+def _scientific(decimals: int) -> Callable[[float], str]:
     def formatter(value: float) -> str:
         return f"{float(value):.{decimals}e}"
 

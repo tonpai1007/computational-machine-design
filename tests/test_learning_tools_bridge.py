@@ -59,7 +59,7 @@ def test_learning_tools_bridge_convert_docx_falls_back_to_builtin_renderer(tmp_p
     monkeypatch.setattr(LearningToolsBridge, "is_online", lambda self, timeout=1.0: False)
     import convert.registry as registry
 
-    monkeypatch.setattr(registry, "has_dependency", lambda name: False if name == "bs4" else True)
+    monkeypatch.setattr(registry, "has_dependency", lambda name: name != "bs4")
 
     bridge = LearningToolsBridge()
     html_file = tmp_path / "report.html"

@@ -45,7 +45,8 @@ def _guthlabs_api_call(instrument: str, payload: dict[str, Any]) -> dict[str, An
             headers={"Content-Type": "application/json"},
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+            data = json.loads(resp.read().decode("utf-8"))
+            return data if isinstance(data, dict) else {}
     except Exception as e:
         logger.warning(f"guthlabs API call failed ({instrument}): {e}")
         return {}
@@ -55,7 +56,7 @@ def ensure_guthlibs_imported() -> None:
         sys.path.insert(0, str(GUTHLABS_LIB_DIR))
 
 
-class EngineeringInstrumentResult(dict):
+class EngineeringInstrumentResult(dict[str, Any]):
     """Standardized result container from all guthlabs engineering instruments."""
     pass
 
@@ -138,7 +139,7 @@ def run_fatigue_curve_reader(
     safety factor, and failure probability.
     """
     ensure_guthlibs_imported()
-    payload = {"stress_mpa_amplitude": stress_mpa_amplitude}
+    payload: dict[str, Any] = {"stress_mpa_amplitude": stress_mpa_amplitude}
     if mean_stress_mpa is not None:
         payload["mean_stress_mpa"] = mean_stress_mpa
     if material_endurance_mpa is not None:
@@ -150,8 +151,15 @@ def run_fatigue_curve_reader(
     result = _guthlabs_api_call("fatigue_curve_reader", payload)
     standardized = EngineeringInstrumentResult()
     standardized["life_cycles"] = int(result.get("life_cycles", result.get("cycles_to_failure", cycles_applied or 1e6)))
+    # Without a material endurance limit there is no defensible fallback safety
+    # factor, so report 0.0 instead of dividing by a missing value.
+    fallback_sf = (
+        material_endurance_mpa / (stress_mpa_amplitude + 0.5 * (mean_stress_mpa or 0.0))
+        if material_endurance_mpa is not None
+        else 0.0
+    )
     standardized["safety_factor"] = float(
-        result.get("safety_factor", result.get("fos", material_endurance_mpa / (stress_mpa_amplitude + 0.5 * (mean_stress_mpa or 0))))
+        result.get("safety_factor", result.get("fos", fallback_sf))
     )
     standardized["probability_of_failure"] = float(
         result.get("probability_of_failure", result.get("weibull_pf", 0.01))

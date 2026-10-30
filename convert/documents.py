@@ -309,9 +309,11 @@ def extract_docx_context(path: Path) -> dict[str, Any]:
     for para in document.paragraphs:
         text = para.text.strip()
         style_name = (para.style.name if para.style is not None else "").lower()
-        if style_name.startswith("caption") or text.lower().startswith(("figure ", "fig. ", "table ")):
-            if last_image_index is not None:
-                caption_map[last_image_index] = text
+        is_caption = style_name.startswith("caption") or text.lower().startswith(
+            ("figure ", "fig. ", "table ")
+        )
+        if is_caption and last_image_index is not None:
+            caption_map[last_image_index] = text
     for index, shape in enumerate(document.inline_shapes, start=1):
         caption = caption_map.get(index)
         images.append({
