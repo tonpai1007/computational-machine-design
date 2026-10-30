@@ -60,7 +60,7 @@ include = [
 exclude = ["tests*", "scratch*", "Project*"]
 
 [tool.setuptools.package-data]
-reporting = ["templates/academic_v2/*.j2"]
+reporting = ["templates/academic_v2/*.j2", "templates/slide/*.j2"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -69,7 +69,12 @@ filterwarnings = ["ignore::DeprecationWarning"]
 [tool.ruff]
 line-length = 120
 target-version = "py311"
-exclude = [".venv", "__pycache__", "Project", ".pytest_cache", "*.egg-info", "computational_machine_design.egg-info"]
+exclude = [
+    ".venv", "__pycache__", "Project", ".pytest_cache", "*.egg-info",
+    "computational_machine_design.egg-info",
+    # Not shipped, not linted: local agent scratch and generated decks.
+    "scratch", ".agents", ".reveal.js", "revealjs", "tmp_docx_tools_test",
+]
 
 [tool.ruff.lint]
 select = [

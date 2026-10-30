@@ -3,6 +3,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .coverage
 .coverage.*
 htmlcov/
@@ -21,8 +23,11 @@ env/
 *.swp
 *.swo
 
-# Local agent scratch & cache
-.agents/
+# Local agent scratch & cache. The project rules ARE versioned, so they are
+# excluded from the blanket ignore below.
+.agents/*
+!.agents/rules/
+!.agents/rules/**
 .kilo/
 .kombai/
 
@@ -30,6 +35,7 @@ env/
 build/
 dist/
 *.egg-info/
+*.egg-info
 
 # Generated engineering run artifacts (keep project folders clean)
 Project/*/
@@ -37,3 +43,21 @@ Project/*/
 
 # Disposable agent scratch space (see .agents/rules/agent-workflow.md)
 scratch/
+
+# Generated slide decks and local node installs
+.reveal.js/
+/revealjs/
+
+# Ad-hoc output at the repository root (never part of the product)
+/*.log
+/output*.txt
+/test_output.txt
+/script_test.txt
+/steps.txt
+/tmp_docx_text.txt
+/chair_report_text.txt
+/docx_content.txt
+/*.zip
+/test_report.docx
+/mdie_pipeline.py
+/tmp_docx_tools_test/
