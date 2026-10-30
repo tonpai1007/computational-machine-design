@@ -64,6 +64,7 @@ SUBCOMMANDS = {
     "consolidate",
     "study",
     "info",
+    "slides",
     "help",
     "trace",
     "menu",
@@ -699,6 +700,85 @@ def _cmd_docx_report(argv: list[str]) -> int:
         return 1
 
 
+def _cmd_slides(argv: list[str]) -> int:
+    """AI-powered slide deck generator.
+
+    Usage:
+      mdie slides --from Project/chair/chair_real_data.md --out Project/chair/armchair_slides.html
+      mdie slides --content "..." --out slides.html
+    """
+    import argparse
+
+    from ai.slide_designer import design_slides
+    from reporting.slide_engine import render_slide_deck
+
+    ap = argparse.ArgumentParser(
+        prog="mdie slides",
+        description="Generate an AI-designed, styled HTML slide deck from engineering content.",
+    )
+    ap.add_argument("--from", dest="source", help="source markdown/data file")
+    ap.add_argument("--content", dest="content", help="inline content string")
+    ap.add_argument("--title", dest="title", default="Engineering Slide Deck")
+    ap.add_argument(
+        "--out", "-o", dest="output", default="Project/slides/deck.html", help="output HTML path"
+    )
+    ap.add_argument("--no-ai", action="store_true", help="use deterministic fallback design")
+    args = ap.parse_args(argv)
+
+    # Build content dict from curated spec, source file, or inline string
+    content: dict[str, Any]
+    if args.source and "chair" in args.source.lower():
+        try:
+            from ai.armchair_slides_content import ARMCHAIR_SLIDES
+
+            content = ARMCHAIR_SLIDES
+        except ImportError:
+            content = _build_content_from_file(args.source, args.title)
+    elif args.source:
+        content = _build_content_from_file(args.source, args.title)
+    elif args.content:
+        content = {"title": args.title, "source": "inline", "slides": _parse_slides(args.content)}
+    else:
+        console.print("[red]No content provided. Use --from or --content.[/red]")
+        return 1
+
+    spec = design_slides(content, use_ai=not args.no_ai)
+    out = render_slide_deck(spec, Path(args.output))
+    console.print(f"[bold green]Slide deck written:[/bold green] {out}")
+    return 0
+
+
+def _build_content_from_file(source: str, title: str) -> dict[str, Any]:
+    src = Path(source)
+    body_text = src.read_text(encoding="utf-8", errors="replace") if src.exists() else ""
+    return {"title": title, "source": source, "slides": _parse_slides(body_text)}
+
+
+def _parse_slides(text: str) -> list[dict[str, Any]]:
+    """Split markdown into slide dicts (one per H1/H2 block)."""
+    slides: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("# "):
+            if current:
+                slides.append(current)
+            current = {"type": "cover", "heading": stripped[2:].strip(), "body": []}
+        elif stripped.startswith("## "):
+            if current:
+                slides.append(current)
+            current = {"type": "bullet", "heading": stripped[3:].strip(), "body": []}
+        elif stripped.startswith("### "):
+            if current:
+                slides.append(current)
+            current = {"type": "bullet", "heading": stripped[4:].strip(), "body": []}
+        elif current is not None and stripped:
+            current["body"].append(stripped)
+    if current:
+        slides.append(current)
+    return slides
+
+
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point.
 
@@ -751,6 +831,8 @@ def _dispatch(argv: list[str] | None = None) -> int:
         return _cmd_validate(argv[1:])
     if head in ("docx-report", "word-report"):
         return _cmd_docx_report(argv[1:])
+    if head == "slides":
+        return _cmd_slides(argv[1:])
     if head in ("docx", "convert-docx", "word"):
         return _cmd_convert(["--to", "docx"] + argv[1:])
     if head in ("menu", "interactive"):

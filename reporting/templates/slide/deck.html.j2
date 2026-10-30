@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>{{ spec.title }}</title>
+<style>
+  :root {
+    --bg: {{ spec.palette.bg }};
+    --ink: {{ spec.palette.ink }};
+    --accent: {{ spec.palette.accent }};
+    --muted: {{ spec.palette.muted }};
+    --pass: {{ spec.palette.pass }};
+    --fail: {{ spec.palette.fail }};
+    --heading: {{ spec.typography.heading }};
+    --body: {{ spec.typography.body }};
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0b1220;
+    font-family: var(--body);
+    color: var(--ink);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 0;
+  }
+  .slide {
+    width: 1280px;
+    height: 720px;
+    background: var(--bg);
+    padding: 64px 80px;
+    margin: 24px auto;
+    border-radius: 8px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+  }
+  .slide::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+    background: var(--accent);
+  }
+  .slide h1 { font-family: var(--heading); font-size: 56px; font-weight: 700; line-height: 1.1; }
+  .slide h2 { font-family: var(--heading); font-size: 36px; font-weight: 700; margin-bottom: 28px; color: var(--accent); }
+  .slide h3 { font-family: var(--heading); font-size: 22px; font-weight: 600; margin-bottom: 12px; }
+  .slide p, .slide li { font-size: 22px; line-height: 1.5; }
+  .slide ul, .slide ol { padding-left: 28px; display: flex; flex-direction: column; gap: 10px; }
+  .slide .subtitle { font-size: 26px; color: var(--muted); margin-top: 14px; }
+  .slide .accent-bar { width: 80px; height: 4px; background: var(--accent); margin: 20px 0 32px; }
+  .slide .metric-grid { display: flex; gap: 32px; flex-wrap: wrap; margin-top: 12px; }
+  .slide .metric-card {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 24px 32px;
+    min-width: 200px;
+  }
+  .slide .metric-card .value { font-size: 42px; font-weight: 700; color: var(--accent); }
+  .slide .metric-card .label { font-size: 16px; color: var(--muted); margin-top: 4px; }
+  .slide table { border-collapse: collapse; width: 100%; margin-top: 16px; font-size: 18px; }
+  .slide th, .slide td { border: 1px solid rgba(255,255,255,0.15); padding: 12px 16px; text-align: left; }
+  .slide th { background: rgba(255,255,255,0.07); font-weight: 600; color: var(--accent); }
+  .slide .pass { color: var(--pass); font-weight: 600; }
+  .slide .fail { color: var(--fail); font-weight: 600; }
+  .slide .slide-number { position: absolute; bottom: 24px; right: 32px; font-size: 14px; color: var(--muted); }
+  .slide .img-row { display: flex; gap: 24px; margin-top: 24px; flex-wrap: wrap; }
+  .slide .img-card {
+    flex: 1 1 300px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .slide .img-card img { max-width: 100%; max-height: 340px; object-fit: contain; border-radius: 4px; }
+  .slide .img-card .img-cap { font-size: 13px; color: var(--muted); margin-top: 8px; text-align: center; }
+  .slide.cover { justify-content: center; align-items: flex-start; }
+  .slide.cover h1 { font-size: 64px; }
+  .slide.end { justify-content: center; align-items: center; text-align: center; }
+  .slide.end h1 { font-size: 48px; color: var(--accent); }
+</style>
+</head>
+<body>
+{% for slide in spec.slides %}
+<section class="slide{% if slide.type == 'cover' %} cover{% elif slide.type == 'end' %} end{% endif %}">
+  {% if slide.type == 'cover' %}
+    <h1>{{ slide.heading }}</h1>
+    {% if slide.get('subtitle') %}<div class="subtitle">{{ slide.subtitle }}</div>{% endif %}
+    <div class="accent-bar"></div>
+  {% elif slide.type == 'end' %}
+    <h1>{{ slide.heading }}</h1>
+    {% if slide.body %}{% for item in slide.body %}<p style="margin-top:16px;">{{ item }}</p>{% endfor %}{% endif %}
+  {% else %}
+    <h2>{{ slide.heading }}</h2>
+    <div class="accent-bar"></div>
+    {% if slide.type == 'table' and slide.body %}
+      {% set rows = slide.body %}
+      {% if rows and rows[0] is iterable and rows[0] is not string %}
+      <table>
+        <thead><tr>{% for cell in rows[0] %}<th>{{ cell }}</th>{% endfor %}</tr></thead>
+        <tbody>
+        {% for row in rows[1:] %}
+          <tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    {% elif slide.type == 'metric' %}
+      <div class="metric-grid">
+        {% for item in slide.body %}
+          {% if item is mapping %}
+          <div class="metric-card">
+            <div class="value">{{ item.value }}</div>
+            <div class="label">{{ item.label }}</div>
+          </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    {% elif slide.type == 'image' and slide.images %}
+      <div class="img-row">
+        {% for img in slide.images %}
+          <div class="img-card">
+            <img src="{{ img.src }}" alt="{{ img.alt or '' }}" onerror="this.parentElement.style.display='none'">
+            {% if img.caption %}<div class="img-cap">{{ img.caption }}</div>{% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <ul>
+      {% for item in slide.body %}
+        <li>{{ item }}</li>
+      {% endfor %}
+      </ul>
+    {% endif %}
+  {% endif %}
+  <div class="slide-number">{{ loop.index }} / {{ spec.slides|length }}</div>
+</section>
+{% endfor %}
+</body>
+</html>
